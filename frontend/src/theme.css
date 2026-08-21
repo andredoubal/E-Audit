@@ -1,30 +1,48 @@
-/* ZATCA VAT Audit Agent — design system (shared with the Rulebook page) */
+/* ZATCA VAT Audit Agent — design system (shared with the Rulebook page)
+   Palette: navy/teal with a warm orange accent, cream light theme / deep-navy dark theme. */
 :root{
-  --brand:#0E6B57; --brand-deep:#0A4C40; --brand-tint:#E6F0EB; --gold:#A9803F;
-  --bg:#EDF2EF; --surface:#FFFFFF; --surface-2:#F5F9F7;
-  --ink:#14201C; --muted:#5B6A63; --faint:#8A968F; --line:#DCE6E0;
-  --high:#B23A36; --high-bg:#F7E7E6; --med:#A9761E; --med-bg:#F6EDDD; --low:#2C7A58; --low-bg:#E2F0E9;
-  --shadow:0 1px 2px rgba(16,40,32,.05), 0 8px 24px -14px rgba(16,40,32,.18);
-  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --brand:#1F7A7E; --brand-deep:#123F41; --brand-tint:#E4F2F1; --gold:#FF7F51;
+  --bg:#FAF5EB; --surface:#FFFFFF; --surface-2:#F2ECDC;
+  --ink:#12253F; --muted:#5A7A9A; --faint:#9BB4C9; --line:#E1D9C5;
+  --high:#C4453A; --high-bg:#F7E3E0; --med:#D9812E; --med-bg:#FBEADA; --low:#4C7A2C; --low-bg:#E8F0DD;
+  --shadow:0 1px 2px rgba(18,37,63,.06), 0 10px 26px -16px rgba(18,37,63,.22);
+  --sans:'Cairo',ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:'Fira Code',ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  /* a faint audit/inspection motif used only in the body atmosphere, never behind content */
+  --atmosphere:url('data:image/jpeg;base64,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');
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --brand:#3FB79A; --brand-deep:#2C8C76; --brand-tint:#132A23; --gold:#C9A15C;
-  --bg:#0C1310; --surface:#131C18; --surface-2:#0F1713;
-  --ink:#E9F1EC; --muted:#9BADA4; --faint:#6E7E76; --line:#243029;
-  --high:#E4736E; --high-bg:#2A1917; --med:#D6A44E; --med-bg:#241D12; --low:#5FC496; --low-bg:#122A20;
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -16px rgba(0,0,0,.6);
+  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
+  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
+  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
+  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
 }}
 :root[data-theme="dark"]{
-  --brand:#3FB79A; --brand-deep:#2C8C76; --brand-tint:#132A23; --gold:#C9A15C;
-  --bg:#0C1310; --surface:#131C18; --surface-2:#0F1713;
-  --ink:#E9F1EC; --muted:#9BADA4; --faint:#6E7E76; --line:#243029;
-  --high:#E4736E; --high-bg:#2A1917; --med:#D6A44E; --med-bg:#241D12; --low:#5FC496; --low-bg:#122A20;
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -16px rgba(0,0,0,.6);
+  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
+  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
+  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
+  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{margin:0;position:relative;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* atmosphere — a faint accent wash + inspection motif behind the app shell; never behind a
+   panel/card (those keep their own opaque surface), and never intercepts clicks. */
+body::before,body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none}
+body::before{
+  background-image:var(--atmosphere);background-size:cover;background-position:center 30%;
+  opacity:.05;
+}
+body::after{
+  background:
+    radial-gradient(ellipse at 82% 4%, color-mix(in srgb,var(--brand) 16%,transparent) 0%, transparent 55%),
+    radial-gradient(ellipse at 6% 100%, color-mix(in srgb,var(--gold) 10%,transparent) 0%, transparent 60%);
+}
+:root[data-theme="dark"] body::before{opacity:.12}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body::before{opacity:.12}}
+#root{position:relative;z-index:1}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 h1{font-size:26px;letter-spacing:-.02em;margin:2px 0}
