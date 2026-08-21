@@ -22,6 +22,10 @@ os.environ["EAUDIT_DATABASE_URL"] = f"sqlite:///{os.path.join(_TMP, 'main.db')}"
 # No model is ever reached: without credentials `availability()` returns False and every
 # feature degrades to its deterministic draft. `test_llm_path.py` stubs the SDK to exercise
 # the live path, so the switch is deliberately NOT forced off here.
+os.environ["EAUDIT_SKIP_REGULATORY_SEED"] = "1"
+# The real-corpus ingestion in seed.py (~40s: 160 pages, bidi reconstruction) would otherwise
+# run on every `seeded` fixture initialization for no benefit — the regulatory tests ingest
+# their own small synthetic fixtures independently (see reg_seeded below).
 
 
 @pytest.fixture(scope="session")

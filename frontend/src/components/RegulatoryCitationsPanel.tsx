@@ -60,12 +60,14 @@ export default function RegulatoryCitationsPanel({ units }: { units: RegCitedUni
               <span className="sub">match {u.score.toFixed(2)}</span>
             </div>
 
-            <p style={{ whiteSpace: "pre-wrap" }}>{u.text}</p>
+            {/* dir="auto": lets the browser pick RTL/LTR per the text's own first strong
+                character — the real corpus is Arabic, fixtures/English content is not. */}
+            <p style={{ whiteSpace: "pre-wrap" }} dir="auto">{u.text}</p>
 
             {u.parent && (
               <details className="drill">
                 <summary>Parent article — {u.parent.citation_label}</summary>
-                <p style={{ whiteSpace: "pre-wrap" }} className="detail-note">
+                <p style={{ whiteSpace: "pre-wrap" }} className="detail-note" dir="auto">
                   {u.parent.text}
                 </p>
               </details>

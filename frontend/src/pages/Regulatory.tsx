@@ -104,7 +104,7 @@ export default function Regulatory() {
               <VerifyBadge source={answer.source} />
             </div>
             <div className="panel-body">
-              <p style={{ whiteSpace: "pre-wrap" }}>
+              <p style={{ whiteSpace: "pre-wrap" }} dir="auto">
                 {answer.text || (answer.streaming ? "Drafting…" : "")}
               </p>
             </div>

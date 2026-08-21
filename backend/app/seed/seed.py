@@ -10,7 +10,7 @@ from ..models import Rule, Assumption, CodeDictionary
 from ..rule_taxonomy import REASON_CODES
 from ..risk_indicators import INDICATORS
 from .rulebook_loader import parse_rules
-from . import scenarios, dossier_seed, corpus, casework_seed
+from . import scenarios, dossier_seed, corpus, casework_seed, regulatory_seed
 
 ASSUMPTIONS = [
     ("return.total_is_netted", "true", "Declared Total is final; _Adjustment already included."),
@@ -68,6 +68,7 @@ def run() -> None:
         dossier_seed.enrich_all(db)  # profiles, financials, customs, structured referrals
         n_corpus = corpus.build(db)  # the labelled closed-case population precedent searches
         loop = casework_seed.build(db)   # one issued request + a deficient response, on the hero
+        reg = regulatory_seed.build(db)  # the real VAT Implementing Regulations, ingested
         db.commit()
         print(f"Seeded {len(rules)} rules, {len(ASSUMPTIONS)} assumptions, "
               f"{len(CODE_DICTIONARY)} codes, {len(REASON_CODES)} reason codes, "
@@ -77,6 +78,10 @@ def run() -> None:
             print(f"Request loop on {loop['case_id']}: round {loop['round']}, "
                   f"{loop['items']} items requested, {loop['gaps']} gaps found "
                   f"({loop['blocking']} blocking).")
+        if reg.get("seeded"):
+            print(f"Regulatory corpus: {reg['units']} legal units, "
+                  f"{reg['relationships']} cross-references"
+                  + (f", {len(reg['warnings'])} warning(s)" if reg["warnings"] else "") + ".")
     except Exception:
         db.rollback()
         raise
