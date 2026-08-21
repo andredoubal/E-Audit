@@ -1,4 +1,4 @@
-"""The single Claude boundary for E-AUDIT Phase 2.
+"""The single model boundary for E-AUDIT Phase 2.
 
 Four features, one class:
   1. narrate            -> prose  (streamed internally, returned whole + verdict)
@@ -7,22 +7,31 @@ Four features, one class:
   4. stream_report      -> prose  (STREAMED as SSE)
 
 Division of labour (NON-NEGOTIABLE): recon_engine.reconcile_case computes EVERY
-number. Claude writes LANGUAGE ONLY and emits figures ONLY as placeholder tokens
+number. The model writes LANGUAGE ONLY and emits figures ONLY as placeholder tokens
 ({{difference}}, {{step.OUT-07}}, ...). verify_claims/verify_conclusion validate the
 output against the recon dict BEFORE anything is shown; render_placeholders then
 substitutes the engine's exact values.
 
-PDPL: the DEMO calls hosted Claude on SYNTHETIC data only, and only when
-settings.data_is_synthetic is True. PRODUCTION swaps an in-tenant model behind THIS
-interface by pointing _client() at an in-VPC gateway (settings.anthropic_base_url) —
-zero call-site change. Nothing outside this module imports `anthropic`.
+PDPL: the DEMO calls a hosted model on SYNTHETIC data only, and only when
+settings.data_is_synthetic is True. PRODUCTION swaps the model behind THIS interface
+by changing settings.llm_model (an EAUDIT_LLM_MODEL env var) and, for an in-tenant
+deployment, settings.llm_base_url — zero call-site change either way. Nothing outside
+`provider.py` imports `litellm`; this module never sees a provider name or an SDK object.
+
+Every `"source": "claude"` literal below is intentionally left as-is regardless of which
+provider is actually configured — the frontend (VerifyBadge.tsx, Casework.tsx,
+TaxpayerResponsePanel.tsx, ai.ts) hardcodes `source === "claude"` to key its "verified by AI"
+badge, and renaming this string would silently break that badge without any frontend code
+changing. It is a legacy success-tag label, not a provider identifier.
 """
 from __future__ import annotations
 
 import os
+
 from typing import Iterator
 
 from ..config import settings
+from . import provider
 from .schemas import NextBestAction, TaxpayerSummary, LetterExtraction, CalcQuerySpec
 from .prompts import (
     FROZEN_PREAMBLE, build_context, build_history_context,
@@ -37,39 +46,19 @@ from .verify import (
     fb_narration, fb_nba, fb_summary, fb_report,
 )
 
-MODEL = settings.claude_model  # "claude-opus-5"
 _ALIAS = "Taxpayer A"          # PDPL pseudonym sent to a hosted model (F7)
 
 
-class _Refusal(Exception):
-    ...
-
-
 # ---------------------------------------------------------------- availability
-def _is_public_endpoint() -> bool:
-    base = (os.getenv("ANTHROPIC_BASE_URL") or settings.anthropic_base_url or "").lower()
-    return ("api.anthropic.com" in base) or base == ""  # default SDK base is public
-
-
 def availability() -> tuple[bool, str]:
     """Returns (enabled, reason). reason is machine-readable for the UI badge (F11)."""
     if settings.llm_disabled or os.getenv("EAUDIT_LLM_DISABLED") == "1":
         return False, "disabled"
-    has_cred = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
-                    or os.getenv("ANTHROPIC_PROFILE"))
-    if not has_cred:
+    if not provider.has_credentials():
         return False, "no-credentials"
-    if not settings.data_is_synthetic and _is_public_endpoint() and not settings.allow_hosted_egress:
+    if not settings.data_is_synthetic and provider.is_public_endpoint() and not settings.allow_hosted_egress:
         return False, "pdpl-blocked"
     return True, "claude"
-
-
-def _client():
-    import anthropic
-    kwargs = {}
-    if settings.anthropic_base_url:
-        kwargs["base_url"] = settings.anthropic_base_url  # the ONLY prod swap point
-    return anthropic.Anthropic(**kwargs)  # resolves key / token / ant profile
 
 
 # ------------------------------------------------------------- message assembly
@@ -84,16 +73,6 @@ def _user_blocks(context: str, instr: str, ask: str) -> list:
         {"type": "text", "text": instr},
         {"type": "text", "text": ask},
     ]
-
-
-def _parsed(resp, model_cls):
-    for attr in ("parsed_output", "parsed", "output_parsed"):
-        obj = getattr(resp, attr, None)
-        if isinstance(obj, model_cls):
-            return obj
-        if isinstance(obj, dict):
-            return model_cls.model_validate(obj)
-    return model_cls.model_validate_json(resp.content[0].text)
 
 
 def _src(reason: str) -> str:
@@ -130,18 +109,11 @@ class LLMService:
 
     # ------------------------------------------------- FEATURE 1: BRIDGE NARRATION
     def _prose(self, ctx: str, instr: str, ask: str, max_tokens: int) -> tuple[str, str | None]:
-        try:
-            with _client().messages.stream(
-                model=MODEL, max_tokens=max_tokens, thinking={"type": "adaptive"},
-                system=_system_blocks(),
-                messages=[{"role": "user", "content": _user_blocks(ctx, instr, ask)}],
-            ) as stream:
-                raw = "".join(stream.text_stream)
-                if stream.get_final_message().stop_reason == "refusal":
-                    return "", "blocked-refusal"
-            return raw, None
-        except Exception:
-            return "", "api-error"
+        return provider.stream_text(
+            system_blocks=_system_blocks(),
+            user_content=_user_blocks(ctx, instr, ask),
+            max_tokens=max_tokens,
+        )
 
     def narrate(self, recon: dict, rules: list) -> dict:
         enabled, reason = availability()
@@ -178,23 +150,14 @@ class LLMService:
             return {**_render_nba(fb_nba(recon), recon), "source": _src(reason),
                     "verified": True, "violations": []}
         ctx, _unmask = build_context(recon, rules, alias=_ALIAS)
-        try:
-            resp = _client().messages.parse(
-                model=MODEL, max_tokens=800, thinking={"type": "adaptive"},
-                system=_system_blocks(),
-                messages=[{"role": "user",
-                           "content": _user_blocks(ctx, NBA_INSTR, "Decide the next best action now.")}],
-                output_format=NextBestAction,
-            )
-            if resp.stop_reason == "refusal":
-                raise _Refusal()
-            nba = _parsed(resp, NextBestAction)
-        except _Refusal:
-            return {**_render_nba(fb_nba(recon), recon), "source": "blocked-refusal",
-                    "verified": False, "violations": ["refusal"]}
-        except Exception:
-            return {**_render_nba(fb_nba(recon), recon), "source": "api-error",
-                    "verified": False, "violations": ["api-error"]}
+        nba, err = provider.parse_structured(
+            system_blocks=_system_blocks(),
+            user_content=_user_blocks(ctx, NBA_INSTR, "Decide the next best action now."),
+            max_tokens=800, output_model=NextBestAction,
+        )
+        if err:
+            return {**_render_nba(fb_nba(recon), recon), "source": err,
+                    "verified": False, "violations": [err]}
 
         if immaterial and nba.action_type != "no-action":       # engine override (F2)
             out = _render_nba(fb_nba(recon), recon)
@@ -215,25 +178,16 @@ class LLMService:
             return {**fb_summary(profile, prior_returns, prior_cases), "source": _src(reason),
                     "verified": True, "violations": []}
         ctx = build_history_context(profile, prior_returns, prior_cases, alias=_ALIAS)
-        try:
-            resp = _client().messages.parse(
-                model=MODEL, max_tokens=900, thinking={"type": "adaptive"},
-                system=_system_blocks(),
-                messages=[{"role": "user",
-                           "content": [{"type": "text", "text": ctx, "cache_control": {"type": "ephemeral"}},
-                                       {"type": "text", "text": SUMMARY_INSTR},
-                                       {"type": "text", "text": "Write the taxpayer brief now."}]}],
-                output_format=TaxpayerSummary,
-            )
-            if resp.stop_reason == "refusal":
-                raise _Refusal()
-            s = _parsed(resp, TaxpayerSummary)
-        except _Refusal:
-            return {**fb_summary(profile, prior_returns, prior_cases), "source": "blocked-refusal",
-                    "verified": False, "violations": ["refusal"]}
-        except Exception:
-            return {**fb_summary(profile, prior_returns, prior_cases), "source": "api-error",
-                    "verified": False, "violations": ["api-error"]}
+        s, err = provider.parse_structured(
+            system_blocks=_system_blocks(),
+            user_content=[{"type": "text", "text": ctx, "cache_control": {"type": "ephemeral"}},
+                          {"type": "text", "text": SUMMARY_INSTR},
+                          {"type": "text", "text": "Write the taxpayer brief now."}],
+            max_tokens=900, output_model=TaxpayerSummary,
+        )
+        if err:
+            return {**fb_summary(profile, prior_returns, prior_cases), "source": err,
+                    "verified": False, "violations": [err]}
 
         probe = " ".join([s.headline, s.prior_pattern, *s.points, *s.risk_flags])
         v = verify_claims(probe, recon=None, figure_free=True)   # reject ANY numeric literal
@@ -305,24 +259,17 @@ class LLMService:
         enabled, reason = availability()
         if not enabled:
             return {**fallback, "source": _src(reason)}
-        try:
-            resp = _client().messages.parse(
-                model=MODEL, max_tokens=900, thinking={"type": "adaptive"},
-                system=[{"type": "text", "text": LETTER_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": [
-                    {"type": "text", "text": build_letter_context(recon)},
-                    {"type": "text", "text": LETTER_INSTR},
-                    {"type": "text", "text": fence_letter(text[:6000])},
-                ]}],
-                output_format=LetterExtraction,
-            )
-            if resp.stop_reason == "refusal":
-                raise _Refusal()
-            ext = _parsed(resp, LetterExtraction)
-        except _Refusal:
-            return {**fallback, "source": "blocked-refusal"}
-        except Exception:
-            return {**fallback, "source": "api-error"}
+        ext, err = provider.parse_structured(
+            system_blocks=[{"type": "text", "text": LETTER_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            user_content=[
+                {"type": "text", "text": build_letter_context(recon)},
+                {"type": "text", "text": LETTER_INSTR},
+                {"type": "text", "text": fence_letter(text[:6000])},
+            ],
+            max_tokens=900, output_model=LetterExtraction,
+        )
+        if err:
+            return {**fallback, "source": err}
         out = ext.model_dump()
         out["proposed_amount"] = round(abs(float(out.get("proposed_amount") or 0.0)), 2)  # auditor confirms
         return {**out, "source": "claude"}
@@ -347,23 +294,16 @@ class LLMService:
                     "mode": "fallback", "violations": []}
 
         def _write(ask: str) -> tuple[str, str | None]:
-            try:
-                with _client().messages.stream(
-                    model=MODEL, max_tokens=1400, thinking={"type": "adaptive"},
-                    system=[{"type": "text", "text": DRAFT_LETTER_SYSTEM,
-                             "cache_control": {"type": "ephemeral"}}],
-                    messages=[{"role": "user", "content": [
-                        {"type": "text", "text": fence_facts(facts)},
-                        {"type": "text", "text": instr},
-                        {"type": "text", "text": ask},
-                    ]}],
-                ) as stream:
-                    raw = "".join(stream.text_stream)
-                    if stream.get_final_message().stop_reason == "refusal":
-                        return "", "blocked-refusal"
-                return raw, None
-            except Exception:
-                return "", "api-error"
+            return provider.stream_text(
+                system_blocks=[{"type": "text", "text": DRAFT_LETTER_SYSTEM,
+                                "cache_control": {"type": "ephemeral"}}],
+                user_content=[
+                    {"type": "text", "text": fence_facts(facts)},
+                    {"type": "text", "text": instr},
+                    {"type": "text", "text": ask},
+                ],
+                max_tokens=1400,
+            )
 
         raw, err = _write("Draft the letter now.")
         if err:
@@ -407,25 +347,17 @@ class LLMService:
         enabled, reason = availability()
         if not enabled:
             return {**fallback, "source": _src(reason)}
-        try:
-            resp = _client().messages.parse(
-                model=MODEL, max_tokens=800, thinking={"type": "adaptive"},
-                system=[{"type": "text", "text": CALC_SYSTEM,
-                         "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": [
-                    {"type": "text", "text": build_calc_context(docs)},
-                    {"type": "text", "text": CALC_INSTR},
-                    {"type": "text", "text": fence_calc(text[:2000])},
-                ]}],
-                output_format=CalcQuerySpec,
-            )
-            if resp.stop_reason == "refusal":
-                raise _Refusal()
-            spec = _parsed(resp, CalcQuerySpec)
-        except _Refusal:
-            return {**fallback, "source": "blocked-refusal"}
-        except Exception:
-            return {**fallback, "source": "api-error"}
+        spec, err = provider.parse_structured(
+            system_blocks=[{"type": "text", "text": CALC_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            user_content=[
+                {"type": "text", "text": build_calc_context(docs)},
+                {"type": "text", "text": CALC_INSTR},
+                {"type": "text", "text": fence_calc(text[:2000])},
+            ],
+            max_tokens=800, output_model=CalcQuerySpec,
+        )
+        if err:
+            return {**fallback, "source": err}
 
         out = spec.model_dump()
         # The parser is a translator. Any digit in `understood` means it started answering the

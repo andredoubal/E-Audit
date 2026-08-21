@@ -6,7 +6,6 @@ substituted, that a non-compliant one never does, and that every failure mode de
 labelled deterministic draft instead of an error or unverified text.
 """
 import json
-import types
 
 import pytest
 
@@ -40,37 +39,32 @@ RULES = [{"code": "COR-01", "family": "Corrections", "title": "Sales credit note
           "explains_gap": "Yes", "severity": "Medium"}]
 
 
-# --------------------------------------------------------------- the stub SDK
-class _Stream:
-    def __init__(self, text, stop_reason=None):
-        self.text_stream = [text]
-        self._stop = stop_reason
-
-    def __enter__(self): return self
-    def __exit__(self, *a): return False
-    def get_final_message(self): return types.SimpleNamespace(stop_reason=self._stop)
-
-
-def stub_client(*, prose=None, parsed=None, stop_reason=None, raises=False):
-    """Build a fake anthropic client. `prose` may be a list, to script the retry."""
+# ----------------------------------------------------------- the stubbed provider boundary
+# `provider.py` is the only thing that talks to LiteLLM; these stubs replace it directly with
+# its own (value, err) contract, so a test never has to fabricate an SDK-shaped response.
+def stub_stream_text(*, prose=None, stop_reason=None, raises=False):
+    """`prose` may be a list, to script the retry."""
     drafts = list(prose) if isinstance(prose, list) else [prose]
 
-    class Messages:
-        def stream(self, **_kw):
-            if raises:
-                raise RuntimeError("connection reset")
-            return _Stream(drafts.pop(0) if len(drafts) > 1 else drafts[0], stop_reason)
+    def _stream_text(**_kw):
+        if raises:
+            return "", "api-error"
+        if stop_reason == "refusal":
+            return "", "blocked-refusal"
+        return (drafts.pop(0) if len(drafts) > 1 else drafts[0]), None
 
-        def parse(self, **kw):
-            if raises:
-                raise RuntimeError("connection reset")
-            model = kw["output_format"]
-            return types.SimpleNamespace(
-                stop_reason=stop_reason,
-                parsed_output=model.model_validate(parsed),
-                content=[types.SimpleNamespace(text=json.dumps(parsed))])
+    return _stream_text
 
-    return lambda: types.SimpleNamespace(messages=Messages())
+
+def stub_parse_structured(*, parsed=None, stop_reason=None, raises=False):
+    def _parse_structured(*, output_model, **_kw):
+        if raises:
+            return None, "api-error"
+        if stop_reason == "refusal":
+            return None, "blocked-refusal"
+        return output_model.model_validate(parsed), None
+
+    return _parse_structured
 
 
 @pytest.fixture
@@ -92,7 +86,7 @@ GOOD = ("Of {{population_count}} sale lines on file, OUT-07 places {{step.OUT-07
 
 
 def test_compliant_draft_reaches_the_screen_with_engine_figures(live, monkeypatch):
-    monkeypatch.setattr(svc, "_client", stub_client(prose=GOOD))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(prose=GOOD))
     out = svc.llm.narrate(HERO, RULES)
     assert out["source"] == "claude" and out["verified"] is True
     # placeholders replaced by the engine's own values
@@ -104,7 +98,7 @@ def test_compliant_draft_reaches_the_screen_with_engine_figures(live, monkeypatc
 
 def test_fabricated_figure_never_reaches_the_screen(live, monkeypatch):
     bad = "SAR 90,000 is unexplained, which exceeds materiality."
-    monkeypatch.setattr(svc, "_client", stub_client(prose=[bad, bad]))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(prose=[bad, bad]))
     out = svc.llm.narrate(HERO, RULES)
     assert out["source"] == "blocked-unverified" and out["verified"] is False
     assert "90,000" not in out["text"]
@@ -112,7 +106,8 @@ def test_fabricated_figure_never_reaches_the_screen(live, monkeypatch):
 
 
 def test_corrective_retry_can_rescue_a_bad_first_draft(live, monkeypatch):
-    monkeypatch.setattr(svc, "_client", stub_client(prose=["The unexplained amount is SAR 90,000.", GOOD]))
+    monkeypatch.setattr(svc.provider, "stream_text",
+                         stub_stream_text(prose=["The unexplained amount is SAR 90,000.", GOOD]))
     out = svc.llm.narrate(HERO, RULES)
     assert out["source"] == "claude" and "SAR 75,000" in out["text"]
 
@@ -120,16 +115,17 @@ def test_corrective_retry_can_rescue_a_bad_first_draft(live, monkeypatch):
 def test_wrong_verdict_is_blocked_even_with_no_figures(live, monkeypatch):
     """The subtle failure: every number correct, the conclusion inverted."""
     wrong = "The case is fully explained and no further action is needed."
-    monkeypatch.setattr(svc, "_client", stub_client(prose=[wrong, wrong]))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(prose=[wrong, wrong]))
     out = svc.llm.narrate(HERO, RULES)
     assert out["source"] == "blocked-unverified"
 
 
 def test_refusal_and_api_error_are_distinguished(live, monkeypatch):
-    monkeypatch.setattr(svc, "_client", stub_client(prose=GOOD, stop_reason="refusal"))
+    monkeypatch.setattr(svc.provider, "stream_text",
+                         stub_stream_text(prose=GOOD, stop_reason="refusal"))
     assert svc.llm.narrate(HERO, RULES)["source"] == "blocked-refusal"
 
-    monkeypatch.setattr(svc, "_client", stub_client(raises=True))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(raises=True))
     out = svc.llm.narrate(HERO, RULES)
     assert out["source"] == "api-error" and out["text"] == svc.fb_narration(HERO)
 
@@ -151,7 +147,7 @@ NBA_OK = {"action_type": "request-explanation",
 
 
 def test_next_best_action_substitutes_placeholders(live, monkeypatch):
-    monkeypatch.setattr(svc, "_client", stub_client(parsed=NBA_OK))
+    monkeypatch.setattr(svc.provider, "parse_structured", stub_parse_structured(parsed=NBA_OK))
     out = svc.llm.next_best_action(HERO, RULES)
     assert out["source"] == "claude"
     assert out["expected_yield"] == "Confirms or clears SAR 75,000."
@@ -159,7 +155,7 @@ def test_next_best_action_substitutes_placeholders(live, monkeypatch):
 
 def test_engine_overrides_an_action_on_a_supported_case(live, monkeypatch):
     """The model may not invent work on a case the engine has already cleared."""
-    monkeypatch.setattr(svc, "_client", stub_client(parsed=NBA_OK))
+    monkeypatch.setattr(svc.provider, "parse_structured", stub_parse_structured(parsed=NBA_OK))
     out = svc.llm.next_best_action(SUPPORTED, RULES)
     assert out["source"] == "engine-override" and out["action_type"] == "no-action"
 
@@ -170,12 +166,12 @@ def test_taxpayer_brief_rejects_any_digit(live, monkeypatch):
     bad = {"headline": "Wholesale trader with 3 prior cases.",
            "points": ["Sector: wholesale.", "Filed on time."],
            "risk_flags": [], "prior_pattern": "Recurring."}
-    monkeypatch.setattr(svc, "_client", stub_client(parsed=bad))
+    monkeypatch.setattr(svc.provider, "parse_structured", stub_parse_structured(parsed=bad))
     out = svc.llm.summarise_history(profile, [], [])
     assert out["source"] == "blocked-unverified"
 
     ok = {**bad, "headline": "Wholesale trader with prior audit history."}
-    monkeypatch.setattr(svc, "_client", stub_client(parsed=ok))
+    monkeypatch.setattr(svc.provider, "parse_structured", stub_parse_structured(parsed=ok))
     out = svc.llm.summarise_history(profile, [], [])
     assert out["source"] == "claude"
     assert "Taxpayer A" not in json.dumps(out)     # alias restored to the real name
@@ -185,7 +181,7 @@ def test_taxpayer_brief_rejects_any_digit(live, monkeypatch):
 def test_report_streams_verified_prose_then_done(live, monkeypatch):
     md = ("## Case summary\nReconstructed {{expected}} against {{declared}}.\n\n"
           "## Comparison & conclusion\n{{unexplained}} is unexplained; a potential finding.")
-    monkeypatch.setattr(svc, "_client", stub_client(prose=md))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(prose=md))
     frames = "".join(svc.llm.stream_report(HERO, RULES))
     assert "SAR 2,075,000" in frames and "{{" not in frames
     assert frames.rstrip().endswith("event: done\ndata: claude")
@@ -193,7 +189,7 @@ def test_report_streams_verified_prose_then_done(live, monkeypatch):
 
 def test_report_falls_back_without_leaking_the_bad_draft(live, monkeypatch):
     bad = "## Case summary\nThe unexplained amount is SAR 90,000."
-    monkeypatch.setattr(svc, "_client", stub_client(prose=[bad, bad]))
+    monkeypatch.setattr(svc.provider, "stream_text", stub_stream_text(prose=[bad, bad]))
     frames = "".join(svc.llm.stream_report(HERO, RULES))
     assert "event: fallback" in frames          # tells the UI to clear any partial text
     assert "90,000" not in frames
@@ -207,7 +203,7 @@ def test_letter_reader_returns_the_letters_own_figure_as_a_draft(live, monkeypat
               "quote": "already declared in our prior-period return",
               "proposed_amount": -75000.0, "confidence": "medium",
               "caveat": "Obtain the prior return before accepting."}
-    monkeypatch.setattr(svc, "_client", stub_client(parsed=parsed))
+    monkeypatch.setattr(svc.provider, "parse_structured", stub_parse_structured(parsed=parsed))
     out = svc.llm.read_letter(HERO, "Dear Sir, the difference relates to Q4 2024...")
     assert out["source"] == "claude"
     assert out["proposed_amount"] == 75000.0      # normalised, and the auditor still confirms it

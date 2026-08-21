@@ -127,8 +127,20 @@ shows the funnel as the hero and the three-way comparison beneath it.
   single figure the *letter itself states*, as a **draft** the auditor confirms
   in the UI before it is committed.
 
-All Claude access is funneled through the single boundary
-`backend/app/llm/service.py`. Nothing else imports `anthropic`.
+All model access is funneled through the single boundary `backend/app/llm/service.py`,
+which delegates the actual call to `backend/app/llm/provider.py` — the only file that
+imports `litellm`. The active model, its provider, and any endpoint override are pure
+configuration (`EAUDIT_LLM_MODEL`, e.g. `anthropic/claude-opus-5` or `openai/gpt-4o`;
+`EAUDIT_LLM_BASE_URL` for an in-VPC gateway) — swapping provider or model never touches
+`service.py`, the agents, the prompts, or the frontend. `service.py` calls two
+provider-neutral functions (`provider.stream_text`, `provider.parse_structured`) and never
+sees an SDK object or a provider name; the two Anthropic-specific extras the app relies on
+(`thinking` extended reasoning, `cache_control` prompt caching) are applied or stripped
+inside `provider.py` based on which provider the configured model targets. An
+`embedding_model` config field exists (`EAUDIT_EMBEDDING_MODEL`) for a future
+embedding-based retrieval feature, independently configurable from the generation model —
+it is currently unused, since `precedent/` is deterministic structured-field scoring, not
+vector search.
 
 Every deterministic fallback is **complete, sendable output**, not a stub —
 degrading to it costs polish, never correctness. That is why the whole app,
@@ -178,7 +190,7 @@ backend/app/
   reporting/           # audit_report.py — the Authority's own template, section by section
   api/routes.py        # FastAPI endpoints
   models/              # core.py, dossier.py, casework.py, config_tables.py, recon.py
-  llm/                 # the ONLY Claude boundary: service, prompts, verify, schemas
+  llm/                 # the ONLY model boundary: service, provider, prompts, verify, schemas
   seed/                # scenarios.py + dossier_seed.py + corpus.py + casework_seed.py
 frontend/src/
   pages/               # Overview, Intake, Dossier, Casework, Reconciliation, Rules
@@ -386,7 +398,8 @@ cd backend
 python -m venv .venv && . .venv/Scripts/activate   # Windows; use bin/activate on macOS/Linux
 pip install -r requirements.txt
 python -m app.seed.seed                            # drop, create, load 65 rules + demo cases
-# The Anthropic SDK reads ANTHROPIC_API_KEY from the environment for AI features:
+# LiteLLM reads the credential env var for whichever provider EAUDIT_LLM_MODEL names
+# (ANTHROPIC_API_KEY by default) from the environment for AI features:
 export $(grep -v '^#' ../.env | xargs)             # or set the vars however you prefer
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```

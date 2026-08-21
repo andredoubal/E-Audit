@@ -89,8 +89,10 @@ so. `backend/tests/test_llm_path.py` proves each of those paths with the SDK stu
 
 Two things to know: the standalone `portal.html` can never show live AI, because it is a
 static file with no server and no key; and the hosted model is called only while
-`EAUDIT_DATA_IS_SYNTHETIC` is true. Production points `EAUDIT_ANTHROPIC_BASE_URL` at an
-in-tenant gateway — the single swap point, with no call-site change.
+`EAUDIT_DATA_IS_SYNTHETIC` is true. The model itself is pure config (`EAUDIT_LLM_MODEL`, a
+LiteLLM provider-prefixed string like `anthropic/claude-opus-5` or `openai/gpt-4o`), and
+production points `EAUDIT_LLM_BASE_URL` at an in-tenant gateway — swapping either is the
+single change, with no call-site change anywhere in the app.
 
 To use Postgres instead of SQLite, run `docker compose up -d db` and set
 `EAUDIT_DATABASE_URL` in `.env`.
