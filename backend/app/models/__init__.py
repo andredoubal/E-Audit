@@ -28,3 +28,10 @@ from .recon import (  # noqa: F401
     EventLog,
     TaxpayerResponse,
 )
+from .investigation import (  # noqa: F401
+    InvestigationRun,
+    PersistedHypothesis,
+    HypothesisRegulatoryRef,
+    AuditorDecision,
+    AuditorFinding,
+)
