@@ -28,3 +28,11 @@ from .recon import (  # noqa: F401
     EventLog,
     TaxpayerResponse,
 )
+from .regulatory import (  # noqa: F401
+    LegalUnit,
+    LegalRelationship,
+    LegalUnitEmbedding,
+    RetrievalTrace,
+    RegulatoryInterpretation,
+    AuditTestRule,
+)

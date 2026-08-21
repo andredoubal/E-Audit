@@ -46,3 +46,25 @@ def case(seeded):
     from app.models import AuditCase
 
     return seeded.scalar(select(AuditCase).where(AuditCase.case_id == "CASE-2025-0481"))
+
+
+@pytest.fixture()
+def reg_seeded(seeded):
+    """The synthetic regulatory fixture, ingested into the same throwaway database — never the
+    demo seed data. Uses HashingEmbeddingProvider (zero-network, pure numpy) so no model
+    download is needed and the same provider is used everywhere else in the app."""
+    from datetime import date
+    from pathlib import Path
+
+    from app.regulatory.embeddings import HashingEmbeddingProvider
+    from app.regulatory.extract import PlainTextExtractor
+    from app.regulatory.ingest import ingest_document
+
+    fixture = Path(__file__).parent / "fixtures" / "regulatory" / "fake_vat_ir_excerpt.txt"
+    ingest_document(
+        seeded, source_path=fixture, regulation_code="TEST-IR",
+        content_type="IMPLEMENTING_REGULATION", effective_from=date(2020, 1, 1),
+        authority="ZATCA", extractor=PlainTextExtractor(), provider=HashingEmbeddingProvider(),
+    )
+    seeded.commit()
+    return seeded

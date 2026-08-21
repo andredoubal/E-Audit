@@ -136,6 +136,41 @@ def verify_correspondence(text: str, facts: str) -> dict:
     return {"ok": not out, "violations": out}
 
 
+# =========================================================== verify_citation
+_LAW_RE = re.compile(r"\[\[LAW:([A-Za-z0-9\-]+)\]\]")
+_REF_RE = re.compile(r"\[\[REF:([A-Za-z0-9\-]+)\]\]")
+_STATUTORY_CONTENT_TYPES = {"STATUTORY_TEXT", "IMPLEMENTING_REGULATION", "BOARD_DECISION"}
+
+
+def verify_citation(text: str, grounding: dict) -> dict:
+    """Cite-or-drop for regulatory answers: every [[LAW:unit_id]]/[[REF:unit_id]] token must
+    name a unit_id actually present in the supplied grounding — never one the model recalled
+    from its own training data — and [[LAW:...]] (binding law) may only be used against a unit
+    whose content_type is one of the three statutory types. A guideline, FAQ or internal note
+    cited as [[LAW:...]] is rejected exactly like an invented unit_id: both are a model
+    asserting more legal weight than the retrieved text actually carries."""
+    units = {u["unit_id"]: u for u in (grounding or {}).get("cited_units", [])}
+    violations: list[str] = []
+
+    for uid in _LAW_RE.findall(text or ""):
+        if uid not in units:
+            violations.append(f"cited unit not in grounding: {uid}")
+        elif units[uid]["content_type"] not in _STATUTORY_CONTENT_TYPES:
+            violations.append(
+                f"{uid} cited as binding law ([[LAW:...]]) but is {units[uid]['content_type']}")
+
+    for uid in _REF_RE.findall(text or ""):
+        if uid not in units:
+            violations.append(f"cited unit not in grounding: {uid}")
+
+    seen, out = set(), []
+    for v in violations:
+        if v not in seen:
+            out.append(v)
+            seen.add(v)
+    return {"ok": not out, "violations": out}
+
+
 # =========================================================== verify_conclusion (F1)
 def verify_conclusion(text: str, recon: dict) -> list:
     """A wrong VERDICT passes every figure check. Guard the words that flip the outcome."""
@@ -253,6 +288,19 @@ def fb_summary(profile: dict, prior_returns: list, prior_cases: list) -> dict:
             "risk_flags": (["Repeated amendments"] if len(amended) > 1 else []),
             "prior_pattern": ("Recurring adjustments across periods." if prior_cases
                               else "No prior audit findings recorded.")}
+
+
+def fb_regulatory_answer(grounding: dict) -> str:
+    """ENGINE-AUTHORED trusted text — the deterministic fallback for regulatory Q&A: a plain
+    citation list, no prose to verify. Complete and sendable with zero API key."""
+    units = grounding.get("cited_units") or []
+    if not units:
+        return "No matching regulatory text was found for this question."
+    lines = [
+        f"- {u['citation_label']} [{u['content_type']}, {u['status']}]: {u['text'][:280]}"
+        for u in units
+    ]
+    return "Relevant provisions on file (automated summary unavailable):\n" + "\n".join(lines)
 
 
 def fb_report(recon: dict) -> str:

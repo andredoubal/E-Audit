@@ -8,8 +8,9 @@ const NAV = [
   { to: `/cases/${HERO}/casework`, label: "Casework", end: false, icon: "✉" },
   { to: `/cases/${HERO}/reconciliation`, label: "Reconciliation", end: false, icon: "▦" },
   { to: "/rules", label: "Rulebook", end: false, icon: "▤" },
+  { to: "/regulatory", label: "Legal retrieval", end: false, icon: "§" },
 ];
-const SOON = ["Legal retrieval", "Audit report", "Auditor approval"];
+const SOON = ["Audit report", "Auditor approval"];
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (

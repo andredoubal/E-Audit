@@ -12,7 +12,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
 
-SCHEMAS = ("core", "recon")
+SCHEMAS = ("core", "recon", "regulatory")
 
 engine = create_engine(settings.database_url, future=True, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

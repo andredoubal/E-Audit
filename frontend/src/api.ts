@@ -652,3 +652,46 @@ export const deleteCalc = (id: string, calcId: number) =>
   fetch(`/api/cases/${id}/calc/${calcId}`, { method: "DELETE" }).then((r) => r.json());
 
 export const getStepEmails = (id: string) => getJSON<StepEmails>(`/cases/${id}/emails`);
+
+// ============================================================ REGULATORY KNOWLEDGE (RAG)
+export interface RegCitedUnit {
+  unit_id: string;
+  citation_label: string;
+  content_type: string;
+  text: string;
+  authority: string;
+  effective_from: string;
+  effective_to: string | null;
+  status: "ACTIVE" | "SUPERSEDED" | "NEEDS_LEGAL_VALIDATION";
+  score: number;
+  parent: RegCitedUnit | null;
+  related: { type: string; unit_id: string; citation_label: string }[];
+}
+export interface RegQueryResult {
+  trace_id: number;
+  query: string;
+  tax_period: string | null;
+  cited_units: RegCitedUnit[];
+}
+export interface RegTrace {
+  id: number;
+  query: string;
+  filters: Record<string, unknown>;
+  candidates: { unit_id: string; lexical: number; vector: number; exact: number; fused: number }[];
+  chosen_chunks: string[];
+  legal_version: Record<string, { resolved_unit_id: string; status: string }>;
+}
+
+export const askRegulatoryQuery = (
+  question: string,
+  taxPeriod?: string,
+  regulationCode = "VAT-IR",
+) =>
+  postJSON<RegQueryResult>("/regulatory/query", {
+    question,
+    tax_period: taxPeriod || null,
+    regulation_code: regulationCode,
+  });
+
+export const getRegulatoryTrace = (traceId: number) =>
+  getJSON<RegTrace>(`/regulatory/trace/${traceId}`);

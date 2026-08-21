@@ -23,3 +23,26 @@ export function useReport(id?: string, rev?: number) {
   }, [id, rev]);
   return { text, streaming: source === null, source };
 }
+
+export function useRegulatoryAnswer(traceId?: number) {
+  const [text, setText] = useState("");
+  const [source, setSource] = useState<AiSource | null>(null);
+  useEffect(() => {
+    if (!traceId) return;
+    setText("");
+    setSource(null);
+    const es = new EventSource(`/api/regulatory/ask/${traceId}`);
+    es.addEventListener("token", (e) => setText((t) => t + (e as MessageEvent).data));
+    es.addEventListener("fallback", () => setText(""));                 // clear partial
+    es.addEventListener("done", (e) => {
+      setSource((e as MessageEvent).data as AiSource);
+      es.close();
+    });
+    es.onerror = () => {
+      es.close();
+      setSource((s) => s ?? "stream-error");
+    };
+    return () => es.close();
+  }, [traceId]);
+  return { text, streaming: source === null, source };
+}

@@ -1,3 +1,5 @@
+from datetime import date as _date
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
@@ -7,8 +9,9 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import (
     Taxpayer, VatReturn, Invoice, AuditCase, Rule, TaxpayerResponse, EventLog, GapFinding,
-    AuditorCalculation,
+    AuditorCalculation, RetrievalTrace,
 )
+from ..regulatory.agent import answer_query, grounding_from_trace
 from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
@@ -760,3 +763,48 @@ def step_emails(case_id: str, db: Session = Depends(get_db)):
 
     return {"case_id": case_id, "emails": out,
             "findings": findings, "exposure": inv.get("exposure", {})}
+
+
+# ============================================================ REGULATORY KNOWLEDGE (RAG)
+class RegulatoryQueryIn(BaseModel):
+    question: str
+    tax_period: str | None = None       # ISO date
+    regulation_code: str = "VAT-IR"
+
+
+@router.post("/regulatory/query")
+def regulatory_query(body: RegulatoryQueryIn, db: Session = Depends(get_db)):
+    """Deterministic retrieval + version resolution + relationship expansion — no Claude call,
+    works with zero API key. Returns the citations the panel renders immediately."""
+    period = _date.fromisoformat(body.tax_period) if body.tax_period else None
+    grounding, trace_id = answer_query(
+        db, body.question, regulation_code=body.regulation_code, tax_period=period)
+    db.commit()
+    return {"trace_id": trace_id, **grounding}
+
+
+@router.get("/regulatory/ask/{trace_id}")
+def regulatory_ask(trace_id: int, db: Session = Depends(get_db)):
+    """Streams the drafted explanation over a trace's already-cited grounding — never
+    re-runs retrieval, so the explanation always matches what the citations panel showed."""
+    trace = db.get(RetrievalTrace, trace_id)
+    if trace is None:
+        raise HTTPException(404, "trace not found")
+    grounding = grounding_from_trace(db, trace)
+    return StreamingResponse(llm.stream_regulatory_answer(grounding),
+                             media_type="text/event-stream")
+
+
+@router.get("/regulatory/trace/{trace_id}")
+def regulatory_trace_view(trace_id: int, db: Session = Depends(get_db)):
+    """Debug endpoint: the full retrieval trace as JSON — every candidate, its scores, the
+    chosen chunks and the resolved legal version. No hidden chain-of-thought."""
+    trace = db.get(RetrievalTrace, trace_id)
+    if trace is None:
+        raise HTTPException(404, "trace not found")
+    return {
+        "id": trace.id, "query": trace.query_text, "filters": trace.filters,
+        "candidates": trace.candidates, "chosen_chunks": trace.chosen_chunks,
+        "legal_version": trace.legal_version, "answer_source": trace.answer_source,
+        "verified": trace.verified, "violations": trace.violations,
+    }

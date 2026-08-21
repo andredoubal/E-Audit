@@ -6,6 +6,7 @@ import Reconciliation from "./pages/Reconciliation";
 import Dossier from "./pages/Dossier";
 import Casework from "./pages/Casework";
 import Intake from "./pages/Intake";
+import Regulatory from "./pages/Regulatory";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/cases/:id/casework" element={<Casework />} />
         <Route path="/cases/:id/reconciliation" element={<Reconciliation />} />
         <Route path="/rules" element={<Rules />} />
+        <Route path="/regulatory" element={<Regulatory />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

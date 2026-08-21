@@ -31,10 +31,12 @@ from .prompts import (
     DRAFT_LETTER_SYSTEM, DRAFT_REQUEST_INSTR, DRAFT_FOLLOWUP_INSTR,
     DRAFT_VERDICT_INSTR, fence_facts,
     CALC_SYSTEM, CALC_INSTR, build_calc_context, fence_calc,
+    REGULATORY_SYSTEM, REGULATORY_INSTR, build_regulatory_context,
 )
 from .verify import (
     verify_claims, verify_conclusion, verify_correspondence, render_placeholders, StreamGuard,
     fb_narration, fb_nba, fb_summary, fb_report,
+    verify_citation, fb_regulatory_answer,
 )
 
 MODEL = settings.claude_model  # "claude-opus-5"
@@ -433,6 +435,42 @@ class LLMService:
         if any(ch.isdigit() for ch in out.get("understood", "")):
             out["understood"] = "Method parsed — check the query below before relying on it."
         return {**out, "source": "claude"}
+
+    # ------------------------------------------------- FEATURE 8: REGULATORY Q&A
+    def stream_regulatory_answer(self, grounding: dict) -> Iterator[str]:
+        """Yields SSE frames explaining a Regulatory Knowledge Agent grounding. Same shape as
+        stream_report: try, verify (verify_citation — cite-or-drop), one corrective retry
+        naming the exact violations, else a deterministic fallback (a plain citation list)."""
+        enabled, reason = availability()
+        if not enabled:
+            yield _sse_token(fb_regulatory_answer(grounding))
+            yield _sse("done", _src(reason))
+            return
+
+        ctx = build_regulatory_context(grounding)
+        raw, err = self._prose(ctx, REGULATORY_INSTR, "Answer the question now.", 700)
+        if not err:
+            v = verify_citation(raw, grounding)
+            if not v["ok"]:
+                corr = ("Answer the question now. Your earlier draft was REJECTED for: "
+                        + "; ".join(v["violations"])
+                        + ". Cite ONLY unit_ids present in GROUNDING, using [[LAW:...]] for "
+                          "binding text or [[REF:...]] for non-binding text, exactly as "
+                          "defined.")
+                raw2, err2 = self._prose(ctx, REGULATORY_INSTR, corr, 700)
+                if not err2 and verify_citation(raw2, grounding)["ok"]:
+                    raw = raw2
+                else:
+                    err = "blocked-unverified"
+        if err:
+            yield _sse("fallback", "")
+            yield _sse_token(fb_regulatory_answer(grounding))
+            yield _sse("done", err if err in ("blocked-refusal", "api-error")
+                       else "blocked-unverified")
+            return
+        for line in raw.split("\n"):
+            yield _sse_token(line + "\n")
+        yield _sse("done", "claude")
 
 
 llm = LLMService()  # module singleton

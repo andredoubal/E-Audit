@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     allow_hosted_egress: bool = False       # EAUDIT_ALLOW_HOSTED_EGRESS (real-data escape hatch)
     data_is_synthetic: bool = True          # EAUDIT_DATA_IS_SYNTHETIC
     anthropic_base_url: str | None = None   # prod: in-VPC gateway (the ONLY swap point)
+    # Regulatory RAG: "hashing" (default, zero network) or "fastembed" (real neural embeddings,
+    # requires `pip install fastembed` and internet on first run — see regulatory/embeddings.py)
+    regulatory_embedding_provider: str = "hashing"
 
     @property
     def cors_list(self) -> list[str]:

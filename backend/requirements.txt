@@ -8,3 +8,6 @@ python-dateutil>=2.9
 anthropic>=0.116
 openpyxl>=3.1
 python-multipart>=0.0.9
+pdfplumber>=0.11
+numpy>=1.26
+python-bidi>=0.6
