@@ -41,6 +41,32 @@ export interface CaseRow {
   priority: PriorityScore;
 }
 
+/* ---- manual case creation — the only route a case exists through, since there is no
+   live risk-engine integration in this PoC. */
+export interface NewCaseTaxpayerIn {
+  name: string;
+  vat_registration_number: string;
+  ind_sector?: string;
+  economic_activities?: { isic: string; description: string; primary: boolean }[];
+  contact_phone?: string;
+  contact_email?: string;
+  contact_address?: string;
+  audited_before?: boolean;
+  audited_before_note?: string;
+}
+export interface NewCaseIn {
+  case_id?: string;
+  period_from: string;   // YYYY-MM-DD
+  period_to: string;
+  creation_date?: string;
+  creation_reason?: string;
+  audit_manager?: string;
+  audit_supervisor?: string;
+  audit_officer?: string;
+  taxpayer: NewCaseTaxpayerIn;
+}
+export const createCase = (body: NewCaseIn) => postJSON<{ case_id: string }>("/cases", body);
+
 export type RuleKind = "explanation" | "mistake" | "risk";
 
 export interface RuleRow {

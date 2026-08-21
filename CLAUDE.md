@@ -361,6 +361,10 @@ JS port is validated field-by-field against the Python engine's output (currentl
 > hand-written JS mirror, kept in sync manually. Re-port before relying on
 > `portal.html` for a demo that needs any of those six items.
 
+**One feature that will never port: manual case creation ("Add Case").** It writes to a
+database `portal.html` doesn't have — a genuine capability boundary, not a scope choice.
+Cases in the standalone portal stay limited to the embedded seed set.
+
 ## Running locally
 
 **1. Database** (Postgres on port **5433**):

@@ -6,12 +6,15 @@ import Reconciliation from "./pages/Reconciliation";
 import Dossier from "./pages/Dossier";
 import Casework from "./pages/Casework";
 import Intake from "./pages/Intake";
+import NewCase from "./pages/NewCase";
 
 export default function App() {
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Overview />} />
+        {/* declared before /cases/:id so "new" is never read as a case id */}
+        <Route path="/cases/new" element={<NewCase />} />
         {/* a case is worked in lifecycle order: what we hold → what we ask for → what it means */}
         <Route path="/cases/:id" element={<Dossier />} />
         <Route path="/cases/:id/intake" element={<Intake />} />

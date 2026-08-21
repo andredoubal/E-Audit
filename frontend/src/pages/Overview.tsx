@@ -71,14 +71,19 @@ export default function Overview() {
           <p className="eyebrow">Command deck</p>
           <h1>Overview</h1>
         </div>
-        <button
-          className={"btn-ghost" + (resetState === "confirm" ? " confirm" : "")}
-          onClick={reset}
-          disabled={resetState === "busy"}
-          title="Restore the demo to its seeded state"
-        >
-          {resetState === "busy" ? "Resetting…" : resetState === "confirm" ? "Confirm reset?" : "↻ Reset demo"}
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn" onClick={() => nav("/cases/new")} title="Create a case by hand — there is no live risk-engine feed">
+            + Add case
+          </button>
+          <button
+            className={"btn-ghost" + (resetState === "confirm" ? " confirm" : "")}
+            onClick={reset}
+            disabled={resetState === "busy"}
+            title="Restore the demo to its seeded state"
+          >
+            {resetState === "busy" ? "Resetting…" : resetState === "confirm" ? "Confirm reset?" : "↻ Reset demo"}
+          </button>
+        </div>
       </div>
 
       <div className="tiles">

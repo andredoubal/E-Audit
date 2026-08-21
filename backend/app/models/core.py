@@ -56,6 +56,20 @@ class Taxpayer(Base):
     #  "payments_late": 1, "outstanding_balance": 0.0}
     filing_compliance: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    # --- contact + prior-audit knowledge, captured by hand on manual case creation -----
+    # There is no integration to source these from; a case created through the "Add Case"
+    # form is the only place they get filled in. A seeded/demo taxpayer leaves them blank,
+    # and the audit report shows [not held] exactly as before.
+    contact_phone: Mapped[str] = mapped_column(String(40), default="")
+    contact_email: Mapped[str] = mapped_column(String(120), default="")
+    contact_address: Mapped[str] = mapped_column(String(240), default="")
+    # Auditor-stated, not derived — the live-computed history badge (dossier/collect.py)
+    # already answers this for any taxpayer with real case history in this system; this is
+    # for the taxpayer being entered here for the first time, whose real audit history (if
+    # any) predates what this system can see.
+    audited_before: Mapped[bool] = mapped_column(Boolean, default=False)
+    audited_before_note: Mapped[str] = mapped_column(Text, default="")
+
     @property
     def primary_activity(self) -> dict:
         for a in self.economic_activities or []:
@@ -187,6 +201,14 @@ class AuditCase(Base):
     referral_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     sla_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # audit deadline (prioritization)
     scenario_key: Mapped[str] = mapped_column(String(30), default="")   # demo scenario tag
+    # one of app.reporting.audit_report.CREATION_REASONS; blank on a seeded case (the report
+    # falls back to [not held] rather than the old hardcoded "Risk Engine" guess)
+    creation_reason: Mapped[str] = mapped_column(String(40), default="")
+    # "Assigned Audit Team information" on the report template — auditor-entered on manual
+    # case creation, blank (→ [not held]) on a seeded/demo case
+    audit_manager: Mapped[str] = mapped_column(String(120), default="")
+    audit_supervisor: Mapped[str] = mapped_column(String(120), default="")
+    audit_officer: Mapped[str] = mapped_column(String(120), default="")
     action_taken: Mapped[str] = mapped_column(String(60), default="")
     audit_result_type: Mapped[str] = mapped_column(String(30), default="")
     root_cause_code: Mapped[str] = mapped_column(String(30), default="")

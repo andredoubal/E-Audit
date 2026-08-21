@@ -6,9 +6,14 @@ fills them from the case, and it is deliberately explicit about the difference b
 states, because an auditor signing a report needs to be able to tell them apart:
 
 * **filled** — the engine established it. It carries a figure or a fact from the case file.
-* **not held** — the proof-of-concept has no source for it (contact details, the audit team's
-  names, the field-audit date). Written as `[not held]` rather than left blank, so an empty
-  cell is never mistaken for "nothing to report".
+  For a case created through "Add Case" (`POST /cases`), this now includes contact details,
+  the creation reason and the assigned audit team's names — the only route by which this
+  PoC ever has them, since there is no integration to source them from otherwise.
+* **not held** — nothing filled it in: a seeded/demo case (never asked), or a manually
+  created one where the auditor left the field blank (the field-audit date is always this,
+  since no field visit is ever made under this PoC's desk-audit-only scope). Written as
+  `[not held]` rather than left blank, so an empty cell is never mistaken for "nothing to
+  report".
 * **for the auditor** — a judgement the report needs and the machine must not make. Rulings
   given verbally, penalties, whether a future audit is warranted.
 
@@ -74,10 +79,17 @@ def _priority_band(score: int) -> str:
 
 # ------------------------------------------------------------------ the blocks
 def taxpayer_information(taxpayer) -> Section:
+    contact_parts = [p for p in (
+        f"Tel: {taxpayer.contact_phone}" if getattr(taxpayer, "contact_phone", "") else "",
+        f"E-mail: {taxpayer.contact_email}" if getattr(taxpayer, "contact_email", "") else "",
+        f"Address: {taxpayer.contact_address}" if getattr(taxpayer, "contact_address", "") else "",
+    ) if p]
+    contact = "; ".join(contact_parts) if contact_parts else NOT_HELD
     return Section("Taxpayer information", [
         Field("Taxpayer name", taxpayer.name),
         Field("Taxpayer TIN", taxpayer.vat_registration_number),
-        Field("Taxpayer contact details", NOT_HELD,
+        Field("Taxpayer contact details", contact,
+              "" if contact_parts else
               "Telephone, address and e-mail are not among the sources this "
               "proof-of-concept holds."),
     ])
@@ -89,7 +101,11 @@ def case_information(case, priority: dict | None = None) -> Section:
         Field("Audit Case ID", case.case_id),
         Field("Audit Creation Date",
               case.referral_date.isoformat() if case.referral_date else NOT_HELD),
-        Field("Case Creation Reason", "Risk Engine",
+        # Every seeded demo case was conceived as a risk-engine referral, so that stays the
+        # fallback here (unlike contact details/audit team below, which were never held for
+        # any case) — only a case created through the "Add Case" form states a different,
+        # real reason.
+        Field("Case Creation Reason", case.creation_reason or "Risk Engine",
               "One of: " + ", ".join(CREATION_REASONS)),
         Field("Date Audit closed",
               date.today().isoformat() if case.status == "closed" else FOR_AUDITOR),
@@ -114,12 +130,13 @@ def case_information(case, priority: dict | None = None) -> Section:
     ])
 
 
-def audit_team() -> Section:
-    """Names the proof-of-concept has no source for. Never invented."""
+def audit_team(case) -> Section:
+    """Real names for a case created through "Add Case"; [not held] for a seeded one — never
+    invented either way."""
     return Section("Assigned Audit Team information", [
-        Field("Audit Manager", NOT_HELD),
-        Field("Audit Supervisor", NOT_HELD),
-        Field("Audit Officer", NOT_HELD),
+        Field("Audit Manager", case.audit_manager or NOT_HELD),
+        Field("Audit Supervisor", case.audit_supervisor or NOT_HELD),
+        Field("Audit Officer", case.audit_officer or NOT_HELD),
     ])
 
 
@@ -315,7 +332,7 @@ def build(case, taxpayer, recon: dict, investigation: dict, *,
     sections = [
         taxpayer_information(taxpayer),
         case_information(case, priority),
-        audit_team(),
+        audit_team(case),
         taxpayer_documentation(requested or [], received or [], gaps or []),
         audit_outcome(case, recon, findings, exposure,
                       investigation.get("conclusion", "")),

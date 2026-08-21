@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
@@ -234,6 +236,109 @@ def list_cases(db: Session = Depends(get_db)):
     ]
     rows.sort(key=lambda r: r["priority"]["score"], reverse=True)
     return rows
+
+
+# ------------------------------------------------------------------- manual case creation
+# There is no live risk-engine integration in this PoC — every case up to now has come from
+# a seed script. This is the only way an auditor can actually put a case in front of the
+# tool themselves, so it doubles as the one place several report-template fields
+# ("Case Creation Reason", "Assigned Audit Team information", taxpayer contact details) can
+# ever be filled with something real instead of [not held]. See reporting/audit_report.py.
+class NewCaseTaxpayerIn(BaseModel):
+    name: str
+    vat_registration_number: str
+    ind_sector: str = ""
+    economic_activities: list = []
+    contact_phone: str = ""
+    contact_email: str = ""
+    contact_address: str = ""
+    audited_before: bool = False
+    audited_before_note: str = ""
+
+
+class NewCaseIn(BaseModel):
+    case_id: str = ""                    # blank = auto-generate the next CASE-{year}-NNNN
+    period_from: date
+    period_to: date
+    creation_date: date | None = None     # blank = today
+    creation_reason: str = ""             # one of audit_report.CREATION_REASONS
+    audit_manager: str = ""
+    audit_supervisor: str = ""
+    audit_officer: str = ""
+    taxpayer: NewCaseTaxpayerIn
+
+
+def _next_case_id(db: Session, year: int) -> str:
+    """CASE-{year}-NNNN, one past whatever already exists for that year.
+
+    Deliberately not the CASE-H{year}-... shape corpus.py uses for the historical/precedent
+    corpus — that prefix marks a different population and must not collide with live cases.
+    """
+    prefix = f"CASE-{year}-"
+    existing = db.scalars(
+        select(AuditCase.case_id).where(AuditCase.case_id.like(f"{prefix}%"))
+    ).all()
+    max_seq = 0
+    for cid in existing:
+        tail = cid[len(prefix):]
+        if tail.isdigit():
+            max_seq = max(max_seq, int(tail))
+    return f"{prefix}{max_seq + 1:04d}"
+
+
+@router.post("/cases")
+def create_case(body: NewCaseIn, db: Session = Depends(get_db)):
+    """Create a case by hand. Reuses the taxpayer by VAT registration number if one already
+    exists, rather than erroring on the unique constraint — an auditor re-testing with the
+    same synthetic TIN should update the record, not be blocked by it."""
+    tp_in = body.taxpayer
+    if not tp_in.name.strip() or not tp_in.vat_registration_number.strip():
+        raise HTTPException(422, "taxpayer name and VAT registration number are required")
+    if body.period_from > body.period_to:
+        raise HTTPException(422, "period_from must not be after period_to")
+
+    tp = db.scalar(select(Taxpayer).where(
+        Taxpayer.vat_registration_number == tp_in.vat_registration_number.strip()))
+    if tp:
+        tp.name = tp_in.name.strip()
+        tp.ind_sector = tp_in.ind_sector.strip()
+        tp.economic_activities = tp_in.economic_activities
+        tp.contact_phone = tp_in.contact_phone.strip()
+        tp.contact_email = tp_in.contact_email.strip()
+        tp.contact_address = tp_in.contact_address.strip()
+        tp.audited_before = tp_in.audited_before
+        tp.audited_before_note = tp_in.audited_before_note.strip()
+    else:
+        tp = Taxpayer(
+            vat_registration_number=tp_in.vat_registration_number.strip(),
+            name=tp_in.name.strip(), ind_sector=tp_in.ind_sector.strip(),
+            economic_activities=tp_in.economic_activities,
+            contact_phone=tp_in.contact_phone.strip(), contact_email=tp_in.contact_email.strip(),
+            contact_address=tp_in.contact_address.strip(),
+            audited_before=tp_in.audited_before,
+            audited_before_note=tp_in.audited_before_note.strip(),
+        )
+        db.add(tp)
+    db.flush()   # assign tp.id for a brand-new taxpayer
+
+    creation_date = body.creation_date or date.today()
+    case_id = body.case_id.strip() or _next_case_id(db, creation_date.year)
+    if db.scalar(select(AuditCase).where(AuditCase.case_id == case_id)):
+        raise HTTPException(409, f"case {case_id} already exists")
+
+    db.add(AuditCase(
+        case_id=case_id, taxpayer_id=tp.id,
+        period_from=body.period_from, period_to=body.period_to,
+        audit_type="desk", status="referred", referral_date=creation_date,
+        creation_reason=body.creation_reason.strip(),
+        audit_manager=body.audit_manager.strip(),
+        audit_supervisor=body.audit_supervisor.strip(),
+        audit_officer=body.audit_officer.strip(),
+    ))
+    db.add(EventLog(case_id=case_id, actor="auditor", action="case-created",
+                    payload={"taxpayer": tp.name, "vat_no": tp.vat_registration_number}))
+    db.commit()
+    return {"case_id": case_id}
 
 
 @router.get("/overview")
