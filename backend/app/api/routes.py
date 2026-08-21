@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import (
     Taxpayer, VatReturn, Invoice, AuditCase, Rule, TaxpayerResponse, EventLog, GapFinding,
-    AuditorCalculation,
+    AuditorCalculation, AuditorDecision, AuditorFinding, PersistedHypothesis,
 )
 from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
+from ..agents import investigation_service as inv_service
 from ..agents.correspondence import draft_followup, draft_request
 from ..recon_engine import reconcile_case
 from ..priority import score_case
@@ -117,70 +118,160 @@ def case_precedent(case_id: str, db: Session = Depends(get_db)):
     return brief(db, c).to_dict()
 
 
+def _case_or_404(db: Session, case_id: str) -> AuditCase:
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    return c
+
+
 @router.get("/cases/{case_id}/investigate")
 def investigate_case(case_id: str, db: Session = Depends(get_db)):
-    """Run the multi-agent investigation over the reconciled case.
+    """Run the multi-agent investigation over the reconciled case, without storing it.
 
     Evidence agents propose typed hypotheses; a deterministic adjudicator settles each one
     against the engine's figures. No model is involved in any number here, and the whole
     loop runs without credentials — the agents are pattern detectors, not writers.
+
+    This is the stateless view. `/cases/{id}/investigation` is the same pipeline with its
+    conclusions kept, which is what the auditor rules on; both assemble their context from
+    `investigation_service.context_args` so the two can never disagree about what the agents
+    were shown.
     """
     from ..agents.orchestrator import investigate
 
-    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
-    if not c:
-        raise HTTPException(404, "case not found")
+    c = _case_or_404(db, case_id)
     recon = reconcile_case(db, case_id, persist=False)
+    return investigate(recon, **inv_service.context_args(db, c)).model_dump()
 
-    prior_returns = [
-        {"form_number": r.form_number,
-         "period_from": r.period_from.isoformat(), "period_to": r.period_to.isoformat(),
-         "vat_amount": next((float(b.vat_amount) for b in r.boxes
-                             if b.box_code == "standard_rate_sales" and b.direction == "sale"), 0.0)}
-        for r in db.scalars(
-            select(VatReturn).where(VatReturn.taxpayer_id == c.taxpayer_id,
-                                    VatReturn.period_from < c.period_from)
-            .order_by(VatReturn.period_from)).all()
-    ]
-    prior_cases = [
-        {"case_id": pc.case_id, "root_cause_code": pc.root_cause_code,
-         "result": pc.audit_result_type, "action": pc.action_taken}
-        for pc in db.scalars(
-            select(AuditCase).where(AuditCase.taxpayer_id == c.taxpayer_id,
-                                    AuditCase.case_id != case_id,
-                                    AuditCase.scenario_key != "corpus")).all()
-    ]
-    # §7's second line: whatever the taxpayer supplied, and whatever figure an auditor keyed in
-    # against it, so the adjudicator can re-add the source and check our own arithmetic.
-    docs = [
-        {"id": d.id, "filename": d.filename,
-         "columns": (d.content or {}).get("columns", []),
-         "rows": (d.content or {}).get("rows", [])}
-        for d in req_service.documents(db, case_id)
-    ]
-    recorded = [
-        {"seq": r.seq, "label": r.label, "amount": float(r.amount), "doc_name": r.doc_name}
-        for r in db.scalars(
-            select(TaxpayerResponse).where(TaxpayerResponse.case_id == case_id)
-            .order_by(TaxpayerResponse.seq)).all()
-    ]
-    # What the post-receipt agents reason over: the registration's activities (without which
-    # undisclosed secondary-activity revenue is undetectable), the figures the auditor has had
-    # checked, and whatever is still outstanding from the request.
-    activities = list(c.taxpayer.economic_activities or []) if c.taxpayer else []
-    calculations = calc_service.listing(db, case_id)
-    gaps = [
-        {"kind": g.kind, "item_label": g.item_label, "detail": g.detail,
-         "severity": g.severity}
-        for g in db.scalars(select(GapFinding).where(GapFinding.case_id == case_id)).all()
-    ]
-    # What the auditor formally asked for and confirmed — so an agent can tell a document
-    # that answers the request apart from one that merely happens to be on file.
-    req = req_service.current_request(db, case_id)
-    requested = [{"key": i.catalog_key, "label": i.label} for i in (req.items if req else [])]
-    return investigate(recon, prior_returns=prior_returns, prior_cases=prior_cases,
-                       documents=docs, recorded=recorded, cr_activities=activities,
-                       calculations=calculations, gaps=gaps, requested=requested).model_dump()
+
+# ======================================================= the investigation, remembered
+#
+# `/investigate` above recomputes and returns; it never stored anything, which is why an
+# auditor could read a hypothesis but not rule on one. These endpoints work over the
+# persisted view instead: the same pipeline, with its conclusions kept so a decision has
+# something to attach to and a re-run has something to compare against.
+
+
+@router.get("/cases/{case_id}/investigation")
+def investigation_state(case_id: str, db: Session = Depends(get_db)):
+    """The persisted investigation: hypotheses, their verdicts, and what the auditor decided.
+
+    Runs the investigation once on first read so opening the tab shows a worked case rather
+    than an empty page asking to be told to start.
+    """
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return inv_service.state(db, c)
+
+
+class RunIn(BaseModel):
+    trigger: str = "auditor-requested"
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/investigation/run")
+def investigation_run(case_id: str, body: RunIn | None = None,
+                      db: Session = Depends(get_db)):
+    """Investigate again, merging into what the case already concluded.
+
+    This is the loop: new documents arrive, the auditor re-runs, and each hypothesis is
+    re-adjudicated against the larger evidence base. A verdict that moves keeps the old one
+    beside it, and any decision made before the ground shifted is flagged rather than
+    silently overwritten.
+    """
+    c = _case_or_404(db, case_id)
+    body = body or RunIn()
+    run = inv_service.run(db, c, trigger=body.trigger, note=body.note)
+    state = inv_service.state(db, c)
+    state["last_run"] = {"seq": run.seq, "changed_count": run.changed_count}
+    return state
+
+
+class DecisionIn(BaseModel):
+    decision: str
+    comment: str = ""
+
+
+@router.post("/cases/{case_id}/hypotheses/{hypothesis_id}/decision")
+def decide(case_id: str, hypothesis_id: str, body: DecisionIn,
+           db: Session = Depends(get_db)):
+    """Record what the auditor decided about one hypothesis.
+
+    Only `accepted` reaches the report. The rest are kept because what was rejected, and
+    why, is as much a part of the audit file as what was upheld — and because an auditor
+    who reopens the case in a month needs to see that a question was already answered.
+    """
+    from ..models.investigation import DECISIONS
+
+    c = _case_or_404(db, case_id)
+    if body.decision not in DECISIONS:
+        raise HTTPException(422, f"decision must be one of {', '.join(DECISIONS)}")
+    h = db.scalar(select(PersistedHypothesis).where(
+        PersistedHypothesis.case_id == case_id,
+        PersistedHypothesis.hypothesis_id == hypothesis_id))
+    if h is None:
+        raise HTTPException(404, "hypothesis not found on this case")
+
+    row = db.scalar(select(AuditorDecision).where(
+        AuditorDecision.case_id == case_id,
+        AuditorDecision.hypothesis_id == hypothesis_id))
+    if row is None:
+        row = AuditorDecision(case_id=case_id, hypothesis_id=hypothesis_id)
+        db.add(row)
+    row.decision = body.decision
+    row.comment = (body.comment or "").strip()
+    row.decided_on_status = h.status
+    row.superseded_by_run = None          # deciding again clears the re-confirmation flag
+    db.add(EventLog(case_id=case_id, actor="auditor", action="hypothesis-decision",
+                    payload={"hypothesis_id": hypothesis_id, "decision": body.decision,
+                             "status": h.status}))
+    db.commit()
+    return inv_service.state(db, c)
+
+
+class AuditorFindingIn(BaseModel):
+    statement: str
+    outcome_code: str = ""
+    amount: float = 0.0
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/auditor-findings")
+def add_auditor_finding(case_id: str, body: AuditorFindingIn,
+                        db: Session = Depends(get_db)):
+    """A finding the auditor wrote themselves.
+
+    The agents cover what they have tests for. Anything else still has to be recordable, and
+    it has to stay distinguishable in the report from what a model proposed.
+    """
+    _case_or_404(db, case_id)
+    statement = (body.statement or "").strip()
+    if not statement:
+        raise HTTPException(422, "statement is required")
+    seq = 1 + len(db.scalars(select(AuditorFinding).where(
+        AuditorFinding.case_id == case_id)).all())
+    row = AuditorFinding(case_id=case_id, seq=seq, statement=statement,
+                         outcome_code=(body.outcome_code or "").strip(),
+                         amount=round(float(body.amount or 0), 2),
+                         basis=f"auditor|{seq}", note=(body.note or "").strip())
+    db.add(row)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-added",
+                    payload={"seq": seq, "statement": statement[:200]}))
+    db.commit()
+    return {"seq": seq, "statement": statement, "amount": float(row.amount),
+            "outcome_code": row.outcome_code, "note": row.note, "basis": row.basis}
+
+
+@router.get("/cases/{case_id}/auditor-findings")
+def list_auditor_findings(case_id: str, db: Session = Depends(get_db)):
+    _case_or_404(db, case_id)
+    return [{"seq": r.seq, "statement": r.statement, "amount": float(r.amount or 0),
+             "outcome_code": r.outcome_code, "note": r.note, "basis": r.basis,
+             "created_at": r.created_at.isoformat() if r.created_at else ""}
+            for r in db.scalars(select(AuditorFinding)
+                                .where(AuditorFinding.case_id == case_id)
+                                .order_by(AuditorFinding.seq)).all()]
 
 
 class RulePatch(BaseModel):
@@ -496,11 +587,6 @@ def delete_response(case_id: str, seq: int, db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------- information request / response loop
-def _case_or_404(db: Session, case_id: str) -> AuditCase:
-    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
-    if not c:
-        raise HTTPException(404, "case not found")
-    return c
 
 
 @router.get("/cases/{case_id}/plan")
