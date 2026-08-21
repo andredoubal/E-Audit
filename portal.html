@@ -705,6 +705,59 @@ const DEMO_TODAY = DATA.demo_today;
 const SEED_RULES = DATA.rules.map((r) => ({ ...r }));
 let STATE = { rules: SEED_RULES.map((r) => ({ ...r })), responses: {} };
 
+/* ------------------------------------------------------------- manually created cases
+   There is no backend here, so "Add case" cannot write to a database -- it writes to this
+   browser's localStorage instead. Cases created this way exist only in the browser that
+   created them; they are not the same cases a real ANTHROPIC-backed deployment would show
+   another auditor. A pristine copy of the seed arrays is kept so "Reset demo" can drop them,
+   the same way re-seeding the real database drops everything that isn't in the fixtures. */
+const SEED_TAXPAYERS = DATA.taxpayers.map((t) => ({ ...t }));
+const SEED_CASES = DATA.cases.map((c) => ({ ...c }));
+DATA.dossiers = DATA.dossiers || {};
+DATA.casework = DATA.casework || {};
+const LOCAL_STORAGE_KEY = "eaudit-portal-local-cases";
+let LOCAL_TAXPAYERS = [];
+let LOCAL_CASES = [];
+let LOCAL_DOSSIERS = {};
+
+function saveLocalCases() {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+      taxpayers: LOCAL_TAXPAYERS, cases: LOCAL_CASES, dossiers: LOCAL_DOSSIERS,
+    }));
+  } catch (e) { /* private browsing / storage disabled -- the case still works this session */ }
+}
+
+function loadLocalCases() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "null"); }
+  catch (e) { saved = null; }
+  if (!saved) return;
+  LOCAL_TAXPAYERS = saved.taxpayers || [];
+  LOCAL_CASES = saved.cases || [];
+  LOCAL_DOSSIERS = saved.dossiers || {};
+  // Reuse an existing taxpayer by id rather than pushing a duplicate row.
+  LOCAL_TAXPAYERS.forEach((tp) => {
+    if (!DATA.taxpayers.some((t) => t.id === tp.id)) DATA.taxpayers.push(tp);
+  });
+  LOCAL_CASES.forEach((c) => {
+    if (!DATA.cases.some((x) => x.case_id === c.case_id)) DATA.cases.push(c);
+  });
+  Object.assign(DATA.dossiers, LOCAL_DOSSIERS);
+}
+
+function clearLocalCases() {
+  DATA.taxpayers.length = 0;
+  DATA.taxpayers.push(...SEED_TAXPAYERS.map((t) => ({ ...t })));
+  DATA.cases.length = 0;
+  DATA.cases.push(...SEED_CASES.map((c) => ({ ...c })));
+  Object.keys(LOCAL_DOSSIERS).forEach((k) => delete DATA.dossiers[k]);
+  LOCAL_TAXPAYERS = []; LOCAL_CASES = []; LOCAL_DOSSIERS = {};
+  try { localStorage.removeItem(LOCAL_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+
+loadLocalCases();
+
 // ===== ENGINE START =====  (pure port of backend/app/recon_engine.py + priority.py)
 const MATERIALITY_FLOOR = 1000.0;
 const MATERIALITY_PCT = 0.005;
@@ -2364,6 +2417,7 @@ const REFERRAL_REASON = {
   POS_VS_RETURN: "POS takings look higher than declared",
   FINANCIAL_STATUS: "Financials out of line with the returns",
   REPEAT_FINDING: "Same issue found in an earlier audit",
+  MANUAL: "Manually created — no risk-engine referral",
 };
 const readableReason = (code) =>
   REFERRAL_REASON[code] || String(code || "").replace(/_/g, " ").toLowerCase();
@@ -2388,6 +2442,246 @@ function caseStanding(caseId, status) {
 const daysOpen = (referral) =>
   referral ? Math.max(0, Math.round((new Date(DEMO_TODAY) - new Date(referral)) / 86400000)) : null;
 
+/* ============================================================== add case (manual creation)
+   There is no live risk-engine integration, so a case only ever exists here because the seed
+   script created it -- or, now, because an auditor filled this form in. Mirrors
+   frontend/src/pages/NewCase.tsx field-for-field, and backend/app/api/routes.py's POST
+   /cases logic (reuse-by-VAT, CASE-{year}-{seq} generation) in JS over the in-browser DATA
+   arrays instead of a database. */
+const NC_SECTORS = [
+  { sector: "Wholesale trade", isic: "4690", description: "Non-specialised wholesale trade" },
+  { sector: "Retail trade", isic: "4711", description: "Retail sale in non-specialised stores" },
+  { sector: "Construction", isic: "4100", description: "Construction of buildings" },
+  { sector: "Transport & logistics", isic: "4923", description: "Freight transport by road" },
+  { sector: "Manufacturing", isic: "2011", description: "Manufacture of basic chemicals" },
+  { sector: "Food retail", isic: "4721", description: "Retail sale of food in specialised stores" },
+  { sector: "Professional services", isic: "6920", description: "Accounting, bookkeeping and auditing" },
+  { sector: "Medical equipment", isic: "4649", description: "Wholesale of other household goods" },
+  { sector: "Telecommunications", isic: "6110", description: "Wired telecommunications activities" },
+  { sector: "Hospitality", isic: "5610", description: "Restaurants and mobile food service activities" },
+  { sector: "Real estate", isic: "6810", description: "Real estate activities with own or leased property" },
+  { sector: "Information technology", isic: "6201", description: "Computer programming activities" },
+];
+const NC_NAME_A = ["Al-Rajhi", "Al-Nahda", "Al-Waha", "Riyadh", "Jeddah", "Dammam", "Qassim", "Asir",
+  "Madinah", "Taif", "Khobar", "Buraidah", "Najran", "Jazan", "Sakaka", "Arar",
+  "Al-Bahah", "Unaizah", "Hafar", "Yanbu", "Rabigh", "Dhahran"];
+const NC_NAME_B = ["Trading", "Industrial", "Commercial", "Development", "Services", "Enterprises",
+  "Group", "Holding", "Contracting", "Supplies", "Systems", "Solutions"];
+const NC_NAME_C = ["Co.", "Est.", "LLC", "Company", "Group"];
+const NC_REASONS = ["Risk Engine", "Whistleblowers report", "Report from OGAs", "Internal referral", "Other"];
+const NC_NAMES = ["Fahad Al-Otaibi", "Noura Al-Harbi", "Khalid Al-Ghamdi", "Sara Al-Dosari",
+  "Abdullah Al-Qahtani", "Maha Al-Shehri"];
+
+const ncPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const ncDigits = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join("");
+function ncQuarterEnd(fromISO) {
+  const d = new Date(fromISO + "T00:00:00Z");
+  d.setUTCMonth(d.getUTCMonth() + 3);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function ncFreshDraft() {
+  return {
+    caseId: "", name: "", vat: "", phone: "", email: "", address: "",
+    activities: [], sectorPick: NC_SECTORS[0].sector,
+    creationDate: DEMO_TODAY, creationReason: "", periodFrom: "", periodTo: "",
+    manager: "", supervisor: "", officer: "",
+    auditedBefore: false, auditedBeforeNote: "", err: null,
+  };
+}
+let NEW_CASE_DRAFT = null;
+
+/* A field edited but not yet blurred has fired no "change" event. Any action that is about
+   to re-render the form (add/remove/make-primary/submit) reads the live DOM first, so that
+   typed-but-uncommitted text is not lost under it. */
+function ncSyncFromDom() {
+  if (!NEW_CASE_DRAFT) return;
+  document.querySelectorAll("[data-field]").forEach((el) => {
+    const name = el.getAttribute("data-field");
+    NEW_CASE_DRAFT[name] = el.type === "checkbox" ? el.checked : el.value;
+  });
+}
+
+function ncAutoGenerate() {
+  const d = NEW_CASE_DRAFT;
+  const s = ncPick(NC_SECTORS);
+  d.name = `${ncPick(NC_NAME_A)} ${ncPick(NC_NAME_B)} ${ncPick(NC_NAME_C)}`;
+  d.vat = `300${ncDigits(4)}00${ncDigits(1)}0003`;
+  d.phone = `+9665${ncDigits(8)}`;
+  d.email = "finance@example-taxpayer.sa";
+  d.address = `${ncPick(NC_NAME_A)} District, ${ncPick(["Riyadh", "Jeddah", "Dammam"])}, Saudi Arabia`;
+  d.activities = [{ isic: s.isic, description: s.description, primary: true }];
+  d.sectorPick = s.sector;
+  const from = "2025-01-01";
+  d.periodFrom = from;
+  d.periodTo = ncQuarterEnd(from);
+  d.creationDate = DEMO_TODAY;
+  d.creationReason = ncPick(NC_REASONS);
+  d.manager = ncPick(NC_NAMES);
+  d.supervisor = ncPick(NC_NAMES);
+  d.officer = ncPick(NC_NAMES);
+  d.auditedBefore = Math.random() < 0.3;
+  d.auditedBeforeNote = "";
+  d.caseId = "";
+  d.err = null;
+}
+
+function ncNextCaseId(year) {
+  let seq = 0;
+  const re = new RegExp("^CASE-" + year + "-(\\d+)$");
+  for (const c of DATA.cases) {
+    const m = re.exec(c.case_id);
+    if (m) seq = Math.max(seq, parseInt(m[1], 10));
+  }
+  return "CASE-" + year + "-" + String(seq + 1).padStart(4, "0");
+}
+
+function ncCreateCase() {
+  const d = NEW_CASE_DRAFT;
+  if (!d.name.trim() || !d.vat.trim() || !d.periodFrom || !d.periodTo) {
+    d.err = "Taxpayer name, TIN and tax period (from and to) are required.";
+    return;
+  }
+  if (d.periodFrom > d.periodTo) {
+    d.err = "Tax period 'from' must not be after 'to'.";
+    return;
+  }
+
+  const primary = d.activities.find((a) => a.primary) || d.activities[0];
+  let tp = DATA.taxpayers.find((t) => t.vat_no === d.vat.trim());
+  if (tp) {
+    tp.name = d.name.trim();
+    if (primary) tp.sector = primary.description;
+    tp.contact_phone = d.phone.trim();
+    tp.contact_email = d.email.trim();
+    tp.contact_address = d.address.trim();
+    if (!LOCAL_TAXPAYERS.includes(tp)) LOCAL_TAXPAYERS.push(tp);
+  } else {
+    tp = {
+      id: Math.max(0, ...DATA.taxpayers.map((t) => t.id)) + 1,
+      vat_no: d.vat.trim(), name: d.name.trim(),
+      sector: primary ? primary.description : "",
+      size: "medium", accounting_method: "accrual", resident: true,
+      vat_group: false, bp_type: "org", reg_from: d.creationDate,
+      contact_phone: d.phone.trim(), contact_email: d.email.trim(), contact_address: d.address.trim(),
+    };
+    DATA.taxpayers.push(tp);
+    LOCAL_TAXPAYERS.push(tp);
+  }
+
+  const year = (d.creationDate || DEMO_TODAY).slice(0, 4);
+  const caseId = d.caseId.trim() || ncNextCaseId(year);
+  if (DATA.cases.some((c) => c.case_id === caseId)) {
+    d.err = "Case " + caseId + " already exists.";
+    return;
+  }
+
+  const newCase = {
+    case_id: caseId, taxpayer_id: tp.id, form_number: "",
+    period_from: d.periodFrom, period_to: d.periodTo,
+    reason: "MANUAL", risk: "", vat_priority: "", audit_type: "desk",
+    status: "referred", scenario: "manual",
+    referral_date: d.creationDate, sla_due: null,
+    diff_tax_amt: 0, audit_result_type: null, root_cause_code: null,
+    creation_reason: d.creationReason, audit_manager: d.manager.trim(),
+    audit_supervisor: d.supervisor.trim(), audit_officer: d.officer.trim(),
+  };
+  DATA.cases.push(newCase);
+  LOCAL_CASES.push(newCase);
+
+  const dossier = {
+    taxpayer: {
+      id: tp.id, name: tp.name, vat_no: tp.vat_no, legal_form: "—",
+      bp_type: tp.bp_type, sector: tp.sector, size: tp.size,
+      activities: d.activities.map((a) => ({ ...a })),
+      resident: true, vat_group_rep: false, accounting_method: "accrual",
+      registered_from: tp.reg_from, importer: false, exporter: false,
+      related_parties: [],
+      audit_history: d.auditedBefore
+        ? { manual: true, note: d.auditedBeforeNote.trim() } : {},
+    },
+  };
+  DATA.dossiers[caseId] = dossier;
+  LOCAL_DOSSIERS[caseId] = dossier;
+
+  saveLocalCases();
+  NEW_CASE_DRAFT = null;
+  location.hash = "#/cases/" + encodeURIComponent(caseId);
+}
+
+function viewNewCase() {
+  if (!NEW_CASE_DRAFT) NEW_CASE_DRAFT = ncFreshDraft();
+  const d = NEW_CASE_DRAFT;
+  const field = (name, placeholder, type) =>
+    '<input' + (type ? ' type="' + type + '"' : "") + ' data-field="' + name + '" placeholder="' +
+    esc(placeholder || "") + '" value="' + esc(d[name]) + '">';
+
+  const activityRows = d.activities.length
+    ? '<div class="resp-list">' + d.activities.map((a) =>
+        '<div class="resp-item"><div>' + (a.primary ? "★ " : "") + esc(a.description) +
+        ' <span class="sub mono">' + esc(a.isic) + '</span></div>' +
+        '<div style="display:flex;gap:12px">' +
+        (a.primary ? "" : '<button class="linklike" data-newcase="make-primary" data-isic="' +
+          esc(a.isic) + '">make primary</button>') +
+        '<button class="linklike danger" data-newcase="remove-activity" data-isic="' +
+          esc(a.isic) + '">remove</button></div></div>').join("") + '</div>'
+    : "";
+
+  return '<div class="page">' +
+    '<div class="page-head"><div><p class="eyebrow">No live integration — this is how a case gets in</p>' +
+    '<h1>Add case</h1></div>' +
+    '<button class="linklike" data-newcase="auto-generate">⚡ Auto-generate</button></div>' +
+
+    (d.err ? '<div class="notice err">' + esc(d.err) + '</div>' : "") +
+
+    '<div class="panel"><div class="panel-head"><h2>Taxpayer information</h2></div>' +
+    '<div class="panel-body"><div class="resp-form">' +
+    '<div class="resp-row">' + field("name", "Taxpayer name") +
+    field("vat", "Taxpayer TIN (VAT registration number)") + '</div>' +
+    '<div class="resp-row">' + field("phone", "Contact phone") +
+    field("email", "Contact e-mail") + '</div>' +
+    field("address", "Contact address") +
+    '<div class="formula"><span class="k">Sectors / economic activities</span>' +
+    '<div class="resp-row"><select data-field="sectorPick">' +
+    NC_SECTORS.map((s) => '<option value="' + esc(s.sector) + '"' +
+      (s.sector === d.sectorPick ? " selected" : "") + '>' + esc(s.sector) + " — " + esc(s.isic) +
+      '</option>').join("") + '</select>' +
+    '<button class="btn-ghost" data-newcase="add-activity">+ Add</button></div>' +
+    activityRows + '</div>' +
+    '<div class="callout"><label class="switch"><input type="checkbox" data-field="auditedBefore"' +
+    (d.auditedBefore ? " checked" : "") + '><span class="switch-track"><span class="switch-thumb">' +
+    '</span></span><span class="switch-label">Has this taxpayer been audited before?</span></label>' +
+    (d.auditedBefore
+      ? '<div style="margin-top:9px">' + field("auditedBeforeNote",
+          "Note on the prior audit (outcome, period, anything relevant)") + '</div>'
+      : "") +
+    '</div></div></div></div>' +
+
+    '<div class="panel"><div class="panel-head"><h2>Audit case information</h2></div>' +
+    '<div class="panel-body"><div class="resp-form">' +
+    '<div class="resp-row">' + field("caseId", "Audit Case ID (leave blank to auto-generate)") +
+    field("creationDate", "", "date") + '</div>' +
+    '<div class="resp-row"><select data-field="creationReason"><option value="">Case Creation Reason…</option>' +
+    NC_REASONS.map((r) => '<option value="' + esc(r) + '"' + (r === d.creationReason ? " selected" : "") +
+      '>' + esc(r) + '</option>').join("") + '</select></div>' +
+    '<div class="formula"><span class="k">Audit Case Tax Period — from / to</span>' +
+    '<div class="resp-row">' + field("periodFrom", "", "date") + field("periodTo", "", "date") + '</div></div>' +
+    '<div class="kv"><div><span class="k">Tax type</span><span class="v">VAT</span></div>' +
+    '<div><span class="k">Place of conduct of Audit</span><span class="v">Desk audit</span></div>' +
+    '<div><span class="k">Address of Audit location</span><span class="v">Not applicable</span></div></div>' +
+    '</div></div></div>' +
+
+    '<div class="panel"><div class="panel-head"><h2>Assigned audit team information</h2></div>' +
+    '<div class="panel-body"><div class="resp-row">' + field("manager", "Audit Manager") +
+    field("supervisor", "Audit Supervisor") + field("officer", "Audit Officer") + '</div></div></div>' +
+
+    '<div class="resp-actions">' +
+    '<button class="btn" data-newcase="submit">Create case</button>' +
+    '<a class="linklike" href="#/">cancel</a>' +
+    '</div></div>';
+}
+
 function viewOverview() {
   const ov = overviewData();
   const cases = listCases();
@@ -2399,9 +2693,11 @@ function viewOverview() {
 
   return '<div class="page">' +
     '<div class="page-head"><div><p class="eyebrow">VAT audit</p><h1>Cases</h1></div>' +
+    '<div style="display:flex;gap:10px">' +
+    '<a class="btn" href="#/cases/new" title="Create a case by hand — there is no live risk-engine feed">+ Add case</a>' +
     '<button class="btn-ghost' + (resetState === "confirm" ? " confirm" : "") + '" data-act="reset" ' +
     'title="Restore the demo to its seeded state">' +
-    (resetState === "confirm" ? "Confirm reset?" : "↻ Reset demo") + '</button></div>' +
+    (resetState === "confirm" ? "Confirm reset?" : "↻ Reset demo") + '</button></div></div>' +
 
     '<div class="tiles">' + tiles.map((t) =>
       '<div class="tile"><div class="tn">' + esc(t.n) + '</div><div class="tl">' + esc(t.l) +
@@ -2909,7 +3205,9 @@ function viewDossier(caseId) {
       'Evidence &amp; Coverage agent needs this list.</p>'
     : '<p class="muted">No activities recorded, so a secondary activity cannot be tested for.</p>';
 
-  const historyLine = h.closed_cases
+  const historyLine = h.manual
+    ? (h.note || "Marked by the auditor as previously audited (manually entered — no structured outcome on file).")
+    : h.closed_cases
     ? h.closed_cases + " prior case" + (h.closed_cases === 1 ? "" : "s") + ", " +
       (h.findings >= h.closed_cases && h.closed_cases
         ? "every one resolved in the Authority's favour"
@@ -2937,7 +3235,7 @@ function viewDossier(caseId) {
     '<div class="who2">' +
     '<section class="who-col"><h4>Registered economic activities</h4>' + activities + '</section>' +
     '<section class="who-col"><h4>Audit history' +
-      (h.closed_cases ? ' <span class="pill pri-medium">audited before</span>'
+      ((h.closed_cases || h.manual) ? ' <span class="pill pri-medium">audited before</span>'
                       : ' <span class="pill status">first audit</span>') +
       '</h4>' + history + '</section>' +
     '<section class="who-col"><h4>Related parties</h4>' + related + '</section>' +
@@ -3604,13 +3902,15 @@ function auditReport(caseId) {
       { title: "Taxpayer information", fields: [
         F("Taxpayer name", tp.name),
         F("Taxpayer TIN", tp.vat_no),
-        F("Taxpayer contact details", NOT_HELD,
-          "Telephone, address and e-mail are not among the sources this proof-of-concept holds."),
+        F("Taxpayer contact details",
+          [tp.contact_phone, tp.contact_email, tp.contact_address].filter(Boolean).join(" · "),
+          "Telephone, address and e-mail are not among the sources this proof-of-concept holds " +
+          "for a seeded case; a manually created one carries whatever the auditor entered."),
       ] },
       { title: "Audit Case information", fields: [
         F("Audit Case ID", caseId),
         F("Audit Creation Date", c.referral_date || NOT_HELD),
-        F("Case Creation Reason", "Risk Engine", "One of: " + CREATION_REASONS),
+        F("Case Creation Reason", c.creation_reason || "Risk Engine", "One of: " + CREATION_REASONS),
         F("Date Audit closed", c.status === "closed" ? DEMO_TODAY : FOR_AUDITOR),
         F("Priority", priorityBand(score),
           "Composite score " + score + "/100 — exposure, deadline, history, quick-win."),
@@ -3630,8 +3930,8 @@ function auditReport(caseId) {
           "Should be attached to this if separate."),
       ] },
       { title: "Assigned Audit Team information", fields: [
-        F("Audit Manager", NOT_HELD), F("Audit Supervisor", NOT_HELD),
-        F("Audit Officer", NOT_HELD),
+        F("Audit Manager", c.audit_manager || NOT_HELD), F("Audit Supervisor", c.audit_supervisor || NOT_HELD),
+        F("Audit Officer", c.audit_officer || NOT_HELD),
       ] },
       { title: "Taxpayer documentation", fields: [
         F("Documents required/obtained", lines.length ? lines.join("\n") : NOT_HELD),
@@ -4463,6 +4763,8 @@ function caseRoute(path) {
 
 function render() {
   const path = currentPath();
+  // must be checked before caseRoute, or "new" is read as a case id
+  if (path === "/cases/new") { root.innerHTML = shell(path, viewNewCase()) + '<div id="modal-host"></div>'; renderModal(); return; }
   const route = caseRoute(path);
   let inner;
   if (path === "/rules") inner = viewRules();
@@ -4503,8 +4805,36 @@ document.addEventListener("drop", (e) => {
 });
 
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-close],[data-report],[data-pick],[data-case],[data-drill],[data-act],[data-fam],[data-sev],[data-gap],[data-kind],[data-del],[data-delask],[data-delcancel],[data-remove],[data-calc],[data-calcdel],[data-email],[data-drop]");
+  const t = e.target.closest("[data-close],[data-report],[data-pick],[data-case],[data-drill],[data-act],[data-fam],[data-sev],[data-gap],[data-kind],[data-del],[data-delask],[data-delcancel],[data-remove],[data-calc],[data-calcdel],[data-email],[data-drop],[data-newcase]");
   if (!t) return;
+
+  if (t.hasAttribute("data-newcase")) {
+    const action = t.getAttribute("data-newcase");
+    const d = NEW_CASE_DRAFT || (NEW_CASE_DRAFT = ncFreshDraft());
+    if (action === "auto-generate") { ncAutoGenerate(); render(); return; }
+    // Any of the actions below re-render the whole form; a text field edited but not yet
+    // blurred (no "change" fired) would otherwise be silently wiped by that re-render.
+    ncSyncFromDom();
+    if (action === "add-activity") {
+      const s = NC_SECTORS.find((x) => x.sector === d.sectorPick);
+      if (s && !d.activities.some((a) => a.isic === s.isic)) {
+        d.activities.push({ isic: s.isic, description: s.description, primary: d.activities.length === 0 });
+      }
+      render(); return;
+    }
+    if (action === "remove-activity") {
+      const isic = t.getAttribute("data-isic");
+      d.activities = d.activities.filter((a) => a.isic !== isic);
+      render(); return;
+    }
+    if (action === "make-primary") {
+      const isic = t.getAttribute("data-isic");
+      d.activities = d.activities.map((a) => ({ ...a, primary: a.isic === isic }));
+      render(); return;
+    }
+    if (action === "submit") { ncCreateCase(); render(); return; }
+    return;
+  }
 
   if (t.hasAttribute("data-close")) {
     // the overlay closes on click; clicks inside the dialog only close via its × button
@@ -4592,6 +4922,8 @@ document.addEventListener("click", (e) => {
   if (act === "reset") {
     if (resetState === "idle") { resetState = "confirm"; render(); return; }
     STATE = { rules: SEED_RULES.map((r) => ({ ...r })), responses: {} };
+    clearLocalCases();
+    NEW_CASE_DRAFT = null;
     resetState = "idle";
     render();
     return;
@@ -4600,11 +4932,23 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("change", (e) => {
   const cb = e.target.closest("[data-toggle]");
-  if (!cb) return;
-  const code = cb.getAttribute("data-toggle");
-  const rule = STATE.rules.find((r) => r.code === code);
-  if (rule) rule.enabled = cb.checked;
-  render();
+  if (cb) {
+    const code = cb.getAttribute("data-toggle");
+    const rule = STATE.rules.find((r) => r.code === code);
+    if (rule) rule.enabled = cb.checked;
+    render();
+    return;
+  }
+  // Only the audited-before switch re-renders on its own "change": it toggles a conditional
+  // field, so the form actually has to change shape. Every other field is read from the live
+  // DOM at the moment an action needs it (ncSyncFromDom, called from the data-newcase click
+  // handler) -- re-rendering the whole form on every field's blur would replace the very
+  // input another field's in-flight focus/fill was about to land in, and silently drop it.
+  const ab = e.target.closest('[data-field="auditedBefore"]');
+  if (ab && NEW_CASE_DRAFT) {
+    ncSyncFromDom();
+    render();
+  }
 });
 
 

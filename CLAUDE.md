@@ -361,9 +361,15 @@ JS port is validated field-by-field against the Python engine's output (currentl
 > hand-written JS mirror, kept in sync manually. Re-port before relying on
 > `portal.html` for a demo that needs any of those six items.
 
-**One feature that will never port: manual case creation ("Add Case").** It writes to a
-database `portal.html` doesn't have — a genuine capability boundary, not a scope choice.
-Cases in the standalone portal stay limited to the embedded seed set.
+**Manual case creation ("Add Case") is ported, but not the same feature.** `portal.html`
+has no database, so a case created there is written to that browser's `localStorage`
+instead — visible only in the browser that created it, gone if that storage is cleared,
+and never seen by another auditor or another device. The real app's version is a
+database row every auditor with access to the deployment can see. "Reset demo" clears the
+locally created cases the same way re-seeding drops the real database's. This is the
+capability boundary the standalone build was always going to have for this feature; the
+form and the case-creation logic (case-ID generation, taxpayer reuse by VAT, the fallback
+wiring into the audit report's `[not held]` fields) are the real, hand-ported JS mirror.
 
 ## Running locally
 
