@@ -117,6 +117,30 @@ def test_blocked_input_flags_entertainment_for_review():
     assert "review" in a.explanation.lower()         # flagged, never concluded
 
 
+def test_blocked_input_cites_the_real_article_and_sub_clause():
+    """This used to be an unattributed keyword list (CLAUDE.md's own placeholder note);
+    Article 50 of the VAT Implementing Regulations has since been ingested, and a confirmed
+    hit now names it — including which of Article 50(1)'s sub-clauses the term falls under."""
+    c = ctx(documents=[PURCHASES])
+    h = next(x for x in roster.regulations(c) if x.test.kind == "blocked-input")
+    a = adjudicate(h, c)
+    assert a.detail["citation"] == "Article 50, VAT Implementing Regulations"
+    assert a.detail["clauses"] == ["50(1)(a)"]        # entertainment -> sub-clause (a)
+    assert "Article 50" in a.explanation
+
+
+def test_blocked_input_refuted_case_carries_no_citation():
+    """A citation on a REFUTED verdict would read as "the article was checked and cleared it" —
+    it wasn't; nothing matched, so there is nothing to cite."""
+    clean = {**PURCHASES, "rows": [PURCHASES["rows"][0], PURCHASES["rows"][2]]}  # drop the hit
+    c = ctx(documents=[clean])
+    h = next(x for x in roster.regulations(c) if x.test.kind == "blocked-input")
+    a = adjudicate(h, c)
+    assert a.status == "refuted"
+    assert a.detail["citation"] is None
+    assert a.detail["clauses"] == []
+
+
 def test_a_document_that_is_not_on_file_is_insufficient_evidence():
     c = ctx(documents=[SALES])
     h = next(x for x in roster.regulations(c) if x.test.kind == "invoice-conditions")

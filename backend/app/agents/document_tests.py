@@ -38,14 +38,31 @@ INVOICE_CONDITIONS = {
 }
 CREDIT_NOTE_CONDITIONS = ("note_date", "note_number", "original_invoice_number")
 
-# Expense categories on which input VAT is not recoverable. Deliberately a small, explicit list:
-# it is the placeholder for the article corpus the auditors are supplying, and naming it here
-# keeps the shape honest — when the real articles land, this becomes a lookup against them.
-BLOCKED_TERMS = (
-    "entertainment", "hospitality", "catering", "restaurant", "hotel accommodation",
-    "passenger vehicle", "private car", "employee benefit", "staff welfare", "gift",
-    "club membership", "recreation",
+# Expense categories on which input VAT is not recoverable, per Article 50 of the KSA VAT
+# Implementing Regulations ("Goods and Services Deemed Received Outside the Scope of Economic
+# Activity" — regulatory/agent.py's unit_id VAT-IR-A50, ingested from the real ZATCA text at
+# corpus/raw/Implementing Regulations of the VAT Law.pdf). This used to be a flat, unattributed
+# keyword list; CLAUDE.md called that out explicitly — "a placeholder for the real corpus —
+# when the articles land it becomes a lookup against them." The articles have landed.
+#
+# Matching still runs on the English description the taxpayer's spreadsheet carries (see
+# blocked_input's docstring), so each English term below is mapped to the specific Article
+# 50(1) sub-clause it falls under; that mapping is this codebase's own reading of the Arabic
+# text, not a bilingual ZATCA source, and is why the Regulations agent's `claim` still says
+# "needs review against the article" rather than asserting the deduction is disallowed.
+BLOCKED_CATEGORIES = (
+    {"clause": "50(1)(a)", "label": "entertainment, sporting or cultural services",
+     "terms": ("entertainment", "recreation", "club membership")},
+    {"clause": "50(1)(b)", "label": "hospitality, catering, food and beverages",
+     "terms": ("hospitality", "catering", "restaurant", "hotel accommodation")},
+    {"clause": "50(1)(c)", "label": "insurance or healthcare provided to employees",
+     "terms": ("employee benefit", "staff welfare")},
+    {"clause": "50(1)(d)-(f)", "label": "restricted vehicles — purchase, lease, insurance, fuel",
+     "terms": ("passenger vehicle", "private car")},
+    {"clause": "50(1)(g)", "label": "goods or services for personal use",
+     "terms": ("gift",)},
 )
+BLOCKED_TERMS = tuple(t for cat in BLOCKED_CATEGORIES for t in cat["terms"])
 
 
 def _doc(ctx, name: str) -> dict | None:
@@ -145,12 +162,20 @@ def credit_note_conditions(h: Hypothesis, ctx) -> Adjudication:
 
 
 # ------------------------------------------------------------------- blocked input
+def _blocked_category(text: str) -> dict | None:
+    return next((cat for cat in BLOCKED_CATEGORIES if any(t in text for t in cat["terms"])), None)
+
+
 def blocked_input(h: Hypothesis, ctx) -> Adjudication:
-    """Input VAT claimed on categories it cannot be recovered on.
+    """Input VAT claimed on categories Article 50 of the VAT Implementing Regulations places
+    outside the scope of economic activity.
 
     Matching is on the description the taxpayer wrote, which is evidence of what was bought and
-    nothing more. The verdict therefore says *these lines need review against the article*, and
-    the citation is the row — the auditor decides, which is where §6 puts it.
+    nothing more — it is not itself proof the deduction is disallowed (Article 50(1) carries its
+    own exceptions, e.g. a statutory obligation to provide the service to staff, that no
+    spreadsheet description can confirm or rule out). The verdict therefore says *these lines
+    need review against the article*, and the citation is the row and the specific sub-clause —
+    the auditor decides, which is where §6 puts it.
     """
     name = h.test.params.get("document", "")
     doc = _doc(ctx, name)
@@ -169,27 +194,35 @@ def blocked_input(h: Hypothesis, ctx) -> Adjudication:
     hits, amount = [], 0.0
     for n, row in enumerate(doc.get("rows") or [], start=1):
         text = str(_cell(row, d_idx) or "").lower()
-        term = next((t for t in BLOCKED_TERMS if t in text), "")
-        if not term:
+        cat = _blocked_category(text)
+        if cat is None:
             continue
+        term = next(t for t in cat["terms"] if t in text)
         vat = as_number(_cell(row, v_idx)) or 0.0
         amount += vat
-        hits.append({"row": n, "term": term, "description": _cell(row, d_idx),
-                     "vat_amount": vat})
+        hits.append({"row": n, "term": term, "clause": cat["clause"], "label": cat["label"],
+                     "description": _cell(row, d_idx), "vat_amount": vat})
 
     detail = {"basis": f"blocked|{h.test.box}|{name}",
               "filename": name, "rows_matched": len(hits), "examples": _cite(hits),
-              "terms": sorted({h_["term"] for h_ in hits})}
+              "terms": sorted({h_["term"] for h_ in hits}),
+              "citation": "Article 50, VAT Implementing Regulations" if hits else None,
+              "clauses": sorted({h_["clause"] for h_ in hits})}
     if not hits:
         return Adjudication(
             hypothesis_id=h.id, status="refuted", detail=detail,
-            explanation=f"No line in {name} describes a purchase in a category on which input "
-                        f"VAT is blocked.")
+            explanation=f"No line in {name} describes a purchase in a category Article 50 of "
+                        f"the VAT Implementing Regulations places outside the scope of economic "
+                        f"activity.")
+    clause_str = ", ".join(detail["clauses"])
     return Adjudication(
         hypothesis_id=h.id, status="confirmed", amount=round(amount, 2), detail=detail,
-        explanation=(f"{_plural(len(hits), 'line')} in {name} describe purchases in blocked categories "
-                     f"({', '.join(detail['terms'])}), carrying SAR {abs(amount):,.2f} of input "
-                     f"VAT. Each needs review against the article before the claim is allowed."))
+        explanation=(f"{_plural(len(hits), 'line')} in {name} describe purchases in categories "
+                     f"Article 50({clause_str}) of the VAT Implementing Regulations places "
+                     f"outside the scope of economic activity ({', '.join(detail['terms'])}), "
+                     f"carrying SAR {abs(amount):,.2f} of input VAT. Each needs review against "
+                     f"the article — including its own exceptions — before the claim is "
+                     f"disallowed."))
 
 
 # ----------------------------------------------------------------- missing support
