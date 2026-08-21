@@ -7,7 +7,7 @@ from datetime import date
 import sqlite3
 
 from app.pipeline.predicates import All, Any_, Col, Not, eq, gt, is_null, ne, not_in, not_null
-from app.pipeline.rules import RULES, Action, rules_in_order
+from app.pipeline.rules import RULES, ZERO_RATED_RULES, Action, rules_in_order
 from app.pipeline.run import compose, deferred, qualify
 
 PERIOD_FROM, PERIOD_TO = date(2025, 1, 1), date(2025, 3, 31)
@@ -173,3 +173,59 @@ def test_predicate_algebra_basics():
     assert Not(eq("a", 9)).evaluate(row)
     # NULL compares false, as in SQL
     assert not gt("b", 1).evaluate(row)
+
+
+# ------------------------------------------------------- zero-rated population
+def test_zero_rated_rules_admit_only_zero_rated_lines():
+    """The mirror of test_structural_exclusions_are_not_toggleable: against the ZERO_RATED_RULES
+    registry, a genuinely zero-rated line qualifies and everything else (standard-rated, an
+    unrecognised rate, a rejected status) is excluded — the same structural discipline, scoped
+    the other way.
+    """
+    rows = [line(0, category="Z", rate=0),                       # in this population
+            line(119_000, category="S", rate=15),                # standard-rated: not this box
+            line(50_000, category="Z", rate=5),                  # claims Z but isn't 0% — excluded
+            line(0, category="Z", rate=0, status="rejected")]     # rejected: excluded regardless
+    lines = qualify(rows, set(), "sale", ZERO_RATED_RULES)
+    comp = compose(lines, set(), "sale")
+    assert comp.counted == 1
+    assert comp.counted_lines[0].row["category"] == "Z"
+    assert comp.counted_lines[0].row["rate"] == 0
+
+
+def test_zero_rated_population_is_independent_of_the_standard_rated_one():
+    """The same rows, qualified against each registry, partition cleanly: nothing counted in
+    one registry is ever counted in the other — the two populations do not overlap.
+    """
+    rows = hero_rows() + [line(30_000, category="Z", rate=0) for _ in range(3)]
+    standard = compose(qualify(rows, ALL_ON, "sale"), ALL_ON, "sale")
+    zero_rated = compose(qualify(rows, set(), "sale", ZERO_RATED_RULES), set(), "sale")
+    assert zero_rated.counted == 3
+    assert zero_rated.expected_vat == 90_000.0
+    assert standard.expected_vat == 2_075_000.0    # unaffected by the zero-rated lines' presence
+    standard_ids = {id(l) for l in standard.counted_lines}
+    zero_ids = {id(l) for l in zero_rated.counted_lines}
+    assert not (standard_ids & zero_ids)
+
+
+def test_zero_rated_predicates_and_sql_select_the_same_lines():
+    """The same SQL-equivalence guarantee `RULES` has, for the second registry."""
+    rows = [line(0, category="Z", rate=0), line(119_000, category="S", rate=15),
+            line(50_000, category="Z", rate=5), line(0, category="Z", rate=0, status="rejected")]
+    con = sqlite3.connect(":memory:")
+    con.execute("CREATE TABLE line (type_code INT, delivery_date TEXT, approval_date TEXT, "
+                "counterparty_class TEXT, sector TEXT, category TEXT, "
+                "rate INT, status TEXT, direction TEXT, period_to TEXT, tax_amount REAL)")
+    con.executemany(
+        "INSERT INTO line VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        [(r["type_code"], r["delivery_date"].isoformat() if r["delivery_date"] else None,
+          r["approval_date"].isoformat() if r.get("approval_date") else None,
+          r.get("counterparty_class", ""), r.get("sector", ""),
+          r["category"], r["rate"], r["status"], r["direction"],
+          r["period_to"].isoformat(), r["tax_amount"]) for r in rows])
+    for rule in ZERO_RATED_RULES:
+        sql = rule.sql_when().replace("DATE '", "'")
+        n_sql = con.execute(f"SELECT COUNT(*) FROM line WHERE {sql}").fetchone()[0]
+        n_py = sum(1 for r in rows if rule.matches(r))
+        assert n_sql == n_py, f"{rule.code or rule.stage}: sql={n_sql} python={n_py} :: {sql}"
+    con.close()

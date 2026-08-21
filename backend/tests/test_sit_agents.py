@@ -35,11 +35,13 @@ def box(declared: float, unexplained: float = 0.0) -> dict:
 
 
 def ctx(*, sales_vat=2_000_000.0, purchase_vat=150_000.0, out_unexplained=0.0,
-        in_unexplained=0.0, documents=(), activities=(), gaps=(), calculations=()) -> CaseContext:
+        in_unexplained=0.0, documents=(), activities=(), gaps=(), calculations=(),
+        requested=()) -> CaseContext:
     recon = {**box(sales_vat, out_unexplained),
              "purchase": box(purchase_vat, in_unexplained)}
     return CaseContext(recon=recon, documents=list(documents), cr_activities=list(activities),
-                       gaps=list(gaps), calculations=list(calculations))
+                       gaps=list(gaps), calculations=list(calculations),
+                       requested=list(requested))
 
 
 def settle(hyps, c):
@@ -196,6 +198,25 @@ class TestCalculationAgent:
         assert a.status == "confirmed"
         assert a.detail["listing_total"] == pytest.approx(472_500.0, abs=1.0)
         assert a.amount == pytest.approx(172_500.0, abs=1.0)
+
+    def test_pos_found_only_opportunistically_says_so_in_why(self):
+        """No formal request on file for this case: the hypothesis still fires (the document
+        is on file and testable), but its `why` says it was found, not asked for."""
+        pos = vd.pos_report(days=90, gross_per_day=40_250.0)
+        c = ctx(sales_vat=300_000.0, documents=[pos])
+        h = next(x for x in roster.calculation(c) if x.id == "CA-03")
+        assert "not part of the formal request" in h.why
+
+    def test_pos_formally_requested_reads_as_first_class_in_why(self):
+        """The same document, but this time it answers a confirmed pos-report request — the
+        auditor has to defend a finding, and 'found on file' is a weaker defence than
+        'the auditor asked for exactly this'."""
+        pos = vd.pos_report(days=90, gross_per_day=40_250.0)
+        c = ctx(sales_vat=300_000.0, documents=[pos],
+               requested=[{"key": "pos-report", "label": "Point-of-sale settlement report"}])
+        h = next(x for x in roster.calculation(c) if x.id == "CA-03")
+        assert "formally requested" in h.why
+        assert "not part of the formal request" not in h.why
 
     def test_a_bank_statement_has_no_vat_to_total_and_says_so(self):
         """It is evidence of receipts, not of VAT. Inventing a total from it would be wrong."""

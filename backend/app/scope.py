@@ -47,27 +47,48 @@ IN_SCOPE: tuple[dict[str, str], ...] = (
     {"item": "Materiality and prioritisation",
      "detail": "What is left unexplained banded against max(SAR 1,000, 0.5% of the box); cases "
                "ranked by exposure, deadline, history and quick-win."},
+    {"item": "Imports of goods",
+     "detail": "Not auto-reconstructed — there is no live customs feed. Counted only when the "
+               "taxpayer's customs declaration is on file and the auditor reviews and confirms "
+               "the SAR amount, exactly like any other taxpayer evidence."},
+    {"item": "Reverse charge on imported services",
+     "detail": "Not auto-reconstructed — there is no live AP feed. Counted only when supporting "
+               "documentation (an AP ledger line, a self-billed invoice) is on file and the "
+               "auditor confirms the amount. The RCM-01…10 rulebook family remains an unwired "
+               "reference for the automated version this stands in for."},
+    {"item": "Prior-period corrections (Box 14)",
+     "detail": "The return's own stated Box-14 figure is accepted as a legitimate adjustment "
+               "once the auditor reviews and confirms it. The engine does not independently "
+               "verify which prior period, or which amended return version, it belongs to — "
+               "see the assumptions register for what a full version-chain solution would need."},
+    {"item": "Rounding and currency effects",
+     "detail": "Per-invoice rounding amounts, where the listing or e-invoice feed carries them, "
+               "are summed over the qualifying lines and closed against the residual "
+               "automatically — no auditor confirmation needed, since this is fully computable "
+               "from data already in hand rather than a judgement call."},
+    {"item": "Zero-rated domestic sales", "detail":
+     "A second reconciliation box, qualified and summed the same way as standard-rated sales "
+     "but scoped to category Z / rate 0%, compared against the return's own declared "
+     "zero-rated box. No coded tax-point or adjustment rules are wired for it yet — a first, "
+     "honest declared-vs-reconstructed comparison, not the full standard-rated pipeline."},
 )
 
 OUT_OF_SCOPE: tuple[dict[str, str], ...] = (
-    {"item": "Imports of goods", "reason_code": "S04",
-     "note": "Import VAT is settled through customs, so no domestic supplier e-invoice exists "
-             "to reconstruct from. Needs a customs declaration feed."},
-    {"item": "Reverse charge on imported services", "reason_code": "S05",
-     "note": "Self-assessed output and input legs with no Saudi e-invoice behind them. The "
-             "RCM-01…10 family is written but unwired."},
-    {"item": "Exempt, zero-rated and outside-scope supplies", "reason_code": "S01",
-     "note": "Only the standard-rated category is reconstructed. Zero-rated boxes are seeded "
-             "but never reconciled."},
+    {"item": "Exempt and outside-scope supplies", "reason_code": "S01",
+     "note": "Only the standard-rated and zero-rated categories are reconstructed. Exempt (E) "
+             "and outside-scope (O) lines are excluded, and their boxes are seeded but never "
+             "reconciled."},
     {"item": "VAT groups and branch identities", "reason_code": "S06",
      "note": "One taxpayer, one VAT number. No group representative, branch invoice sequences "
              "or membership changes."},
     {"item": "Cash-accounting taxpayers", "reason_code": "T05",
      "note": "Every demo taxpayer is on the accrual basis, so payment-date timing never moves "
              "a supply between periods."},
-    {"item": "Prior-period corrections and amended returns", "reason_code": "T08",
-     "note": "A correction landing in a later return is a documented cause of difference and "
-             "is not modelled; the version selector is recorded as an assumption only."},
+    {"item": "Full version-chain reconciliation of amended returns", "reason_code": "T08",
+     "note": "The engine accepts the return's own stated Box-14 correction once the auditor "
+             "confirms it (see in-scope), but does not automatically select the correct "
+             "amended Data_Version, decompose Box-14 per error, or detect double-relief or an "
+             "unsupported reversal — see the Word solution overview for the full design."},
     {"item": "Bad-debt relief", "reason_code": "A03",
      "note": "Output-tax adjustments after the original invoice period are out of scope."},
     {"item": "Partial exemption and blocked input", "reason_code": "A02",
@@ -75,9 +96,11 @@ OUT_OF_SCOPE: tuple[dict[str, str], ...] = (
     {"item": "Summary invoices and B2C aggregation", "reason_code": "D02",
      "note": "Reconciliation is document-level only. No daily, store or POS batch tier, so "
              "high-volume simplified-invoice taxpayers are not represented."},
-    {"item": "Rounding and currency effects", "reason_code": "A07",
-     "note": "All demo amounts are SAR and tax-exclusive; no tolerance model for line-level "
-             "versus invoice-level rounding."},
+    {"item": "Automated import/reverse-charge reconstruction", "reason_code": "S04",
+     "note": "There is no live customs or AP feed, so imports and reverse-charge are counted "
+             "only via auditor-confirmed evidence (see in-scope), not reconstructed from a "
+             "feed the way standard-rated sales/purchases are. The RCM-01…10 family remains "
+             "an unwired reference for what the automated version would test."},
     {"item": "Buyer-side supplier matching", "reason_code": "R08",
      "note": "Input VAT is not cross-checked against the supplier's own outward e-invoices, "
              "which is where an over-claim would really be proven."},

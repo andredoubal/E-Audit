@@ -30,6 +30,7 @@ CREDIT_NOTE = 381
 # the boxes this PoC reconstructs (see app/scope.py for everything it does not)
 BOX_SALES = "standard_rate_sales"
 BOX_PURCHASE = "standard_rate_purchase"
+BOX_ZERO_RATED_SALES = "zero_rated_sales"
 BOX_BY_DIRECTION = {"sale": BOX_SALES, "purchase": BOX_PURCHASE}
 
 
@@ -96,15 +97,19 @@ class QualificationRule:
         return self.scope_predicate().evaluate(row)
 
 
+# Shared across every population this PoC reconstructs — a rejected document is not evidence
+# of a supply regardless of which box it would otherwise land in.
+_STATUS_EXCLUDE = QualificationRule(
+    stage="status",
+    action=Action.EXCLUDE,
+    when=not_in("status", ("cleared", "reported")),
+    reason_code="D06",
+    note="Rejected, cancelled or superseded documents are not evidence of a supply.",
+)
+
 RULES: tuple[QualificationRule, ...] = (
     # ---------------------------------------------------------------- status
-    QualificationRule(
-        stage="status",
-        action=Action.EXCLUDE,
-        when=not_in("status", ("cleared", "reported")),
-        reason_code="D06",
-        note="Rejected, cancelled or superseded documents are not evidence of a supply.",
-    ),
+    _STATUS_EXCLUDE,
     # -------------------------------------------------------------- category
     # Only standard-rated 15% maps to a box this PoC reconstructs. Zero-rated, exempt and
     # out-of-scope lines are excluded here rather than silently never summed.
@@ -195,11 +200,36 @@ RULES: tuple[QualificationRule, ...] = (
     ),
 )
 
+# Zero-rated domestic sales: the same structural discipline as the standard-rated box —
+# status, then a category boundary — scoped to category Z / rate 0 instead of S / 15. No
+# coded tax-point or adjustment rules are wired for this box yet (credit notes, clearance
+# lag): this is a first, honest declared-vs-reconstructed comparison, not a full second
+# pipeline. See the solution overview's future-considerations section for what a fuller
+# zero-rated treatment (OUT-03/OUT-04's mis-declaration detection) would add.
+ZERO_RATED_RULES: tuple[QualificationRule, ...] = (
+    _STATUS_EXCLUDE,
+    QualificationRule(
+        stage="category",
+        action=Action.EXCLUDE,
+        when=ne("category", "Z"),
+        reason_code="S01",
+        note="Not zero-rated. Standard-rated, exempt and out-of-scope lines are not this box.",
+    ),
+    QualificationRule(
+        stage="category",
+        action=Action.EXCLUDE,
+        when=All(eq("category", "Z"), ne("rate", 0)),
+        reason_code="R07",
+        note="Marked zero-rated but not actually at a 0% rate.",
+    ),
+)
+
 STAGE_ORDER = {s: i for i, s in enumerate(STAGES)}
 
 
-def rules_in_order(direction: str = "") -> tuple[QualificationRule, ...]:
-    sel = [r for r in RULES if not r.direction or not direction or r.direction == direction]
+def rules_in_order(direction: str = "",
+                    rules: tuple[QualificationRule, ...] = RULES) -> tuple[QualificationRule, ...]:
+    sel = [r for r in rules if not r.direction or not direction or r.direction == direction]
     return tuple(sorted(sel, key=lambda r: STAGE_ORDER[r.stage]))
 
 

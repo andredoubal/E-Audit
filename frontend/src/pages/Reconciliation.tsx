@@ -49,6 +49,7 @@ interface BoxResult {
   difference: number;
   evidence_total: number;
   evidence: EvidenceRow[];
+  rounding_total?: number;
   unexplained: number;
   materiality: number;
   band: string;
@@ -85,7 +86,9 @@ interface Recon extends BoxResult, Provenance {
   case_id: string;
   taxpayer: string;
   purchase?: BoxResult;
+  zero_rated?: BoxResult;
   combined?: Combined;
+  prior_period_correction_declared?: number;
 }
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -525,11 +528,39 @@ export default function Reconciliation() {
         </div>
       )}
 
+      {d.zero_rated && (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Which documents belong in zero-rated domestic sales</h2>
+            <span
+              className={"pill " + (STATE_CLASS[d.zero_rated.state] || "status")}
+              style={{ fontSize: 12, padding: "5px 12px" }}
+            >
+              {STATE_LABEL[d.zero_rated.state] || d.zero_rated.state}
+            </span>
+          </div>
+          <Funnel d={d.zero_rated} open={open} />
+          <Compare d={d.zero_rated} open={open} />
+          <Evidence d={d.zero_rated} open={open} />
+          <div className="panel-note">
+            <span className="ct">∑ computed</span> A second box, qualified the same way — scoped
+            to zero-rated (0%) lines instead of standard-rated. No timing or credit-note rules
+            are wired for this box yet, so this is a first, direct comparison of declared against
+            what the records on file support.
+          </div>
+        </div>
+      )}
+
       <InvestigationPanel id={id} rev={rev} />
       <FindingsPanel id={id} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
       <NextBestAction id={id} rev={rev} />
-      <TaxpayerResponsePanel id={id} difference={d.unexplained} onChanged={() => setRev((r) => r + 1)} />
+      <TaxpayerResponsePanel
+        id={id}
+        difference={d.unexplained}
+        priorPeriodDeclared={d.prior_period_correction_declared}
+        onChanged={() => setRev((r) => r + 1)}
+      />
       <StepEmails id={id} rev={rev} />
       <AuditReport id={id} rev={rev} />
 

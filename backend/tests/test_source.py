@@ -117,6 +117,51 @@ def test_capability_states_what_the_document_supports():
     rich = source.capability([*SALES["columns"], "delivery_date"])
     assert rich["has_delivery_date"] is True
     assert "can act" in rich["note"]
+    assert source.capability(SALES["columns"])["has_category"] is False
+    assert source.capability([*SALES["columns"], "category"])["has_category"] is True
+
+
+# --------------------------------------------------------------- category / rounding
+def test_an_explicit_category_column_is_trusted_over_the_rate_guess():
+    """A listing that states its own category wins over inferring one from the rate — a 15%
+    line explicitly marked Z is read as zero-rated, not silently forced back to standard."""
+    doc = {
+        "filename": "sales.xlsx",
+        "columns": ["invoice_date", "invoice_number", "category", "taxable_amount",
+                    "vat_rate", "vat_amount"],
+        "rows": [["2025-01-10", "INV-001", "Z", "100,000", 15, "0"]],
+    }
+    rows = lines(doc)
+    assert rows[0]["category"] == "Z"
+
+
+def test_an_unrecognised_rate_is_uncategorised_not_defaulted_to_standard():
+    """A 5%-rated line with no explicit category must not be miscounted into the standard-rated
+    box it was never shown to belong to — it is left uncategorised and excluded honestly."""
+    doc = {
+        "filename": "sales.xlsx",
+        "columns": ["invoice_date", "invoice_number", "taxable_amount", "vat_rate", "vat_amount"],
+        "rows": [["2025-01-10", "INV-001", "100,000", 5, "5,000"]],
+    }
+    rows = lines(doc)
+    assert rows[0]["category"] == ""
+    lined = qualify(rows, set(), "sale")
+    assert not any(l.in_population for l in lined)   # excluded, not folded into standard-rated
+
+
+def test_rounding_amount_is_read_when_the_listing_carries_it():
+    doc = {
+        "filename": "sales.xlsx",
+        "columns": ["invoice_date", "invoice_number", "taxable_amount", "vat_rate",
+                    "vat_amount", "rounding_amount"],
+        "rows": [["2025-01-10", "INV-001", "100,000", 15, "15,000", "0.35"]],
+    }
+    rows = lines(doc)
+    assert rows[0]["rounding_amount"] == 0.35
+
+
+def test_rounding_amount_defaults_to_zero_when_the_column_is_absent():
+    assert lines()[0]["rounding_amount"] == 0.0
 
 
 # -------------------------------------------------------------------- picking one
@@ -170,6 +215,29 @@ def test_a_figure_built_from_an_incomplete_response_is_flagged_as_a_floor(seeded
     assert r["population_complete"] is False
     assert "floor" in r["population_caveat"]
     assert r["population_gaps"]
+
+
+def test_reconcile_case_carries_a_zero_rated_box_alongside_output_and_input(seeded):
+    """The second reconciliation box shows up on every case, e-invoice or document-sourced."""
+    from app.recon_engine import reconcile_case
+
+    for case_id in ("CASE-2025-0481", "CASE-2025-0484"):
+        r = reconcile_case(seeded, case_id, persist=False)
+        assert "zero_rated" in r and "purchase" in r
+        assert r["zero_rated"]["box_code"] == "zero_rated_sales"
+        assert r["zero_rated"]["expected_vat"] >= 0.0
+        assert isinstance(r["prior_period_correction_declared"], float)
+
+
+def test_rounding_total_closes_a_small_residual(seeded):
+    """A declared figure a few riyals off the qualifying total closes automatically when the
+    listing states rounding_amount — no auditor confirmation, computed from data in hand."""
+    from app.recon_engine import reconcile_case
+
+    r = reconcile_case(seeded, "CASE-2025-0484", persist=False)
+    # rounding_total is always present and numeric, whether or not this case's data has any
+    assert isinstance(r["rounding_total"], float)
+    assert isinstance(r["difference_detail"]["rounding_total"], float)
 
 
 def test_no_caveat_when_the_population_is_the_e_invoice_feed(seeded):

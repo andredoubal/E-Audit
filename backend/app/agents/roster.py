@@ -126,6 +126,8 @@ def calculation(ctx: CaseContext) -> list[Hypothesis]:
     out: list[Hypothesis] = []
     sales = ctx.document_like("sales", "revenue", "output")
     pos = ctx.document_like("pos", "point-of-sale", "till", "bank")
+    pos_requested = any(r.get("key") in ("pos-report", "bank-statements")
+                         for r in ctx.requested)
 
     if sales:
         out.append(Hypothesis(
@@ -150,8 +152,13 @@ def calculation(ctx: CaseContext) -> list[Hypothesis]:
         out.append(Hypothesis(
             id="CA-03", agent=CALCULATION, outcome_code="SAL-POS", reason_code="R01",
             confidence="high",
-            why=f"{pos['filename']} is an independent record of takings and can be set against "
-                f"the declared box.",
+            why=(f"{pos['filename']} was formally requested (pos-report/bank-statements) and "
+                 f"received as independent evidence of takings, and can be set against the "
+                 f"declared box."
+                 if pos_requested else
+                 f"{pos['filename']} looks like an independent record of takings and can be set "
+                 f"against the declared box, though it was not part of the formal request — "
+                 f"found on file, not asked for."),
             claim="Takings evidenced by the point-of-sale or bank records may exceed the sales "
                   "reported in the return.",
             test=TestSpec(kind="listing-vs-declared", box="output",

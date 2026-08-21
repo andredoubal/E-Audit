@@ -172,9 +172,13 @@ def investigate_case(case_id: str, db: Session = Depends(get_db)):
          "severity": g.severity}
         for g in db.scalars(select(GapFinding).where(GapFinding.case_id == case_id)).all()
     ]
+    # What the auditor formally asked for and confirmed — so an agent can tell a document
+    # that answers the request apart from one that merely happens to be on file.
+    req = req_service.current_request(db, case_id)
+    requested = [{"key": i.catalog_key, "label": i.label} for i in (req.items if req else [])]
     return investigate(recon, prior_returns=prior_returns, prior_cases=prior_cases,
                        documents=docs, recorded=recorded, cr_activities=activities,
-                       calculations=calculations, gaps=gaps).model_dump()
+                       calculations=calculations, gaps=gaps, requested=requested).model_dump()
 
 
 class RulePatch(BaseModel):

@@ -36,7 +36,9 @@ from .models import (
     CaseRecon, BoxOutcome, QualificationStep, Unexplained, Conclusion, EventLog,
     TaxpayerResponse,
 )
-from .pipeline.rules import BOX_PURCHASE, BOX_SALES
+from .pipeline.rules import (
+    BOX_PURCHASE, BOX_SALES, BOX_ZERO_RATED_SALES, RULES, ZERO_RATED_RULES,
+)
 from .pipeline.run import compose, deferred, qualify
 from .rule_taxonomy import REASON_CODES
 
@@ -96,6 +98,9 @@ def _line_records(invs: list[Invoice], period_from, period_to, sector: str = "")
     """
     rows: list[dict] = []
     for inv in invs:
+        # rounding_amount lives on the invoice, not the tax-subtotal — attributed to the
+        # first line only, so an invoice with several subtotal rows is not double-counted.
+        first = True
         for st in inv.subtotals:
             rows.append({
                 "invoice": inv,                      # kept for drill-down rendering
@@ -112,9 +117,11 @@ def _line_records(invs: list[Invoice], period_from, period_to, sector: str = "")
                 "rate": st.rate,
                 "taxable_amount": float(st.taxable_amount),
                 "tax_amount": float(st.tax_amount),
+                "rounding_amount": float(inv.rounding_amount) if first else 0.0,
                 "period_from": period_from,
                 "period_to": period_to,
             })
+            first = False
     return rows
 
 
@@ -165,7 +172,8 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
                  responses: list[TaxpayerResponse] | None = None,
                  ret: VatReturn | None = None, dbox=None, sector: str = "",
                  invoices_considered: int, finding_sign: int,
-                 rows: list[dict] | None = None, source_label: str = "") -> dict:
+                 rows: list[dict] | None = None, source_label: str = "",
+                 rules: tuple = RULES) -> dict:
     """Qualify, sum, compare. Shared by the output and input boxes.
 
     The order is the whole point and there is no step before it. Rules decide which lines
@@ -187,7 +195,7 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
     # Falling back to the e-invoice feed keeps the demo cases that have no upload working.
     if rows is None:
         rows = _line_records(invs, period_from, period_to, sector)
-    lines = qualify(rows, enabled, direction)
+    lines = qualify(rows, enabled, direction, rules)
     comp = compose(lines, enabled, direction)
 
     # ---- how the population narrowed, step by step -----------------------------------
@@ -256,6 +264,14 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
     # ---- compare ---------------------------------------------------------------------
     difference = round(comp.expected_vat - declared, 2)
 
+    # Rounding is fully computable from data already in hand — the per-invoice rounding
+    # amount carried on the lines that qualified — so it closes the residual automatically,
+    # with no auditor confirmation needed, unlike evidence below. It is a genuine artifact of
+    # invoice-level vs. return-level rounding (DAT-09 in the rulebook), not a judgement call,
+    # so the engine applies it the same way it applies everything else: computed, not entered.
+    rounding_total = round(sum(float(l.row.get("rounding_amount") or 0.0)
+                               for l in comp.counted_lines), 2)
+
     # Taxpayer evidence is the one thing that can account for a difference *after* the fact:
     # it arrives later, and the auditor confirms the amount by hand. It is not a rule and is
     # never mixed in with one.
@@ -277,10 +293,11 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
             },
         })
 
-    # evidence eats into the difference from whichever side it sits
-    unexplained = round(difference - evidence_total * (1 if difference >= 0 else -1), 2)
-    if evidence_total and abs(unexplained) > abs(difference):
-        unexplained = 0.0                       # evidence cannot make a difference larger
+    # evidence and rounding both eat into the difference from whichever side it sits
+    closing_total = round(evidence_total + abs(rounding_total), 2)
+    unexplained = round(difference - closing_total * (1 if difference >= 0 else -1), 2)
+    if closing_total and abs(unexplained) > abs(difference):
+        unexplained = 0.0                       # neither can make a difference larger
     materiality = round(max(MATERIALITY_FLOOR, MATERIALITY_PCT * declared), 2)
 
     if abs(unexplained) <= materiality:
@@ -322,7 +339,8 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
                      "taxpayer may have under-claimed; no revenue risk to the Authority.")
     difference_detail = {"type": "difference", "expected": comp.expected_vat,
                          "declared": declared, "difference": difference,
-                         "evidence_total": evidence_total, "unexplained": unexplained,
+                         "evidence_total": evidence_total, "rounding_total": rounding_total,
+                         "unexplained": unexplained,
                          "materiality": materiality, "band": band, "state": state,
                          "note": diff_note}
 
@@ -336,6 +354,7 @@ def _reconstruct(db: Session, *, invs: list[Invoice], declared: float, direction
         "difference": difference,
         "evidence_total": evidence_total,
         "evidence": evidence,
+        "rounding_total": rounding_total,
         "unexplained": unexplained,
         "materiality": materiality,
         "band": band,
@@ -429,6 +448,32 @@ def _reconstruct_input(db: Session, case_id: str, tp, ret: VatReturn | None,
     )
 
 
+def _reconstruct_zero_rated(db: Session, *, invs: list[Invoice], ret: VatReturn | None,
+                            tp, period_from, period_to,
+                            rows: list[dict] | None, source_label: str) -> dict:
+    """Zero-rated domestic sales — the same qualify-then-sum discipline as the standard-rated
+    box, scoped to category Z / rate 0 instead of S / 15, reusing the same sale population
+    (`invs`/`rows`) already assembled for the standard-rated reconciliation.
+
+    No coded tax-point or adjustment rules are wired for this box yet — see the solution
+    overview's future-considerations section. This is a first, honest
+    declared-vs-reconstructed comparison, not the full standard-rated pipeline.
+    """
+    zbox = _box(ret, BOX_ZERO_RATED_SALES, "sale")
+    declared = round(float(zbox.vat_amount) if zbox else 0.0, 2)
+    considered = len([i for i in invs if i.status_code in ("cleared", "reported")])
+    return _reconstruct(
+        db, invs=invs, rows=rows, source_label=source_label,
+        declared=declared, direction="sale",
+        box_code=BOX_ZERO_RATED_SALES, box_label="Zero-rated domestic sales",
+        box_title="Zero-rated domestic sales",
+        period_from=period_from, period_to=period_to, ret=ret, dbox=zbox,
+        sector=tp.ind_sector,
+        invoices_considered=len(rows) if rows else considered,
+        finding_sign=1, rules=ZERO_RATED_RULES,
+    )
+
+
 def reconcile_case(db: Session, case_id: str, *, persist: bool = True) -> dict:
     case = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
     if not case:
@@ -478,6 +523,11 @@ def reconcile_case(db: Session, case_id: str, *, persist: bool = True) -> dict:
         f"floor rather than a settled "
         f"expected return until the response is complete." if blocking else "")
     result["population_gaps"] = blocking[:6]
+    # The return's own stated Box-14 prior-period correction, surfaced so the auditor can see
+    # it and confirm it via the taxpayer-response loop — accepted as declared, not
+    # independently re-derived (no version-chain verification; see CLAUDE.md/scope.py).
+    result["prior_period_correction_declared"] = (
+        round(float(ret.corrections_prev_period), 2) if ret else 0.0)
     unexplained, state = result["unexplained"], result["state"]
     band, difference = result["band"], result["difference"]
 
@@ -523,6 +573,11 @@ def reconcile_case(db: Session, case_id: str, *, persist: bool = True) -> dict:
     # case-level view across BOTH boxes: an input over-claim is a finding too, so the case's
     # exposure and headline state must combine output + input (not just the output box)
     purchase = _reconstruct_input(db, case_id, tp, ret, case.period_from, case.period_to)
+    # Zero-rated sales — shown alongside, not folded into exposure/priority: a genuine second
+    # reconciliation box, but combined()'s exposure math stays output+input only this pass.
+    zero_rated = _reconstruct_zero_rated(
+        db, invs=list(invs), ret=ret, tp=tp, period_from=case.period_from,
+        period_to=case.period_to, rows=sale_rows, source_label=sale_label)
     _order = {"potential-finding": 3, "unresolved": 2, "supported": 1}
     out_finding = unexplained if state == "potential-finding" else 0.0
     in_finding = abs(purchase["unexplained"]) if purchase["state"] == "potential-finding" else 0.0
@@ -545,5 +600,6 @@ def reconcile_case(db: Session, case_id: str, *, persist: bool = True) -> dict:
         "taxpayer": tp.name,
         **result,
         "purchase": purchase,
+        "zero_rated": zero_rated,
         "combined": combined,
     }

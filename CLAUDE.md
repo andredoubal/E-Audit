@@ -353,6 +353,14 @@ If you change the engine, the seed data or the rule taxonomy, regenerate it — 
 JS port is validated field-by-field against the Python engine's output (currently
 12,713 comparisons, 0 failures).
 
+> **Known drift, as of the imports/RCM/zero-rated/prior-period/rounding/POS scope
+> expansion:** the Python engine changed (a new zero-rated qualification path, the
+> rounding adjustment, the confirmed-evidence categories, the POS request-state check)
+> and `portal.html` has **not** been re-ported — by explicit scope decision for that
+> pass, not an oversight. There is no regeneration script for this port; it is a
+> hand-written JS mirror, kept in sync manually. Re-port before relying on
+> `portal.html` for a demo that needs any of those six items.
+
 ## Running locally
 
 **1. Database** (Postgres on port **5433**):

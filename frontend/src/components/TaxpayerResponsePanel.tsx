@@ -14,11 +14,14 @@ const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximu
 export default function TaxpayerResponsePanel({
   id,
   difference,
+  priorPeriodDeclared,
   onChanged,
 }: {
   id?: string;
   /** what is still unexplained — the amount evidence can account for */
   difference: number;
+  /** the return's own stated Box-14 prior-period correction, if any */
+  priorPeriodDeclared?: number;
   onChanged: () => void;
 }) {
   const [list, setList] = useState<Resp[]>([]);
@@ -76,6 +79,26 @@ export default function TaxpayerResponsePanel({
     );
     setAmount(String(Math.max(0, Math.round(difference))));
     setDoc("sales_ledger_Q1-2025.xlsx");
+  };
+
+  // Imports, reverse-charge and prior-period corrections all reduce to the same shape as
+  // any other taxpayer response: a document exists, the auditor reviews it and confirms the
+  // amount. These three are quick-fills onto the same generic form below — not a separate
+  // code path — because that generic form is the whole mechanism.
+  const fillImport = () => {
+    setLabel("Customs declaration provided by the taxpayer evidences import VAT not otherwise reconstructed from FATOORA.");
+    setAmount("");
+    setDoc("customs_declaration.pdf");
+  };
+  const fillRcm = () => {
+    setLabel("AP ledger / self-billed invoice provided by the taxpayer evidences reverse-charge VAT on an imported service.");
+    setAmount("");
+    setDoc("ap_ledger_rcm.xlsx");
+  };
+  const fillPriorPeriod = () => {
+    setLabel("Box 14 of the filed return states a prior-period correction; the auditor has reviewed and confirms it.");
+    setAmount(priorPeriodDeclared ? String(Math.round(Math.abs(priorPeriodDeclared))) : "");
+    setDoc("");
   };
 
   const analyze = async () => {
@@ -213,6 +236,15 @@ export default function TaxpayerResponsePanel({
             </button>
             <button className="linklike" onClick={sample} disabled={busy}>
               use sample
+            </button>
+            <button className="linklike" onClick={fillImport} disabled={busy}>
+              use import evidence
+            </button>
+            <button className="linklike" onClick={fillRcm} disabled={busy}>
+              use reverse-charge evidence
+            </button>
+            <button className="linklike" onClick={fillPriorPeriod} disabled={busy}>
+              use Box-14 correction{priorPeriodDeclared ? ` (${sar(priorPeriodDeclared)})` : ""}
             </button>
           </div>
         </div>

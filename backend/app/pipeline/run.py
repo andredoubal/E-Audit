@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .rules import Action, BOX_BY_DIRECTION, QualificationRule, rules_in_order
+from .rules import Action, BOX_BY_DIRECTION, QualificationRule, RULES, rules_in_order
 
 
 @dataclass
@@ -61,9 +61,16 @@ def _decide(rule: QualificationRule, verdict: str) -> Decision:
                     verdict=verdict, note=rule.note, label=rule.label)
 
 
-def qualify(rows: list[dict], enabled: set[str], direction: str) -> list[QualifiedLine]:
-    """Walk every line through the stages. `enabled` = live rule_library codes."""
-    ordered = rules_in_order(direction)
+def qualify(rows: list[dict], enabled: set[str], direction: str,
+            rules: tuple[QualificationRule, ...] = RULES) -> list[QualifiedLine]:
+    """Walk every line through the stages. `enabled` = live rule_library codes.
+
+    `rules` defaults to the standard-rated registry; a different population (zero-rated
+    sales, say) passes its own rule tuple — `rules_in_order`/`qualify` are generic over
+    which registry they walk, so a second population reuses this exact machinery rather
+    than a parallel implementation.
+    """
+    ordered = rules_in_order(direction, rules)
     structural = [r for r in ordered if r.structural]
     coded = [r for r in ordered if not r.structural]
     out: list[QualifiedLine] = []

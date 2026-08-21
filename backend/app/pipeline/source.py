@@ -17,6 +17,12 @@ the gap with an assumption:
   which is the honest reading: nothing in the evidence places those supplies in another period.
 * **No counterparty classification.** The government-platform rule (OUT-11) is scoped by
   counterparty class, which a spreadsheet does not carry, so it cannot fire either.
+* **Category, when the listing states one.** A listing that carries an explicit `category`
+  column (S/Z/E/O) is read directly, rather than guessed. Without one, standard/zero-rated is
+  inferred from the rate — 15% reads as standard, 0% as zero-rated — and a rate that is neither
+  (a genuinely 5%-rated line, say) is left uncategorised rather than folded into standard-rated
+  by default: an unreadable category must not silently inflate a box it was never shown to
+  belong to.
 
 The consequence is deliberate and worth stating plainly: **fewer rules can fire on an uploaded
 listing than on an e-invoice feed**, so the expected figure is closer to the raw total. That is
@@ -73,6 +79,8 @@ def capability(columns: list[str]) -> dict:
         "has_delivery_date": "delivery_date" in columns,
         "has_status": "status" in columns,
         "has_counterparty_class": "counterparty_class" in columns,
+        "has_category": "category" in columns,
+        "has_rounding_amount": "rounding_amount" in columns,
         "signals_present": present,
         "note": ("Tax-point and status rules can act on this document."
                  if present else
@@ -105,6 +113,8 @@ def lines_from_document(doc: dict, *, direction: str, period_from: date, period_
     i_status = _idx(columns, "status")
     i_cp = _idx(columns, "counterparty_class")
     i_type = _idx(columns, "document_type")
+    i_category = _idx(columns, "category")
+    i_rounding = _idx(columns, "rounding_amount")
 
     filename = doc.get("filename", "")
     out: list[dict] = []
@@ -125,6 +135,22 @@ def lines_from_document(doc: dict, *, direction: str, period_from: date, period_
         is_note = _looks_like_a_note(number, tax, _cell(row, i_type))
         issued = as_date(_cell(row, i_date)) or as_date(_cell(row, i_note_date))
 
+        # An explicit category column is trusted over the rate guess. Where neither the
+        # column nor a 15%/0% rate settles it, the line is left uncategorised (excluded from
+        # every box honestly) rather than defaulted to standard-rated — a 5%-rated line, say,
+        # must not be miscounted into a box it was never shown to belong to.
+        raw_category = (str(_cell(row, i_category) or "").strip().upper()
+                        if i_category >= 0 else "")
+        if raw_category in ("S", "Z", "E", "O"):
+            category = raw_category
+        elif rate == 15:
+            category = "S"
+        elif rate == 0:
+            category = "Z"
+        else:
+            category = ""
+        rounding = as_number(_cell(row, i_rounding)) if i_rounding >= 0 else None
+
         out.append({
             # provenance, so a drill-down can point at the row the auditor can open
             "source": "document",
@@ -142,11 +168,12 @@ def lines_from_document(doc: dict, *, direction: str, period_from: date, period_
             "approval_date": None,
             "counterparty_class": str(_cell(row, i_cp) or "").strip().lower(),
             "sector": sector,
-            "category": "S" if rate == 15 else ("Z" if rate == 0 else "S"),
+            "category": category,
             "rate": rate,
             "taxable_amount": float(base) if base is not None else round(tax / (rate / 100), 2)
             if rate else 0.0,
             "tax_amount": float(tax),
+            "rounding_amount": float(rounding) if rounding is not None else 0.0,
             "period_from": period_from,
             "period_to": period_to,
         })
