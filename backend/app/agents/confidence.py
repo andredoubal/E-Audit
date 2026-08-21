@@ -114,10 +114,19 @@ class Assessment:
 
 
 # --- reading the signals off engine output ----------------------------------------------
+# Each adjudicator test names its row count differently — `listing-vs-declared` counts the
+# rows it summed, `blocked-input` the rows it matched, `invoice-conditions` the rows that
+# failed. Reading only one of them would score a well-evidenced test as unevidenced, so the
+# family is listed explicitly rather than guessed at.
+_ROW_KEYS = ("rows_matched", "rows_failing", "rows_unsupported", "rows_outside",
+             "rows", "rows_tested")
+
+
 def _evidence_strength(detail: dict) -> tuple[float, str]:
-    """How much the test actually found. Rows matched is the honest proxy: one line hit is a
+    """How much the test actually found. The row count is the honest proxy: one line hit is a
     lead, forty is a pattern. Capped, because past a point more rows do not make it truer."""
-    rows = detail.get("rows_matched")
+    rows = next((detail[k] for k in _ROW_KEYS
+                 if isinstance(detail.get(k), int)), None)
     if rows is None:
         examples = detail.get("examples") or []
         rows = len(examples) if examples else None

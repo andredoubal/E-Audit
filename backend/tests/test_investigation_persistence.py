@@ -279,3 +279,22 @@ def test_a_hypothesis_the_roster_stops_proposing_is_kept_and_marked_stale(api, s
     assert ghost is not None, "a hypothesis must not vanish because it stopped being proposed"
     assert ghost["stale"] is True
     assert ghost["status"] == "refuted", "its last verdict is preserved as it stood"
+
+
+def test_evidence_strength_reads_whatever_key_the_test_reported_rows_under():
+    """Each adjudicator test names its row count differently; scoring must not miss them.
+
+    Reading only `rows_matched` scored a `listing-vs-declared` verdict over 22 summed rows as
+    having no row-level evidence at all, which is both wrong and exactly the kind of quiet
+    misreport a confidence signal must not make.
+    """
+    for key in ("rows_matched", "rows_failing", "rows_unsupported", "rows_outside",
+                "rows", "rows_tested"):
+        a = conf.assess(detail={key: 22}, status="supported")
+        ev = next(s for s in a.to_dict()["signals"] if s["key"] == "evidence_strength")
+        assert ev["value"] > 0.5, f"{key} was not read as row-level evidence"
+        assert "22" in ev["note"]
+
+    unknown = conf.assess(detail={"something_else": 9}, status="supported")
+    ev = next(s for s in unknown.to_dict()["signals"] if s["key"] == "evidence_strength")
+    assert ev["value"] == 0.5 and "no row-level evidence" in ev["note"]

@@ -187,6 +187,8 @@ backend/app/
                        #   calculation.py     the closed query algebra
                        #   calc_language.py   read the stated method without a model
                        #   calc_service.py    ask / check, persisted
+                       #   confidence.py      the banded signal composite
+                       #   investigation_service.py  runs, persists, merges by key
   reporting/           # audit_report.py — the Authority's own template, section by section
   api/routes.py        # FastAPI endpoints
   models/              # core.py, dossier.py, casework.py, config_tables.py, recon.py
@@ -250,6 +252,48 @@ name on the screen and no finding under it. They stay live on the feed path, gat
 `orchestrator.investigate` rather than deleted. `detectors.recomputation` runs on **both**
 paths: it checks *our* arithmetic, and a case that looks settled because a figure was
 transcribed wrongly is exactly the case that must not be waved through.
+
+## The investigation is remembered, and the auditor decides
+
+Until Phase A the investigation was computed and thrown away: `GET /cases/{id}/investigate`
+re-ran the pipeline on every request and returned it without storing a row. Fine for a
+read-only display, impossible for anything else — an auditor cannot rule on a hypothesis that
+does not exist between page loads, and a report written next week cannot trace a sentence back
+to reasoning discarded on render.
+
+`models/investigation.py` gives it a memory. Three rules shape it:
+
+- **A hypothesis is identified by what it claims, not by when it ran.** The natural key is
+  `(case_id, hypothesis_id)`, which works because the agents use stable ids (`RG-S1`, `CA-01`)
+  rather than minting fresh ones per run. A re-run merges into the same row.
+- **A verdict that moves says so.** `superseded_status` keeps the previous one beside the new
+  one, and any `AuditorDecision` made before the ground shifted is flagged for re-confirmation
+  rather than silently surviving. A refuted hypothesis is never deleted, and one the roster
+  stops proposing is marked stale — what was investigated is part of the file.
+- **Only what the auditor accepts is a finding.** `AuditorDecision` records accept / reject /
+  needs-more-investigation / irrelevant / needs-more-info; `AuditorFinding` holds what the
+  auditor saw that no agent has a test for. The AI proposes, the engine settles, the auditor
+  decides — and that distinction is visible in the data model, not just the wording.
+
+**Iteration comes from running again, not from a longer pipeline.** `orchestrator.investigate()`
+is unchanged and still single-pass; `agents/investigation_service.py` wraps it. The loop
+(investigate → ask the taxpayer → investigate again) is legible because each pass leaves an
+`InvestigationRun` row behind.
+
+### Confidence is banded, and separate from materiality
+
+`agents/confidence.py` computes a 0–100 composite over seven named signals — data completeness,
+documentary evidence, cross-source consistency, regulatory support, independent validation,
+contradictory evidence, outstanding information — and the score is kept. **What is shown is a
+band** (Strong / Moderate / Limited / Insufficient), because "65% confident" reads as a
+calibrated probability nothing here can support, and in a dispute it would be quoted back as
+though it had been measured. The signal breakdown is published so the band can be argued with:
+"you say limited confidence because there is no trial balance" is a useful conversation in a way
+that "you say 65" is not.
+
+No model touches the number — every signal is read from engine output, same division of labour
+as everywhere else. And confidence is never merged with the amount beside it: a hypothesis can
+be strongly supported and worth very little, or weakly supported and worth a great deal.
 
 ## The auditor's own arithmetic
 

@@ -487,6 +487,130 @@ export const getHealth = () => getJSON<Health>("/health");
 export const getOverview = () => getJSON<ExecOverview>("/overview");
 export const getScope = () => getJSON<ScopeCard>("/scope");
 export const getInvestigation = (id: string) => getJSON<Investigation>(`/cases/${id}/investigate`);
+
+/* ---------------------------------------------------------------- the persisted investigation
+   `getInvestigation` above recomputes and returns; nothing it produces survives the response,
+   which is why an auditor could read a hypothesis but never rule on one. These work over the
+   stored view: the same pipeline, with its conclusions kept so a decision has something to
+   attach to and a re-run has something to compare against. */
+
+export type HypothesisStatus =
+  | "supported"
+  | "partially-supported"
+  | "refuted"
+  | "inconclusive"
+  | "pending-info";
+
+export type DecisionKind =
+  | "accepted"
+  | "rejected"
+  | "needs-more-investigation"
+  | "irrelevant"
+  | "needs-more-info";
+
+export interface ConfidenceSignal {
+  key: string;
+  label: string;
+  value: number;
+  weight: number;
+  contribution: number;
+  note: string;
+}
+
+/** The score exists and is inspectable; the band is what is shown. A percentage headline would
+ *  read as a calibrated probability the engine cannot support. */
+export interface Confidence {
+  score: number;
+  band: "Strong" | "Moderate" | "Limited" | "Insufficient" | "";
+  signals: ConfidenceSignal[];
+}
+
+export interface AuditorDecisionView {
+  decision: DecisionKind;
+  comment: string;
+  decided_at: string;
+  decided_on_status: string;
+  /** set when a later run moved the verdict under a decision already made */
+  needs_reconfirmation: boolean;
+}
+
+export interface StoredHypothesis {
+  hypothesis_id: string;
+  agent: string;
+  claim: string;
+  why: string;
+  outcome_code: string;
+  reason_code: string;
+  test: { kind: string; box: string; params: Record<string, unknown> };
+  status: HypothesisStatus;
+  superseded_status: string;
+  superseded_at_run: number | null;
+  amount: number;
+  explanation: string;
+  detail: Record<string, unknown>;
+  confidence: Confidence;
+  contradictions: string[];
+  needs_info_note: string;
+  first_seen_run: number;
+  last_seen_run: number;
+  /** the roster stopped proposing it; kept on the file rather than deleted */
+  stale: boolean;
+  decision: AuditorDecisionView | null;
+}
+
+export interface InvestigationRunView {
+  seq: number;
+  trigger: string;
+  note: string;
+  hypothesis_count: number;
+  changed_count: number;
+  conclusion: string;
+  unexplained: number;
+  started_at: string;
+}
+
+export interface InvestigationState {
+  case_id: string;
+  runs: InvestigationRunView[];
+  hypotheses: StoredHypothesis[];
+  counts: { total: number; decided: number; accepted: number; needs_reconfirmation: number };
+  last_run?: { seq: number; changed_count: number };
+}
+
+export interface AuditorFindingView {
+  seq: number;
+  statement: string;
+  amount: number;
+  outcome_code: string;
+  note: string;
+  basis: string;
+  created_at?: string;
+}
+
+export const getInvestigationState = (id: string) =>
+  getJSON<InvestigationState>(`/cases/${id}/investigation`);
+
+export const runInvestigation = (id: string, trigger = "auditor-requested", note = "") =>
+  postJSON<InvestigationState>(`/cases/${id}/investigation/run`, { trigger, note });
+
+export const decideHypothesis = (
+  id: string,
+  hypothesisId: string,
+  decision: DecisionKind,
+  comment = "",
+) =>
+  postJSON<InvestigationState>(`/cases/${id}/hypotheses/${hypothesisId}/decision`, {
+    decision,
+    comment,
+  });
+
+export const addAuditorFinding = (
+  id: string,
+  body: { statement: string; outcome_code?: string; amount?: number; note?: string },
+) => postJSON<AuditorFindingView>(`/cases/${id}/auditor-findings`, body);
+
+export const listAuditorFindings = (id: string) =>
+  getJSON<AuditorFindingView[]>(`/cases/${id}/auditor-findings`);
 export const getDossier = (id: string) => getJSON<Dossier>(`/cases/${id}/dossier`);
 export const getPrecedent = (id: string) => getJSON<PrecedentBriefing>(`/cases/${id}/precedent`);
 export const getPlan = (id: string) => getJSON<RequestPlan>(`/cases/${id}/plan`);

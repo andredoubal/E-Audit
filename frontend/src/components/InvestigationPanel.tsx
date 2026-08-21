@@ -1,40 +1,182 @@
 import { useEffect, useState } from "react";
-import { getInvestigation, type AdjudicationStatus, type Investigation } from "../api";
+import {
+  decideHypothesis,
+  getInvestigationState,
+  runInvestigation,
+  type DecisionKind,
+  type HypothesisStatus,
+  type InvestigationState,
+  type StoredHypothesis,
+} from "../api";
+import ConfidenceBadge from "./ConfidenceBadge";
+import DecisionControls from "./DecisionControls";
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-const STATUS_PILL: Record<AdjudicationStatus, string> = {
-  confirmed: "pri-low",
+const STATUS_PILL: Record<HypothesisStatus, string> = {
+  supported: "pri-low",
+  "partially-supported": "pri-medium",
   refuted: "status",
-  "insufficient-evidence": "pri-medium",
+  inconclusive: "pri-medium",
+  "pending-info": "pri-medium",
 };
-const STATUS_WORD: Record<AdjudicationStatus, string> = {
-  confirmed: "confirmed",
+const STATUS_WORD: Record<HypothesisStatus, string> = {
+  supported: "supported by the evidence",
+  "partially-supported": "partly supported",
   refuted: "refuted",
-  "insufficient-evidence": "cannot be tested",
+  inconclusive: "cannot be tested",
+  "pending-info": "waiting on the taxpayer",
 };
 
-/** Agents propose typed tests; a deterministic adjudicator settles them against the engine.
- *  No model states a figure here, so the panel renders with or without an API key.
+/** What the agents proposed, what the engine settled, and what the auditor decided.
  *
- *  The panel shows the whole chain — what was seen, what was therefore proposed, what test
- *  settled it and what the engine concluded — because an auditor has to defend a finding to a
- *  taxpayer, and "an agent suggested it" is not something anyone can defend. */
+ *  Agents propose typed tests; a deterministic adjudicator settles them against the engine's
+ *  own figures. No model states a figure here, so the panel renders with or without an API key.
+ *
+ *  Three things are kept deliberately distinct on every row, because collapsing them is how a
+ *  tool like this starts making decisions it has no business making:
+ *
+ *    what the AI proposed  ->  what the evidence showed  ->  what the auditor decided
+ *
+ *  The whole chain is shown — what was seen, what was therefore proposed, which test settled it
+ *  — because an auditor has to defend a finding to a taxpayer, and "an agent suggested it" is
+ *  not something anyone can defend. */
 export default function InvestigationPanel({ id, rev }: { id?: string; rev?: number }) {
-  const [d, setD] = useState<Investigation | null>(null);
+  const [d, setD] = useState<InvestigationState | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     setD(null);
     setOpen(null);
-    getInvestigation(id).then(setD).catch(() => {});
+    getInvestigationState(id).then(setD).catch(() => {});
   }, [id, rev]);
 
-  const adjudication = (hid: string) => d?.adjudications.find((a) => a.hypothesis_id === hid);
-  const objection = d?.entries.find((e) => e.kind === "objection");
-  const confirmed = d?.adjudications.filter((a) => a.status === "confirmed").length ?? 0;
-  const refuted = d?.adjudications.filter((a) => a.status === "refuted").length ?? 0;
+  const decide = async (hid: string, decision: DecisionKind, comment: string) => {
+    if (!id) return;
+    setBusy(hid);
+    try {
+      setD(await decideHypothesis(id, hid, decision, comment));
+    } catch {
+      /* the panel keeps its last good state rather than blanking on a failed write */
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rerun = async () => {
+    if (!id) return;
+    setRerunning(true);
+    try {
+      setD(await runInvestigation(id, "auditor-requested"));
+    } catch {
+      /* ignored — the existing view stays usable */
+    } finally {
+      setRerunning(false);
+    }
+  };
+
+  const live = (d?.hypotheses ?? []).filter((h) => !h.stale);
+  const stale = (d?.hypotheses ?? []).filter((h) => h.stale);
+  const latest = d?.runs?.[d.runs.length - 1];
+
+  const row = (h: StoredHypothesis) => {
+    const isOpen = open === h.hypothesis_id;
+    return (
+      <div className={"hyp" + (h.stale ? " stale" : "")} key={h.hypothesis_id}>
+        <div>
+          <div className="hid">{h.hypothesis_id}</div>
+          {h.reason_code && <span className="rc">{h.reason_code}</span>}
+        </div>
+        <div>
+          <div className="agent">
+            {h.agent}
+            {h.stale && " · no longer proposed"}
+          </div>
+          {h.claim}
+
+          {/* the trigger: what the agent actually saw. Without it the claim is an assertion;
+              with it, it is an inference the auditor can check. */}
+          {h.why && (
+            <div className="hyp-why">
+              <b>Why raised</b> {h.why}
+            </div>
+          )}
+
+          <div className={"verdict verdict-" + h.status}>
+            <b>{STATUS_WORD[h.status]}</b>
+            {h.explanation ? " — " + h.explanation : ""}
+          </div>
+
+          {/* a verdict that moved says so, rather than quietly showing only the latest answer */}
+          {h.superseded_status && (
+            <div className="callout warn" style={{ margin: "8px 0 0" }}>
+              Previously <b>{h.superseded_status.replace(/-/g, " ")}</b>; re-adjudicated in run{" "}
+              {h.superseded_at_run} against the evidence then on file.
+            </div>
+          )}
+
+          {h.contradictions.map((c) => (
+            <div className="callout warn" style={{ margin: "8px 0 0" }} key={c}>
+              {c}
+            </div>
+          ))}
+
+          <button
+            className="linklike hyp-more"
+            onClick={() => setOpen(isOpen ? null : h.hypothesis_id)}
+          >
+            {isOpen ? "hide the test" : "how it was tested"}
+          </button>
+          {isOpen && (
+            <div className="hyp-test">
+              <div>
+                <span className="k">Test run</span>
+                <code>{h.test.kind}</code>
+                <span className="sub"> on the {h.test.box} box</span>
+              </div>
+              {!!Object.keys(h.test.params || {}).length && (
+                <div>
+                  <span className="k">Against</span>
+                  <code>
+                    {Object.entries(h.test.params)
+                      .map(([k, v]) => `${k}=${String(v)}`)
+                      .join(", ")}
+                  </code>
+                </div>
+              )}
+              <div>
+                <span className="k">First seen</span>
+                run {h.first_seen_run} · last re-tested run {h.last_seen_run}
+              </div>
+              {h.outcome_code && (
+                <div>
+                  <span className="k">Reports as</span>
+                  <code>{h.outcome_code}</code>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DecisionControls
+            decision={h.decision}
+            busy={busy === h.hypothesis_id}
+            onDecide={(dec, comment) => decide(h.hypothesis_id, dec, comment)}
+          />
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <span className={"pill " + STATUS_PILL[h.status]}>
+            {h.status.replace(/-/g, " ")}
+          </span>
+          {/* confidence and money answer different questions and are never merged into one */}
+          <ConfidenceBadge confidence={h.confidence} />
+          {!!h.amount && <div className="amt2">{sar(h.amount)}</div>}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="panel ai-panel">
@@ -45,7 +187,7 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
         </div>
         <span
           className="pill status"
-          title="Agents propose typed tests; a deterministic adjudicator settles them. No model states a figure."
+          title="Agents propose typed tests; a deterministic adjudicator settles them. No model states a figure, and no model decides."
         >
           ∑ Adjudicated (no AI)
         </span>
@@ -55,100 +197,50 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
           <span className="muted">Investigating…</span>
         ) : (
           <>
-            <p className="inv-conc">{d.conclusion}</p>
+            {latest && <p className="inv-conc">{latest.conclusion}</p>}
 
-            {d.hypotheses.length > 0 && (
+            <div className="inv-round">
+              {d.runs.length} run{d.runs.length === 1 ? "" : "s"} · {d.counts.total} hypotheses ·{" "}
+              {d.counts.decided} decided · {d.counts.accepted} accepted
+              {d.counts.needs_reconfirmation > 0 && (
+                <>
+                  {" · "}
+                  <b>{d.counts.needs_reconfirmation} need re-confirming</b>
+                </>
+              )}
+              <button
+                className="linklike"
+                style={{ marginLeft: 12 }}
+                onClick={rerun}
+                disabled={rerunning}
+                title="Re-adjudicate every hypothesis against the evidence now on file"
+              >
+                {rerunning ? "re-running…" : "↻ investigate again"}
+              </button>
+            </div>
+
+            {live.map(row)}
+
+            {stale.length > 0 && (
               <>
-                <div className="inv-round">
-                  Round 1–2 · {d.hypotheses.length} proposed · {confirmed} confirmed ·{" "}
-                  {refuted} refuted
+                <div className="inv-round" style={{ marginTop: 14 }}>
+                  No longer proposed — kept because the question was asked
                 </div>
-                {d.hypotheses.map((h) => {
-                  const a = adjudication(h.id);
-                  const lead = d.leading === h.id;
-                  const isOpen = open === h.id;
-                  return (
-                    <div className={"hyp" + (lead ? " lead" : "")} key={h.id}>
-                      <div>
-                        <div className="hid">{h.id}</div>
-                        {h.reason_code && <span className="rc">{h.reason_code}</span>}
-                      </div>
-                      <div>
-                        <div className="agent">
-                          {h.agent}
-                          {lead && " · leading"}
-                        </div>
-                        {h.claim}
-
-                        {/* the trigger: what the agent actually saw. Without it the claim is
-                            an assertion; with it, it is an inference the auditor can check. */}
-                        {h.why && (
-                          <div className="hyp-why">
-                            <b>Why raised</b> {h.why}
-                          </div>
-                        )}
-
-                        {a && (
-                          <div className={"verdict verdict-" + a.status}>
-                            <b>{STATUS_WORD[a.status]}</b> — {a.explanation}
-                          </div>
-                        )}
-
-                        <button
-                          className="linklike hyp-more"
-                          onClick={() => setOpen(isOpen ? null : h.id)}
-                        >
-                          {isOpen ? "hide the test" : "how it was tested"}
-                        </button>
-                        {isOpen && (
-                          <div className="hyp-test">
-                            <div>
-                              <span className="k">Test run</span>
-                              <code>{h.test.kind}</code>
-                              <span className="sub"> on the {h.test.box} box</span>
-                            </div>
-                            {!!Object.keys(h.test.params || {}).length && (
-                              <div>
-                                <span className="k">Against</span>
-                                <code>
-                                  {Object.entries(h.test.params)
-                                    .map(([k, v]) => `${k}=${String(v)}`)
-                                    .join(", ")}
-                                </code>
-                              </div>
-                            )}
-                            <div>
-                              <span className="k">Confidence when proposed</span>
-                              {h.confidence}
-                            </div>
-                            {h.outcome_code && (
-                              <div>
-                                <span className="k">Reports as</span>
-                                <code>{h.outcome_code}</code>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <span className={"pill " + (a ? STATUS_PILL[a.status] : "status")}>
-                          {(a?.status ?? "").replace(/-/g, " ")}
-                        </span>
-                        {!!a?.amount && <div className="amt2">{sar(a.amount)}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-                {objection && (
-                  <>
-                    <div className="inv-round">Round 3 · Challenger</div>
-                    <p className="detail-note" style={{ margin: 0 }}>
-                      {objection.payload.note}
-                    </p>
-                  </>
-                )}
+                {stale.map(row)}
               </>
             )}
+
+            {!d.hypotheses.length && (
+              <p className="detail-note">
+                No hypothesis was raised. Nothing in the evidence on file matched a test the
+                roster can run.
+              </p>
+            )}
+
+            <p className="detail-note" style={{ margin: "12px 0 0" }}>
+              Every verdict above was settled by the engine against the case's own figures. The
+              audit conclusion is the auditor's: only what you accept reaches the report.
+            </p>
           </>
         )}
       </div>
