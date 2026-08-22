@@ -182,3 +182,34 @@ class AuditorCalculation(Base):
     explanation: Mapped[str] = mapped_column(Text, default="")       # engine-authored
     parse_source: Mapped[str] = mapped_column(String(24), default="")  # claude | auditor | ...
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ZatcaDataset(Base):
+    """ZATCA's own invoice records for this taxpayer and period, as supplied to the case.
+
+    Deliberately **not** a `ReceivedDocument`. That table is what the *taxpayer* sent, and it
+    feeds the completeness check — a dataset from our own systems appearing there would be
+    checked against request items nobody asked the taxpayer for, and would show up in the case
+    file as evidence the taxpayer produced. Two different things, two tables.
+
+    Also deliberately not one row per invoice. The taxpayer's listing lives as extracted content
+    on its document row, and the matcher reads both sides the same way; a second, exploded copy
+    of the same rows would be a second truth to keep in step for no gain. One dataset, one row.
+
+    The comparison itself is **derived, never stored** — the same choice the lifecycle machine
+    makes. It is a pure function of two files, so recomputing it is cheap and there is no state
+    to reconcile when a file is replaced.
+    """
+    __tablename__ = "zatca_dataset"
+    __table_args__ = {"schema": CORE}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(30), index=True)
+    filename: Mapped[str] = mapped_column(String(200))
+    file_format: Mapped[str] = mapped_column(String(20), default="")
+    uploaded_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    source: Mapped[str] = mapped_column(String(40), default="upload")  # upload | seed | feed
+    # the same extracted shape every other tabular file on the case uses
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    extraction_note: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -4,6 +4,7 @@ import TaxpayerBrief from "../components/TaxpayerBrief";
 import AiNarration from "../components/AiNarration";
 import NextBestAction from "../components/NextBestAction";
 import InvestigationPanel from "../components/InvestigationPanel";
+import ZatcaPanel from "../components/ZatcaPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
@@ -554,6 +555,9 @@ export default function Investigation() {
         </div>
       )}
 
+      {/* Loaded before the hypotheses, because it is evidence the agents then reason over:
+          a dataset added here changes what the investigation says on the next run. */}
+      <ZatcaPanel id={id!} onChanged={() => setRev((r) => r + 1)} />
       <InvestigationPanel id={id} rev={rev} />
       <FindingsPanel id={id} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />

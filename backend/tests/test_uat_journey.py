@@ -232,14 +232,20 @@ def test_a_file_that_answers_nothing_is_advisory_not_blocking(api):
 
 
 # ========================================================================= 4 · what it means
-def test_the_review_runs_all_four_agents(api):
-    """The auditors named three and left the fourth to us. All four have to be on the case."""
+def test_the_review_runs_the_whole_roster(api):
+    """The auditors named three and left the fourth to us; the fifth reads our own records.
+
+    The allowlist is the point of the test: an agent nobody agreed to must not be able to put a
+    hypothesis on a case file, and the check would stop meaning anything if it were relaxed to
+    "some agents ran".
+    """
     inv = _json(api.get(f"/api/cases/{CASE}/investigate"))
     assert inv["hypotheses"], "an empty panel is not a review"
     agents = {h["agent"] for h in inv["hypotheses"]}
-    assert agents <= {"Regulations", "Data Entry", "Calculation", "Evidence & Coverage"}, \
+    assert agents <= {"Regulations", "Data Entry", "Calculation", "Evidence & Coverage",
+                      "ZATCA Reconciliation"}, \
         f"an agent the auditors never named is on the case file: {agents}"
-    assert len(agents) == 4, f"only {agents} proposed anything on a case this deficient"
+    assert len(agents) == 5, f"only {agents} proposed anything on a case this deficient"
 
 
 def test_every_finding_is_worded_by_the_authority(api):

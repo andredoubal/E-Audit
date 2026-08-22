@@ -41,6 +41,7 @@ from ..models.investigation import (
 from ..recon_engine import reconcile_case
 from ..requests import service as req_service
 from . import calc_service
+from . import zatca_service
 
 
 # ---------------------------------------------------------------- context assembly
@@ -93,7 +94,10 @@ def context_args(db, case: AuditCase) -> dict:
     return {"prior_returns": prior_returns, "prior_cases": prior_cases, "documents": docs,
             "recorded": recorded, "cr_activities": activities,
             "calculations": calc_service.listing(db, case_id), "gaps": gaps,
-            "requested": requested}
+            "requested": requested,
+            # None when no dataset is loaded, which is the normal case. The fifth agent reads
+            # this and stays silent when there is nothing on both sides to compare.
+            "zatca": zatca_service.context_entry(db, case)}
 
 
 # ---------------------------------------------------------------- status + signals

@@ -22,9 +22,9 @@ Two jobs, in order:
    email is drafted from the gaps alone.
 2. **What does it mean?** The engine decides which uploaded lines *qualify* for the
    box and the period, sums them into an **expected** return, and compares that with
-   what was **declared**. Four agents then propose findings for a deterministic
+   what was **declared**. Five agents then propose findings for a deterministic
    adjudicator to settle, and the verdict email and audit report are drafted from
-   whatever it confirms.
+   whatever the auditor accepts.
 
 Both the **output** (standard-rated sales) and **input** (standard-rated purchases)
 VAT boxes are qualified and compared separately.
@@ -176,6 +176,7 @@ backend/app/
                        #   service.py      drives the rounds; recomputes gaps each pass
   pipeline/            # predicates.py (Python ⇄ SQL algebra) + rules.py + run.py
                        #   source.py       lines from an uploaded listing, not the feed
+                       #   reconciliation.py  declarative matching against ZATCA's records
   recon_engine.py      # qualify -> expected -> compare with declared (output & input VAT)
   rule_taxonomy.py     # explanation/mistake/risk + precedence stage + difference reason codes
   risk_indicators.py   # the risk-engine vocabulary + which internal source to consult first
@@ -190,6 +191,8 @@ backend/app/
                        #   calc_service.py    ask / check, persisted
                        #   confidence.py      the banded signal composite
                        #   investigation_service.py  runs, persists, merges by key
+                       #   zatca_service.py   holds the Authority's extract; compares on demand
+                       #   zatca_tests.py     what a mismatch is worth, per basis
   reporting/           # audit_report.py — the Authority's own template, section by section
   api/routes.py        # FastAPI endpoints
   models/              # core.py, dossier.py, casework.py, config_tables.py, recon.py
@@ -210,10 +213,11 @@ arrived), **Dossier** (what ZATCA holds), **Casework** (the request/response loo
 case is and whose move it is. Under the current scope Intake and Reconciliation carry
 the work; Dossier and Casework are the dormant planning-era screens.
 
-## The four agents (and what they may not do)
+## The agents (and what they may not do)
 
 `app/agents/roster.py`. The auditors named three and left the fourth to us; the fourth is
-**Evidence & Coverage**, because five of their fifteen statements are its territory.
+**Evidence & Coverage**, because five of their fifteen statements are its territory. A fifth,
+**ZATCA Reconciliation**, is the only one whose evidence is not the taxpayer's.
 
 | Agent | Owns |
 |---|---|
@@ -221,6 +225,7 @@ the work; Dossier and Casework are the dormant planning-era screens.
 | **Data Entry** | decimal shift, transposition, out-of-character magnitude |
 | **Calculation** | listing exceeds declared · POS/bank exceeds declared · undisclosed sales · unreproduced auditor figures |
 | **Evidence & Coverage** | missing supporting documentation · lack of cooperation · documents do not correspond · no trial balance · **undisclosed secondary activity** |
+| **ZATCA Reconciliation** | invoices the Authority holds that the listing omits · invoices both sides record differently |
 
 Every one obeys the original contract: it returns a `Hypothesis` carrying **language only**
 plus a typed `TestSpec`, and `agents/document_tests.py` settles it deterministically over the
@@ -253,6 +258,48 @@ name on the screen and no finding under it. They stay live on the feed path, gat
 `orchestrator.investigate` rather than deleted. `detectors.recomputation` runs on **both**
 paths: it checks *our* arithmetic, and a case that looks settled because a figure was
 transcribed wrongly is exactly the case that must not be waved through.
+
+### The Authority's own invoice records
+
+`pipeline/reconciliation.py` + `agents/zatca_service.py` + `agents/zatca_tests.py`. Optional:
+a case with no dataset loaded behaves exactly as it did before.
+
+**The matching is deterministic and is not an agent.** Joining two invoice populations is a
+closed problem — normalise the reference, join, diff the fields, count what is on one side and
+not the other. A model would make it slower, unreproducible and unauditable, and it would put a
+model in front of a figure. The rules are declared the way `pipeline/rules.py` declares
+qualification rules: a `ReconRule` names the shape it applies to (`pair` / `unmatched` / `group`
+/ `row` / `population`), a predicate and how to describe itself, and may be narrowed to one
+`side`. Twelve of them cover omission, value, timing, period, party, duplicates, missing
+identifiers and sequence breaks. Adding a comparison is one entry in `RULES`.
+
+**One side is not a comparison.** With only a listing, or only a dataset, every record on the
+side that exists matches nothing — and reporting all of them as unmatched would be a fabricated
+finding carrying a fabricated amount. `compare()` refuses and names the missing side.
+
+Three details that each exist because the obvious version is wrong:
+
+- **References match normalised and display as written.** `INV-001` and `inv 001` are the same
+  invoice, so formatting is not a mismatch — but the auditor has to find the row in their own
+  spreadsheet, and `INV001` is not a string that occurs in it.
+- **Two rules never describe one disagreement.** A date difference across a month end is ZR-06's
+  and not also ZR-05's; a numbering hole is not reported when unnumbered rows already explain it.
+- **The amount is read per rule, never summed across them.** An invoice absent from the listing
+  is money additional to everything the listing totals; a restated figure is a movement within
+  it. The two hypotheses therefore carry **different bases** (`zatca-unmatched`, `zatca-values`),
+  which is what stops `exposure()` counting one excess twice.
+
+The agent's part is only the judgement the matcher cannot make: whether a population of
+unmatched invoices is worth putting to the taxpayer as undisclosed sales, and whether disagreeing
+figures are worth putting as a records defect. It reaches the vocabulary by the same route as
+everything else — `SAL-UNDISCLOSED` and `SAL-MISMATCH` — and states no figure.
+
+**The dataset is one row, and the comparison is derived.** `ZatcaDataset` is deliberately not a
+`ReceivedDocument` (that table is what the *taxpayer* sent, and this would be checked against
+request items nobody asked for) and deliberately not one row per invoice (the listing lives as
+extracted content on its document row, and a second exploded copy would be a second truth). A
+second upload replaces the first. The comparison itself is recomputed on demand, like the
+lifecycle — a pure function of two files, so there is no stale mismatch to reconcile.
 
 ## The investigation is remembered, and the auditor decides
 
@@ -478,6 +525,14 @@ JS port is validated field-by-field against the Python engine's output (currentl
 > pass, not an oversight. There is no regeneration script for this port; it is a
 > hand-written JS mirror, kept in sync manually. Re-port before relying on
 > `portal.html` for a demo that needs any of those six items.
+>
+> **The same applies to everything from the three-module pass** — the correspondence trail
+> and the Investigation→Correspondence loop, the four-way completeness presentation,
+> multi-sheet extraction, persisted hypotheses with auditor decisions and confidence bands,
+> and the ZATCA reconciliation. None of it is ported. Several of these need a backend by
+> nature (there is nothing to upload and no dataset to load), so the split the port has
+> always kept — port what the user can change, embed what they cannot — puts them on the
+> embed side or out of scope entirely.
 
 **Manual case creation ("Add Case") is ported, but not the same feature.** `portal.html`
 has no database, so a case created there is written to that browser's `localStorage`
@@ -540,7 +595,7 @@ Open http://localhost:5174.
   brands.
 - Frontend build check: `npm run build` (runs `tsc --noEmit` + Vite build).
 - Backend syntax check: `python -m compileall -q app`.
-- Guard tests: `pytest backend/tests` (415 at last count). Three layers, and they answer
+- Guard tests: `pytest backend/tests` (461 at last count). Three layers, and they answer
   different questions — keep them apart:
   - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, …) — is this piece
     right, on a fixture built to isolate it?

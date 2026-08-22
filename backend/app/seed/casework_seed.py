@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..agents.correspondence import draft_request
 from ..models import AuditCase, Taxpayer
+from ..agents import zatca_service
 from ..requests import service
 from . import demo_files
 
@@ -50,6 +51,13 @@ def build(db: Session) -> dict:
     )
 
     report = service.run_checks(db, case)
+
+    # The Authority's own records for the same period. Seeded so the comparison has both sides
+    # on the hero case — with one side it correctly refuses to compare, which is right and
+    # shows nothing.
+    zatca_service.record(db, case, filename="ZATCA_Invoices_Q1_2025.xlsx",
+                         data=demo_files.zatca_invoices_xlsx(), source="seed")
+
     return {"seeded": True, "case_id": HERO, "round": req.seq,
             "items": len(req.items), "gaps": len(report.gaps),
             "blocking": len(report.blocking)}

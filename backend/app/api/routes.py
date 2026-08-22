@@ -15,6 +15,7 @@ from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
 from ..agents import investigation_service as inv_service
+from ..agents import zatca_service
 from ..agents.correspondence import draft_followup, draft_request
 from ..recon_engine import reconcile_case
 from ..priority import score_case
@@ -741,6 +742,39 @@ async def upload_document(case_id: str, file: UploadFile = File(...),
     db.commit()
     return {**req_service.state(db, case),
             "report": report.to_dict() if report else None}
+
+
+# ------------------------------------------------------------------ ZATCA's own invoice records
+
+@router.get("/cases/{case_id}/zatca")
+def zatca_state(case_id: str, db: Session = Depends(get_db)):
+    """What is loaded, and what comparing it against the taxpayer's listing produced."""
+    return zatca_service.state(db, _case_or_404(db, case_id))
+
+
+@router.post("/cases/{case_id}/zatca")
+async def upload_zatca(case_id: str, file: UploadFile = File(...),
+                       db: Session = Depends(get_db)):
+    """Load the Authority's invoice extract for this case, replacing any earlier one.
+
+    Not a `ReceivedDocument`: this is our own data, not something the taxpayer produced, and
+    filing it as a taxpayer response would put it through a completeness check against request
+    items nobody asked for.
+    """
+    case = _case_or_404(db, case_id)
+    data = await file.read()
+    if len(data) > 8_000_000:
+        raise HTTPException(413, "file too large for the demo (8 MB limit)")
+    zatca_service.record(db, case, filename=file.filename or "zatca-invoices", data=data)
+    return zatca_service.state(db, case)
+
+
+@router.delete("/cases/{case_id}/zatca")
+def remove_zatca(case_id: str, db: Session = Depends(get_db)):
+    """Unload the dataset — the comparison goes back to saying it cannot compare."""
+    case = _case_or_404(db, case_id)
+    zatca_service.remove(db, case_id)
+    return zatca_service.state(db, case)
 
 
 @router.post("/cases/{case_id}/requests/check")

@@ -36,6 +36,10 @@ class CaseContext:
     gaps: list[dict] = field(default_factory=list)
     # the confirmed request spec: {key, label, required_columns}
     requested: list[dict] = field(default_factory=list)
+    # ZATCA's own invoice records matched against the taxpayer's listing, when a dataset has
+    # been loaded: `pipeline.reconciliation.Comparison.to_dict()`. None when there is nothing
+    # to compare — which is the normal case, and the agent stays silent rather than guessing.
+    zatca: dict | None = None
 
     def tabular(self) -> list[dict]:
         return [d for d in self.documents if d.get("rows")]
@@ -273,9 +277,11 @@ def _recomputed_total(h: Hypothesis, ctx: CaseContext) -> Adjudication:
 
 
 from .document_tests import TESTS as _DOCUMENT_TESTS   # noqa: E402  (needs Adjudication above)
+from .zatca_tests import TESTS as _ZATCA_TESTS         # noqa: E402  (same)
 
 _TESTS = {
     **_DOCUMENT_TESTS,
+    **_ZATCA_TESTS,
     "decimal-shift": _decimal_shift,
     "digit-transposition": _digit_transposition,
     "single-document": _single_document,

@@ -38,12 +38,13 @@ def investigate(recon: dict, *, prior_returns: list[dict] | None = None,
                 cr_activities: list[dict] | None = None,
                 calculations: list[dict] | None = None,
                 gaps: list[dict] | None = None,
-                requested: list[dict] | None = None) -> Investigation:
+                requested: list[dict] | None = None,
+                zatca: dict | None = None) -> Investigation:
     ctx = CaseContext(recon=recon, prior_returns=prior_returns or [],
                       prior_cases=prior_cases or [],
                       documents=documents or [], recorded=recorded or [],
                       cr_activities=cr_activities or [], calculations=calculations or [],
-                      gaps=gaps or [], requested=requested or [])
+                      gaps=gaps or [], requested=requested or [], zatca=zatca)
     entries: list[Entry] = []
     seq = 0
 

@@ -17,6 +17,7 @@ from .casework import (  # noqa: F401
     ReceivedDocument,
     GapFinding,
     AuditorCalculation,
+    ZatcaDataset,
 )
 from .config_tables import Rule, Assumption, CodeDictionary  # noqa: F401
 from .recon import (  # noqa: F401

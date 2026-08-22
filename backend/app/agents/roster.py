@@ -1,9 +1,15 @@
-"""The four agents that work a case once the taxpayer's documents are in.
+"""The agents that work a case once the taxpayer's documents are in.
 
 The auditors named three and left the fourth to us; the fourth is Evidence & Coverage, because
 their own outcome list is dominated by it — missing supporting documentation, documents that do
 not correspond to the declared sales, revenue from an activity the registration does not carry,
 and outright non-cooperation are five of the fifteen statements between them.
+
+A fifth, ZATCA Reconciliation, is the only one whose evidence is not the taxpayer's: it reads
+the Authority's own invoice records against the listing supplied. The *matching* is not the
+agent's work and could not be — that is closed arithmetic in `pipeline/reconciliation.py`, with
+a rule on record for every disagreement. The agent's part is the judgement the matcher cannot
+make: which of those disagreements is worth putting to the taxpayer, and as what.
 
 Every agent obeys the same contract as the original roster and for the same reason: it proposes
 a `Hypothesis` carrying **language only**, plus a typed `TestSpec` a deterministic adjudicator
@@ -32,6 +38,7 @@ REGULATIONS = oc.REGULATIONS
 DATA_ENTRY = oc.DATA_ENTRY
 CALCULATION = oc.CALCULATION
 EVIDENCE = oc.EVIDENCE
+ZATCA_RECON = oc.ZATCA_RECON
 
 
 def _material(ctx: CaseContext, box: str) -> bool:
@@ -243,7 +250,59 @@ def evidence(ctx: CaseContext) -> list[Hypothesis]:
     return out
 
 
-AGENTS = (regulations, data_entry, calculation, evidence)
+# ========================================================== 5 · ZATCA RECONCILIATION
+# The one agent whose evidence is not the taxpayer's. It reads the comparison the deterministic
+# matcher produced against the Authority's own invoice records, and turns those records into the
+# same kind of hypothesis every other agent raises.
+#
+# **The matching is not this agent's work and never could be.** Joining two invoice populations
+# is closed arithmetic — `pipeline/reconciliation.py` does it, reproducibly, with a rule on
+# record for every disagreement. What is left for an agent is the part that is genuinely a
+# judgement about what to test: whether a population of unmatched invoices is worth putting to
+# the taxpayer as undisclosed sales, or whether disagreeing figures on matched invoices are
+# worth putting as a records defect. It proposes; the adjudicator prices it.
+#
+# Two hypotheses, deliberately not one. They rest on different evidence and describe different
+# money — invoices absent from the listing are additional to everything the listing totals,
+# while a value difference is a movement within it — so a combined figure would describe
+# neither, and `exposure()` could not tell them apart.
+def zatca_reconciliation(ctx: CaseContext) -> list[Hypothesis]:
+    c = getattr(ctx, "zatca", None)
+    if not c or not c.get("comparable"):
+        return []                    # no dataset, or only one side: nothing to say
+
+    out: list[Hypothesis] = []
+    unmatched = [m for m in c["mismatches"] if m["code"] == "ZR-01"]
+    if unmatched:
+        out.append(Hypothesis(
+            id="ZR-01", agent=ZATCA_RECON, outcome_code="SAL-UNDISCLOSED", reason_code="D03",
+            confidence="high",
+            why=f"{len(unmatched)} of the {c['zatca_count']} invoices in ZATCA's records for "
+                f"this period {'has' if len(unmatched) == 1 else 'have'} no counterpart in "
+                f"{c['listing_name'] or 'the listing'}.",
+            claim="Invoices evidenced in the Authority's own records are absent from the sales "
+                  "listing supplied, so the listing may not be a complete record of the "
+                  "period's sales.",
+            test=TestSpec(kind="zatca-unmatched", box="output"),
+            evidence_refs=[c["zatca_name"], c["listing_name"]]))
+
+    values = [m for m in c["mismatches"] if m["code"] == "ZR-03"]
+    if values:
+        out.append(Hypothesis(
+            id="ZR-02", agent=ZATCA_RECON, outcome_code="SAL-MISMATCH", reason_code="D03",
+            confidence="high",
+            why=f"{len(values)} of the {c['matched_count']} invoices present in both "
+                f"populations {'is' if len(values) == 1 else 'are'} recorded with a different "
+                f"VAT amount in each.",
+            claim="Invoices appear in both the listing and the Authority's records with "
+                  "different VAT amounts, so the documents supplied do not correspond to the "
+                  "Authority's record of the same supplies.",
+            test=TestSpec(kind="zatca-value-mismatch", box="output"),
+            evidence_refs=[c["zatca_name"], c["listing_name"]]))
+    return out
+
+
+AGENTS = (regulations, data_entry, calculation, evidence, zatca_reconciliation)
 
 
 def propose(ctx: CaseContext) -> list[Hypothesis]:

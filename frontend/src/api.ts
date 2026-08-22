@@ -972,3 +972,64 @@ export const requestInformation = (id: string, hypothesisId: string, note = "") 
     `/cases/${id}/hypotheses/${hypothesisId}/request-info`,
     { note },
   );
+
+// ---------------------------------------------------------------- ZATCA's own invoice records
+
+/** One disagreement between the two populations, produced by a named deterministic rule.
+ *
+ *  `vat_at_stake` is set only by the rules that genuinely carry money, and is read per rule
+ *  rather than summed across them — an omitted invoice and a restated one describe different
+ *  money, and one total would describe neither. */
+export interface ZatcaMismatch {
+  code: string;
+  category: string;
+  severity: "blocking" | "advisory";
+  detail: string;
+  ref: string;
+  field: string;
+  listing_value: string;
+  zatca_value: string;
+  citation: string;
+  vat_at_stake: number;
+}
+
+export interface ZatcaState {
+  /** false when only one side is present — with one, every record would look unmatched */
+  comparable: boolean;
+  note: string;
+  listing_count: number;
+  zatca_count: number;
+  matched_count: number;
+  listing_name: string;
+  zatca_name: string;
+  mismatches: ZatcaMismatch[];
+  categories: { category: string; count: number; blocking: number; vat_at_stake: number }[];
+  blocking: number;
+  rules: { code: string; category: string; severity: string; note: string }[];
+  dataset: {
+    id: number;
+    filename: string;
+    format: string;
+    source: string;
+    uploaded_at: string;
+    row_count: number;
+    columns: string[];
+    note: string;
+  } | null;
+}
+
+export const getZatca = (id: string) => getJSON<ZatcaState>(`/cases/${id}/zatca`);
+
+export const uploadZatca = async (id: string, file: File): Promise<ZatcaState> => {
+  const body = new FormData();
+  body.append("file", file);
+  const r = await fetch(`${BASE}/cases/${id}/zatca`, { method: "POST", body });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+};
+
+export const removeZatca = async (id: string): Promise<ZatcaState> => {
+  const r = await fetch(`${BASE}/cases/${id}/zatca`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+};

@@ -20,11 +20,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# the four agents that may raise an outcome
+# the agents that may raise an outcome. The first four are the auditors' own roster; the fifth
+# reads the Authority's invoice records against the taxpayer's listing, and reaches the same
+# vocabulary by the same route — it raises a code, and the code carries the wording.
 REGULATIONS = "Regulations"
 DATA_ENTRY = "Data Entry"
 CALCULATION = "Calculation"
 EVIDENCE = "Evidence & Coverage"
+ZATCA_RECON = "ZATCA Reconciliation"
 
 # what the finding does to the assessment
 DISALLOWS_INPUT = "disallows-input"      # recoverable input VAT is reduced

@@ -34,6 +34,9 @@ TestKind = Literal[
     "trial-balance-absent",   # the listing exceeds the return and no trial balance was supplied
     "non-cooperation",        # items requested and never supplied
     "auditor-figure",         # a figure the auditor recorded that the engine cannot reproduce
+    # --- tests over ZATCA's own invoice records, when a dataset is loaded for the case
+    "zatca-unmatched",        # invoices the Authority holds that the listing does not contain
+    "zatca-value-mismatch",   # invoices on both sides recorded with different VAT
 ]
 
 Status = Literal["confirmed", "refuted", "insufficient-evidence"]
