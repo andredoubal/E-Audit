@@ -814,6 +814,13 @@ details summary{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600
 .caserow.on{background:var(--surface-2)}
 .caserow.on td{font-weight:600}
 details[open] summary{margin-bottom:6px}
+/* The assistant is conditionally rendered in React; here it is toggled, and the page is
+   narrowed while it is docked so it covers nothing. */
+.asst{display:none}
+body.asst-on .asst{display:flex}
+body.asst-on .asst-fab{display:none}
+body.asst-on{padding-right:430px}
+@media (max-width:1000px){body.asst-on{padding-right:0}}
 </style></head><body><div class="wrap">
 <header class="page-head" style="border:none">
 <div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
@@ -825,7 +832,7 @@ not act. The regulations corpus behind the citations holds 79
 articles, 31 of which have been amended since
 the English edition they are shown in.</div>
 
-<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list.</p>
+<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list. The <b>case assistant</b> is docked on the right of all three.</p>
 <div class="ctabs"><button class="ctab" data-tab="cases"><b>Cases</b><span>Every case you hold</span></button><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-cases">
 <header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
 <h1>Cases</h1><p class="sub">8 open · ranked by what is worth looking at first</p>
@@ -1199,7 +1206,27 @@ Outstanding at the date of this report (7):
 The records that qualify total SAR 2,618,000.00 against SAR 2,000,000.00 declared, a difference of SAR 618,000.00.
 Four automated checks were then run over the records received — the conditions the law sets for a document, keying and transposition errors, the totals the records support against those declared, and whether there is supporting evidence behind what was claimed. Each proposal was settled against the source records; the findings below are those that were confirmed.
 NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span></div><div><span class="k">Audit Findings</span><span class="v">No finding was established from the records supplied. The declared position is supported by the evidence available.</span></div><div><span class="k">Audit Recommendations</span><span class="v">Close the case. No adjustment is proposed.</span></div><div><span class="k">Rulings</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Assessment</span><span class="v">No measure is proposed. The records supplied support the position declared, within the materiality applied to this review (SAR 10,000.00).</span></div><div><span class="k">Penalties imposed</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Future Audits</span><span class="v">The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span></div></div></div><div class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="kv"><div><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span></div><div><span class="k">Indicator response description</span><span class="v">The referral surfaced a real difference, but the records supplied account for it. No finding.</span></div><div><span class="k">Under reporting driver</span><span class="v">None established</span></div><div><span class="k">Under reporting reason</span><span class="v">Not applicable — no under-reporting was established.</span></div><div><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span></div></div></div></div></div></div>
-</div><script>
+</div>
+<button class="asst-fab" id="asst-open"><span class="ai-chip">AI</span>
+Ask about this case</button>
+<aside class="asst" id="asst">
+<div class="asst-head"><span class="ai-chip">AI</span><b>Case assistant</b>
+<span class="sub">CASE-2025-0481</span>
+<button class="asst-x" id="asst-close" aria-label="Close">×</button></div>
+<div class="asst-body">
+<p class="detail-note" style="margin-top:0">Everything the assistant can do is on the list
+below — it runs the application&rsquo;s own checks rather than analysis of its own, and every
+figure in an answer was computed by the engine before the sentence was written. Which is why
+it answers with no API key at all.</p>
+<div class="asst-msg auditor"><pre>where are we on this case</pre></div><div class="asst-msg assistant"><span class="pill status">status</span><pre>Round 1 of correspondence on CASE-2025-0481. 1 document(s) received; 0 of 3 requested item(s) fully answered. 3 item(s) still outstanding — Detailed sales analysis (incomplete), Reconciliation of the return to the ledger (missing), Credit and debit note listing (missing)</pre></div><div class="asst-msg auditor"><pre>what is still missing?</pre></div><div class="asst-msg assistant"><span class="pill status">outstanding</span><pre>3 item(s) still outstanding.
+
+• Detailed sales analysis — incomplete: The &#x27;Customer VAT number&#x27; column was requested but is not in the file.
+• Reconciliation of the return to the ledger — missing
+• Credit and debit note listing — missing</pre></div><div class="asst-msg auditor"><pre>compare with ZATCA&#x27;s records</pre></div><div class="asst-msg assistant"><span class="pill status">zatca</span><pre>19 invoice(s) appear in both the listing and ZATCA&#x27;s records. 3 invoice(s) in ZATCA&#x27;s records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.</pre></div></div>
+<div class="asst-foot"><div class="asst-quick"><button class="qchip" title="What has arrived, what is still outstanding.">Where is this case?</button><button class="qchip" title="The gaps, and what the chase asks for.">What is still missing?</button><button class="qchip" title="Write the email for what is still outstanding.">Draft the chase</button><button class="qchip" title="Re-test every hypothesis against the evidence now on file.">Re-run the investigation</button><button class="qchip" title="Accepted findings and what they come to.">What has been established?</button><button class="qchip" title="What the Authority&#x27;s own invoices show.">Compare with ZATCA&#x27;s records</button></div>
+<div class="asst-input"><input placeholder="Ask about this case…" disabled>
+<button class="btn" disabled>Ask</button></div></div>
+</aside><script>
 const tabs = document.querySelectorAll('.ctab');
 function show(k) {
   tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
@@ -1207,4 +1234,9 @@ function show(k) {
 }
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
 show('cases');
+
+const dock = on => document.body.classList.toggle('asst-on', on);
+document.getElementById('asst-open').addEventListener('click', () => dock(true));
+document.getElementById('asst-close').addEventListener('click', () => dock(false));
+dock(true);
 </script></body></html>

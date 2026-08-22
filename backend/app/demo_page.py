@@ -32,6 +32,22 @@ def _get(path: str) -> dict:
         return json.loads(r.read().decode())
 
 
+def _post(path: str, body: dict) -> dict:
+    req = urllib.request.Request(
+        f"{API}{path}", data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read().decode())
+
+
+def _delete(path: str) -> None:
+    req = urllib.request.Request(f"{API}{path}", method="DELETE")
+    try:
+        urllib.request.urlopen(req, timeout=30).close()
+    except Exception:                                    # noqa: BLE001
+        pass
+
+
 def e(v) -> str:
     return html.escape(str(v if v is not None else ""))
 
@@ -267,6 +283,48 @@ answered from the case · {rep["completeness"]["outstanding"]} need a person or 
 </span></div><div class="panel-body">{sections}</div></div>"""
 
 
+# ------------------------------------------------------------------ the case assistant
+
+def assistant(a: dict) -> str:
+    """One conversation per case, docked over whichever module you are in.
+
+    It is rendered outside the tab panes for the same reason it sits outside the router in the
+    application: a question about a case spans what arrived, what the tests said and what will
+    be written, so making the auditor pick a tab before they can ask would be the wrong shape.
+
+    The exchange below is real — the three questions were put to the running assistant when this
+    file was generated, and the answers are the ones it gave, deterministically, with no API key
+    involved. What it *can* do is the row of buttons: a closed list of the application's own
+    checks, not open-ended analysis."""
+    msgs = []
+    for m in a.get("messages", []):
+        tag = ""
+        if m["role"] == "assistant" and m.get("action") and m["action"] != "explain":
+            tag = f'<span class="pill status">{e(m["action"].replace("_", " "))}</span>'
+        did = f'<span class="asst-did">✓ {e(m["did"])}</span>' if m.get("did") else ""
+        msgs.append(f'<div class="asst-msg {e(m["role"])}">{tag}'
+                    f'<pre>{e(m["content"])}</pre>{did}</div>')
+    chips = "".join(f'<button class="qchip" title="{e(x["hint"])}">{e(x["label"])}</button>'
+                    for x in a.get("actions", []) if x["key"] != "explain")
+    return f"""
+<button class="asst-fab" id="asst-open"><span class="ai-chip">AI</span>
+Ask about this case</button>
+<aside class="asst" id="asst">
+<div class="asst-head"><span class="ai-chip">AI</span><b>Case assistant</b>
+<span class="sub">{e(CASE)}</span>
+<button class="asst-x" id="asst-close" aria-label="Close">×</button></div>
+<div class="asst-body">
+<p class="detail-note" style="margin-top:0">Everything the assistant can do is on the list
+below — it runs the application&rsquo;s own checks rather than analysis of its own, and every
+figure in an answer was computed by the engine before the sentence was written. Which is why
+it answers with no API key at all.</p>
+{"".join(msgs)}</div>
+<div class="asst-foot"><div class="asst-quick">{chips}</div>
+<div class="asst-input"><input placeholder="Ask about this case…" disabled>
+<button class="btn" disabled>Ask</button></div></div>
+</aside>"""
+
+
 # ------------------------------------------------------------------ the page
 
 def build() -> str:
@@ -281,6 +339,22 @@ def build() -> str:
         loop["_followup"] = _get(f"/cases/{CASE}/followup").get("text", "")
     except Exception:                                    # noqa: BLE001
         loop["_followup"] = ""
+
+    # The assistant is asked its questions here rather than being scripted, for the same reason
+    # the rest of the page is generated: an answer written by hand would drift the moment the
+    # engine behind it changed, and the point of the panel is that it is not being written by
+    # hand. Cleared first so regenerating twice does not stack the same exchange.
+    _delete(f"/cases/{CASE}/assistant")
+    asst: dict = {}
+    for q in ("where are we on this case",
+              "what is still missing?",
+              "compare with ZATCA's records"):
+        try:
+            asst = _post(f"/cases/{CASE}/assistant", {"question": q})
+        except Exception:                                # noqa: BLE001
+            pass
+    if not asst:
+        asst = _get(f"/cases/{CASE}/assistant")
 
     theme = THEME.read_text(encoding="utf-8") if THEME.exists() else ""
     tabs = {
@@ -337,6 +411,13 @@ details summary{{cursor:pointer;font-size:12px;color:var(--brand);font-weight:60
 .caserow.on{{background:var(--surface-2)}}
 .caserow.on td{{font-weight:600}}
 details[open] summary{{margin-bottom:6px}}
+/* The assistant is conditionally rendered in React; here it is toggled, and the page is
+   narrowed while it is docked so it covers nothing. */
+.asst{{display:none}}
+body.asst-on .asst{{display:flex}}
+body.asst-on .asst-fab{{display:none}}
+body.asst-on{{padding-right:430px}}
+@media (max-width:1000px){{body.asst-on{{padding-right:0}}}}
 </style></head><body><div class="wrap">
 <header class="page-head" style="border:none">
 <div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
@@ -348,9 +429,9 @@ not act. The regulations corpus behind the citations holds {cov.get('article_cou
 articles, {len(cov.get('amended_since_english_edition', []))} of which have been amended since
 the English edition they are shown in.</div>
 
-<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list.</p>
+<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list. The <b>case assistant</b> is docked on the right of all three.</p>
 <div class="ctabs">{nav}</div>{panes}
-</div><script>
+</div>{assistant(asst)}<script>
 const tabs = document.querySelectorAll('.ctab');
 function show(k) {{
   tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
@@ -358,6 +439,11 @@ function show(k) {{
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
 show('cases');
+
+const dock = on => document.body.classList.toggle('asst-on', on);
+document.getElementById('asst-open').addEventListener('click', () => dock(true));
+document.getElementById('asst-close').addEventListener('click', () => dock(false));
+dock(true);
 </script></body></html>"""
 
 
