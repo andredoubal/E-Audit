@@ -63,8 +63,13 @@ def to_html(report: dict, *, for_word: bool = False) -> str:
         for f in section.get("fields") or []:
             note = (f'<span class="note">{html.escape(f["note"])}</span>'
                     if f.get("note") else "")
+            # A field the auditor wrote is marked in the document itself, not only on screen.
+            # Somebody reading the Word file has no other way to tell the engine's words from a
+            # person's, and in a dispute that distinction is the whole question.
+            mark = ('<span class="note">Written by the auditor.</span>'
+                    if f.get("edited") else "")
             rows.append(f'<tr><td class="k">{html.escape(f["label"])}</td>'
-                        f'<td class="v">{_value(f["value"])}{note}</td></tr>')
+                        f'<td class="v">{_value(f["value"])}{note}{mark}</td></tr>')
         rows.append("</table>")
 
     completeness = report.get("completeness") or {}
@@ -73,6 +78,23 @@ def to_html(report: dict, *, for_word: bool = False) -> str:
     fields = completeness.get("fields", 0)
     banner = (f"{filled} of {fields} fields are answered from the case. "
               f"{outstanding} still need the auditor or another ZATCA system.")
+    written = report.get("edited_fields") or 0
+    if written:
+        banner += (f" {written} field{'' if written == 1 else 's'} "
+                   f"{'was' if written == 1 else 'were'} written by the auditor.")
+
+    # The footer's claim has to narrow once a person has written in the document. "Every figure
+    # here was computed by the engine" stops being true the moment a field is overridden, and a
+    # standing claim that is sometimes false is worse than a narrower one that is always true.
+    provenance = (
+        'Every figure the audit engine contributed to this report was computed from the '
+        'documents on the case file. Fields marked "Written by the auditor" are that person\'s '
+        'own words. Fields shown as outstanding were left for a person to complete rather than '
+        'filled from an assumption.'
+        if written else
+        'Every figure in this report was computed by the audit engine from the documents on '
+        'the case file. Fields marked as outstanding were left for a person to complete rather '
+        'than filled from an assumption.')
 
     # Word ignores the print button; the browser hides it when printing.
     button = "" if for_word else (
@@ -93,9 +115,7 @@ def to_html(report: dict, *, for_word: bool = False) -> str:
         f'<p class="sub">{html.escape(banner)}</p>'
         f"{button}"
         + "".join(rows)
-        + '<p class="foot">Every figure in this report was computed by the audit engine from '
-          'the documents on the case file. Fields marked as outstanding were left for a person '
-          'to complete rather than filled from an assumption.</p>'
+        + f'<p class="foot">{provenance}</p>'
           "</body></html>"
     )
 

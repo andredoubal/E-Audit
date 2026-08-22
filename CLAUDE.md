@@ -203,6 +203,8 @@ backend/app/
                        #   zatca_service.py   holds the Authority's extract; compares on demand
                        #   zatca_tests.py     what a mismatch is worth, per basis
   reporting/           # audit_report.py — the Authority's own template, section by section
+                       #   edits.py        the auditor's own words, overlaid on the engine's
+                       #   render.py       one HTML render serving Word and print
   api/routes.py        # FastAPI endpoints
   models/              # core.py, dossier.py, casework.py, config_tables.py, recon.py
   llm/                 # the ONLY model boundary: service, provider, prompts, verify, schemas
@@ -455,6 +457,46 @@ rows, derived fresh every time, so a fixed gap changes the word with no state to
 distinction that earns its place is **incomplete** against **needs auditor review**: the first is
 a defect the taxpayer must fix, the second is the checker admitting it cannot decide. A chase
 letter written from the second asks for something that was already sent.
+
+## The report is a draft a person signs
+
+`reporting/edits.py` + `models/reporting.py`. Two things had to be true before the Audit Report
+tab was a place an auditor could actually work, and neither was.
+
+**The report and the letter have to say the same thing.** The report was built from the findings
+the auditor accepted; the verdict letter was built from `investigate_case` — the engine's own
+verdicts. On the seeded case that put a banner reading *"no finding has been confirmed yet"*
+directly above a letter to the taxpayer asserting eight findings and most of a million riyals of
+tax. Both now read `investigation_service.confirmed_findings`. A related defect sat one level
+down: the letter's closing paragraph was chosen from `recon["state"]` alone, so with nothing
+accepted it still said *"the Authority will proceed on the basis set out above"*. The computed
+difference is a fact the letter may report; on its own it may not carry a proposal, and
+`fb_verdict` now says the review is not concluded instead. The verdict is also always drafted,
+where it used to appear only once there was something to assert — a panel that vanishes leaves
+an auditor unable to tell an application with no letter for them from one that failed.
+
+**Every field is editable, and the edit reaches the document.** `[for the auditor to complete]`
+is an instruction — rulings, penalties, a meeting date are judgements the tool has no business
+making — and the report named the gap while offering no way to close it. `ReportFieldEdit` is
+keyed `(case_id, "<section>::<label>")`; `edits.apply()` overlays the rows in `_audit_report`,
+the one place the JSON view, the Word download and the printable page all pass through. That
+placement is the design: an edit visible on screen but not in the download would mean the
+auditor sends the version they had already corrected.
+
+Three rules keep the editing honest:
+
+- **Nothing here computes.** These are the auditor's words, so the core invariant is untouched —
+  the engine still owns every figure. What is new is a third author, and the file records which
+  one wrote each line, in the Word file as well as on screen.
+- **What was replaced is kept.** `original` travels with the field and with `LetterDraft`, so an
+  override is visible and reversible. An override nobody can detect is not an override.
+- **An empty save reverts.** Clearing a box restores the engine's value rather than blanking the
+  line, and a rewritten letter loses its verifier badge — that badge describes what the checker
+  saw, and the checker never saw the auditor's words.
+
+`LetterDraft` is deliberately not a `CorrespondenceMessage`: that table is the trail of what was
+actually *said*, and filing an unsent draft there would make the case file claim a letter went
+out while it is still being written.
 
 ## The law behind a finding
 

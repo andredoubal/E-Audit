@@ -265,26 +265,80 @@ figures. The audit conclusion is the auditor's: only what you accept reaches the
 </div></div>"""
 
 
-def report(rep: dict, inv: dict) -> str:
+def report(rep: dict, inv: dict, verdict: dict) -> str:
+    """The document of record, and the letter that closes the case.
+
+    Both are built from the findings the auditor **accepted** and from nothing else, which is
+    why the banner and the letter below it agree. They did not: the letter was drafted from the
+    engine's own verdicts, so this page carried "no finding has been confirmed yet" directly
+    above a letter to the taxpayer asserting eight of them.
+
+    Every field is editable in the application; here it is a static capture, so the controls are
+    shown and do not act, like everything else on this page.
+    """
+    def field(f: dict) -> str:
+        long = len(f["value"]) > 90 or "\n" in f["value"]
+        tag = '<span class="rfield-tag">yours</span>' if f.get("edited") else ""
+        return (f'<div class="rfield{" wide" if long else ""}'
+                f'{" edited" if f.get("edited") else ""}">'
+                f'<span class="k">{e(f["label"])}{tag}</span>'
+                f'<span class="v{"" if f["held"] else " gap"}">{e(f["value"])}</span>'
+                f'<div class="rfield-actions"><span class="linklike">'
+                f'{"fill this in" if not f["held"] else "edit"}</span></div></div>')
+
     sections = "".join(
-        f'<div class="rep-section"><h3 class="rep-h">{e(s["title"])}</h3><div class="kv">' +
-        "".join(f'<div><span class="k">{e(f["label"])}</span>'
-                f'<span class="v{"" if f["held"] else " gap"}">{e(f["value"])}</span></div>'
-                for f in s["fields"]) + "</div></div>"
+        f'<section class="rep-section"><h3 class="rep-h">{e(s["title"])}</h3>'
+        f'<div class="rfields">' + "".join(field(f) for f in s["fields"]) + "</div></section>"
         for s in rep["sections"])
     undecided = inv["counts"]["total"] - inv["counts"]["decided"]
+    accepted = inv["counts"]["accepted"]
+    outstanding = rep["completeness"]["outstanding"]
+
+    # Driven by the counts, not written out. It was a fixed "no finding has been confirmed yet",
+    # which is the same defect this page exists to show fixed: a banner contradicting the letter
+    # printed underneath it.
+    if accepted:
+        banner = (f'<div class="callout ok"><b>{accepted} finding'
+                  f'{"" if accepted == 1 else "s"} confirmed by you</b> · {undecided} '
+                  f'hypothes{"is" if undecided == 1 else "es"} still undecided in the '
+                  f'Investigation tab. The report and the letter below are built from what you '
+                  f'accepted, and from nothing else.</div>')
+    else:
+        banner = (f'<div class="callout warn"><b>No finding has been confirmed yet.</b> This '
+                  f'report — and the letter at the bottom of this page — are built from the '
+                  f'findings you accept in the Investigation tab. The engine\'s own verdicts '
+                  f'are proposals, not audit conclusions. {undecided} hypotheses are still '
+                  f'undecided.</div>')
+
+    letter = ""
+    if verdict:
+        letter = f"""
+<div class="panel ai-panel"><div class="panel-head">
+<div class="ai-h"><span class="ai-chip">AI</span><h2>{e(verdict["title"])}</h2></div>
+<div class="chips"><span class="pill status">{e(verdict["trigger"])}</span>
+<span class="pill">Edit</span><span class="pill">Copy</span></div></div>
+<div class="panel-body"><pre class="letterpre">{e(verdict["text"])}</pre>
+<p class="detail-note">Written from the findings you accepted, and from nothing else — and
+editable in place, because a letter is the one thing here that leaves the building in the
+Authority&rsquo;s name.</p></div></div>"""
+
     return f"""
 <header class="page-head"><div><p class="eyebrow">Audit report</p>
 <h1>{e(rep.get("taxpayer", CASE))}</h1></div>
 <div class="chips"><span class="pill">Download Word</span>
 <span class="pill">Open printable / PDF</span></div></header>
-<div class="callout warn"><b>No finding has been confirmed yet.</b> This report is built from
-the findings you accept in the Investigation tab — the engine's own verdicts are proposals, not
-audit conclusions. {undecided} hypotheses are still undecided.</div>
+{banner}
 <div class="panel"><div class="panel-head"><h2>{e(rep["title"])}</h2>
-<span class="muted">{rep["completeness"]["filled"]} of {rep["completeness"]["fields"]} fields
-answered from the case · {rep["completeness"]["outstanding"]} need a person or another system
-</span></div><div class="panel-body">{sections}</div></div>"""
+<div class="chips"><span class="pill status">{rep["completeness"]["filled"]} of
+{rep["completeness"]["fields"]} answered</span>
+<span class="pill pri-medium">{outstanding} still open</span></div></div>
+<div class="panel-body">
+<p class="detail-note" style="margin-top:0">Every field here can be written in your own words —
+the ones marked <b>[for the auditor to complete]</b> are judgements the tool has no business
+making, and <b>[not held]</b> is something ZATCA keeps in another system. What you write
+replaces what the engine wrote, is marked as yours, keeps the original beside it, and goes into
+the Word and printable versions too.</p>
+{sections}</div></div>{letter}"""
 
 
 # ------------------------------------------------------------------ the case assistant
@@ -337,6 +391,8 @@ def build() -> str:
     inv = _get(f"/cases/{CASE}/investigation")
     z = _get(f"/cases/{CASE}/zatca")
     rep = _get(f"/cases/{CASE}/audit-report")
+    mails = _get(f"/cases/{CASE}/emails").get("emails") or []
+    verdict = next((m for m in mails if m["kind"] == "verdict"), {})
     cov = _get("/regulatory/coverage")
     cases = _get("/cases")
     try:
@@ -366,7 +422,7 @@ def build() -> str:
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
         "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
-        "report": ("Audit Report", "What you concluded", report(rep, inv)),
+        "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     nav = "".join(
         f'<button class="ctab" data-tab="{k}"><b>{e(t)}</b><span>{e(s)}</span></button>'

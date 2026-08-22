@@ -13,6 +13,7 @@ import re
 
 from sqlalchemy import select
 
+from app import outcomes as oc
 from app.agents.correspondence import draft_verdict, verdict_facts
 from app.casefile import STAGES, status
 from app.casefile.orchestrator import ACTIVE, DONE, PENDING, SKIPPED, WAITING
@@ -140,5 +141,27 @@ def test_a_finding_letter_is_a_proposal_not_an_assessment(seeded):
     """Agents propose, the human decides — the letter must not pre-empt the decision."""
     c = seeded.scalar(select(AuditCase).where(AuditCase.case_id == "CASE-2025-0487"))
     recon = reconcile_case(seeded, c.case_id, persist=False)
-    text = draft_verdict(c, c.taxpayer, recon)["text"]
+    finding = {"code": "SAL-HIGHER", "statement": oc.statement("SAL-HIGHER"),
+               "amount": 618_000.0, "basis": "listing-vs-declared", "agent": "Calculation",
+               "hypothesis_id": "CA-01", "effect": "adjustment", "direction": "sale"}
+    text = draft_verdict(c, c.taxpayer, recon, findings=[finding])["text"]
     assert "proposed position and not an assessment" in text.lower()
+
+
+def test_a_letter_with_no_accepted_finding_proposes_nothing_at_all(seeded):
+    """Stronger than the test above, and the reason it now has to pass findings in.
+
+    The closing paragraph read `recon["state"]` alone, so a case where the auditor had accepted
+    nothing still went out saying "a difference of SAR 618,000 remains unexplained ... the
+    Authority will proceed on the basis set out above" — a position proposed on a review nobody
+    had concluded. The difference is a computed fact and the letter still reports it; what it
+    may not do on its own is carry a proposal.
+    """
+    c = seeded.scalar(select(AuditCase).where(AuditCase.case_id == "CASE-2025-0487"))
+    recon = reconcile_case(seeded, c.case_id, persist=False)
+    text = draft_verdict(c, c.taxpayer, recon, findings=[])["text"].lower()
+
+    assert "not yet concluded" in text
+    assert "no finding has been established" in text
+    assert "will proceed on the basis" not in text
+    assert "established on review" not in text

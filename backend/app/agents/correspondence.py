@@ -247,6 +247,14 @@ def verdict_facts(case, taxpayer, recon, investigation=None, findings=None) -> s
                      "each amount is stated once and must not be repeated against another "
                      "characterisation of the same matter):")
         lines.extend(_finding_lines(findings))
+    else:
+        # The same rule the deterministic draft follows, stated where the model can see it.
+        # A computed difference is a fact the letter may report; it is not a position the
+        # Authority has taken, and nothing here has been established until a person accepts it.
+        lines.append("Findings established on this review: NONE. The auditor has accepted no "
+                     "finding, so this letter must not propose an adjustment, must not state "
+                     "that the Authority will proceed on any basis, and must say that the "
+                     "review of the difference is not yet concluded.")
     if investigation and investigation.get("conclusion"):
         lines.append(f"Reviewer's conclusion: {investigation['conclusion']}")
     return "\n".join(lines)
@@ -288,7 +296,24 @@ def fb_verdict(case, taxpayer, recon, investigation=None, findings=None) -> str:
         body.extend(_finding_lines(findings))
         body.append("")
 
-    if state == "supported":
+    # A letter asserts what the *auditor* established, never what the engine computed.
+    #
+    # These branches read `recon["state"]` alone until a finding is accepted, which meant a case
+    # with nothing accepted still went out saying "a difference of SAR 618,000 remains
+    # unexplained ... the Authority will proceed on the basis set out above" — the Authority
+    # proposing a position on a review nobody had concluded. The difference is a real computed
+    # fact and is still stated; what it may not do on its own is carry a proposal.
+    if not findings and state != "supported":
+        body += [
+            f"The records supplied show a difference of SAR {unexplained:,.2f} against the "
+            f"figures declared for the period. The review of that difference is not yet "
+            f"concluded: no finding has been established, and no adjustment is proposed at this "
+            f"stage.",
+            "",
+            "The Authority will write again once the review is complete. Nothing in this letter "
+            "is an assessment, and no action is required from you in respect of it.",
+        ]
+    elif state == "supported":
         body += [
             "On that basis the declared figures are supported by the evidence available, and "
             "no adjustment is proposed. No further action is required from you in respect of "

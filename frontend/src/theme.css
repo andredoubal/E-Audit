@@ -624,6 +624,44 @@ input.letter-input,select.letter-input{min-height:0}
    unanswered fields would look finished when it is not. */
 .kv .v.gap{color:var(--med);font-weight:600}
 
+/* The report's fields, which the auditor writes.
+   A flow layout rather than the old two-column grid: that grid left a phantom bordered cell
+   beside any section with an odd number of fields, and forced a 900-character documents list
+   into half the width. Fields size themselves — a long one takes the row. */
+.rfields{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:10px;overflow:hidden;margin:4px 0 0}
+.rfield{background:var(--surface);padding:9px 12px;display:flex;flex-direction:column;gap:3px;
+  flex:1 1 calc(50% - 1px);min-width:min(280px,100%)}
+.rfield.wide{flex-basis:100%}
+.rfield .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;
+  display:flex;align-items:center;gap:7px}
+.rfield .v{font-size:14px;font-variant-numeric:tabular-nums;white-space:pre-wrap;line-height:1.55}
+.rfield .v.gap{color:var(--med);font-weight:600}
+.rfield.edited{background:color-mix(in srgb,var(--low) 7%,var(--surface))}
+.rfield-tag{font-size:9.5px;font-weight:800;letter-spacing:.5px;color:var(--low);
+  background:color-mix(in srgb,var(--low) 15%,transparent);padding:2px 6px;border-radius:5px}
+.rfield-note{font-size:11.5px;color:var(--faint);line-height:1.45}
+.rfield-actions{display:flex;gap:11px;align-items:center;margin-top:2px}
+/* The row's controls stay out of the way until the field is pointed at — 35 fields each
+   showing a permanent "edit" reads as a wall of links rather than as a document. */
+.rfield:not(.editing) .rfield-actions{opacity:0;transition:opacity .12s}
+.rfield:hover .rfield-actions,.rfield:focus-within .rfield-actions{opacity:1}
+.rfield-actions .linklike{font-size:11.5px}
+.rfield.editing{background:color-mix(in srgb,var(--ai) 5%,var(--surface));flex-basis:100%}
+.rfield-input{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:8px 10px;font:inherit;font-size:13.5px;line-height:1.55;
+  resize:vertical;width:100%}
+.rfield-input:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+.rfield-original{margin:4px 0 0;padding:8px 10px;background:var(--surface-2);
+  border:1px dashed var(--line);border-radius:8px;font-family:var(--sans);font-size:12.5px;
+  line-height:1.5;white-space:pre-wrap;color:var(--muted)}
+
+/* The outbound letter, edited in place. */
+.letter-edit{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:10px;padding:13px 15px;font-family:var(--mono);font-size:12.5px;line-height:1.65;
+  resize:vertical;width:100%;min-height:260px}
+.letter-edit:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+
 .trace{display:flex;flex-direction:column;gap:3px}
 .trace-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
   font-weight:700;margin:0 0 6px}

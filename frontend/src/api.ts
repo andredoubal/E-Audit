@@ -18,6 +18,16 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(BASE + path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return (await r.json()) as T;
+}
+
 export interface PriorityScore {
   score: number;
   band: string;
@@ -841,6 +851,11 @@ export interface StepEmail {
   text: string;
   source: string;
   violations?: string[];
+  /** The engine's own draft, kept so an edited letter can be restored. */
+  generated?: string;
+  /** The auditor rewrote it — so the verifier's badge no longer describes this text. */
+  edited?: boolean;
+  edited_at?: string;
 }
 export interface StepEmails {
   case_id: string;
@@ -848,6 +863,11 @@ export interface StepEmails {
   findings: Finding[];
   exposure: Exposure;
 }
+
+/** Save the letter as the auditor wrote it. An empty body restores the generated draft. */
+export const saveLetter = (
+  id: string, kind: "follow-up" | "verdict", body: string, generated = "",
+) => putJSON<StepEmails>(`/cases/${id}/letters/${kind}`, { body, generated });
 
 export const parseRequestEmail = (id: string, text: string) =>
   postJSON<ParsedRequest>(`/cases/${id}/request-email/parse`, { text });
@@ -909,6 +929,14 @@ export interface ReportField {
   note: string;
   held: boolean;
   trace: ReportTrace[];
+  /** "<section>::<label>" — what an edit is saved against. */
+  key: string;
+  editable: boolean;
+  /** The auditor wrote this line; `original` is what it replaced, so it can be put back. */
+  edited: boolean;
+  original: string;
+  edited_at?: string;
+  edited_by?: string;
 }
 
 export interface ReportSection {
@@ -922,10 +950,17 @@ export interface AuditReportDoc {
   taxpayer: string;
   sections: ReportSection[];
   completeness: { fields: number; filled: number; outstanding: number };
+  /** How many fields the auditor has written themselves. */
+  edited_fields?: number;
 }
 
 export const getAuditReport = (id: string) =>
   getJSON<AuditReportDoc>(`/cases/${id}/audit-report`);
+
+/** Write one field in the auditor's own words. An empty value reverts it to the engine's.
+ *  Returns the whole report so the completeness tally and the download stay in step. */
+export const saveReportField = (id: string, key: string, value: string, original = "") =>
+  putJSON<AuditReportDoc>(`/cases/${id}/audit-report/fields`, { key, value, original });
 
 /** Served as application/msword — styled HTML that Word opens and can edit, not a native
  *  .docx binary. Honest about what it is; good enough for a draft an auditor works on. */

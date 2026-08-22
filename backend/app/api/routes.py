@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import (
     Taxpayer, VatReturn, Invoice, AuditCase, Rule, TaxpayerResponse, EventLog, GapFinding,
-    AuditorCalculation, AuditorDecision, AuditorFinding, PersistedHypothesis,
+    AuditorCalculation, AuditorDecision, AuditorFinding, PersistedHypothesis, LetterDraft,
 )
+from ..models.reporting import LETTER_KINDS
 from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
@@ -1059,15 +1060,53 @@ def _audit_report(db: Session, case_id: str) -> dict:
                                 .where(GapFinding.case_id == case_id,
                                        GapFinding.round == (req.seq if req else 1))
                                 .order_by(GapFinding.id)).all()]
-    return audit_report.build(
+    from ..reporting import edits as report_edits
+
+    built = audit_report.build(
         case, case.taxpayer, recon, inv,
         priority=score_case(db, case), requested=requested,
         received=documents_for(db, case_id), gaps=gaps)
+    # Applied here, in the one place the JSON view, the Word download and the printable page all
+    # pass through. An edit that showed on screen but not in the downloaded document would be
+    # worse than no editing at all — the auditor would send the version they already corrected.
+    return report_edits.apply(db, case_id, built)
 
 
 @router.get("/cases/{case_id}/audit-report")
 def audit_report_view(case_id: str, db: Session = Depends(get_db)):
     """The audit report, section by section, in the template's own order."""
+    return _audit_report(db, case_id)
+
+
+class ReportFieldIn(BaseModel):
+    key: str
+    value: str
+    original: str = ""
+
+
+@router.put("/cases/{case_id}/audit-report/fields")
+def edit_report_field(case_id: str, body: ReportFieldIn, db: Session = Depends(get_db)):
+    """Write one field of the report in the auditor's own words.
+
+    The template asks for rulings, penalties and a meeting date — judgements the tool has no
+    business making, and which it had no way for anyone to supply. A report that names the gap
+    and then offers no way to close it is a form you cannot fill in.
+
+    An empty value reverts the field, which is what clearing a box should do. Nothing here
+    computes: the engine still owns every figure, and this records that a third author — the
+    auditor — wrote this line, with what it replaced kept beside it.
+    """
+    from ..reporting import edits as report_edits
+
+    _case_or_404(db, case_id)
+    key = (body.key or "").strip()
+    if not key or "::" not in key:
+        raise HTTPException(422, "a field key is '<section>::<label>'")
+
+    report_edits.save(db, case_id, key, body.value, original=body.original)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="report-field-edited",
+                    payload={"field": key, "cleared": not (body.value or "").strip()}))
+    db.commit()
     return _audit_report(db, case_id)
 
 
@@ -1300,18 +1339,103 @@ def step_emails(case_id: str, db: Session = Depends(get_db)):
             **draft,
         })
 
-    inv = investigate_case(case_id, db)
+    # The verdict states what the **auditor accepted**, not what the engine confirmed.
+    #
+    # It read `investigate_case` until this was noticed on screen: the Report tab said "no
+    # finding has been confirmed yet" directly above a letter to the taxpayer asserting eight
+    # findings and SAR 987,000 of tax. The engine's verdicts are proposals — putting them in an
+    # outbound letter states as the Authority's position something no person ever signed off,
+    # which is the single worst thing this application could do.
+    from ..agents.findings import exposure as exposure_of
+
+    inv_service.ensure_run(db, case)
+    confirmed = inv_service.confirmed_findings(db, case)
+    findings = [f.to_dict() for f in confirmed]
     recon = reconcile_case(db, case_id, persist=False)
-    findings = inv.get("findings") or []
-    if not gaps or findings:
-        draft = draft_verdict(case, case.taxpayer, recon, inv, findings)
-        out.append({
-            "step": "closure", "kind": "verdict",
-            "title": "Outcome of the review",
-            "trigger": (f"{len(findings)} finding{'' if len(findings) == 1 else 's'} established" if findings
-                        else "no finding — the declared position is supported"),
-            **draft,
-        })
+    runs = inv_service.state(db, case)["runs"]
+    inv = {"findings": findings, "exposure": exposure_of(confirmed),
+           "conclusion": runs[-1]["conclusion"] if runs else ""}
+
+    # The verdict is always drafted, where it used to appear only once there was something to
+    # assert. A panel that vanishes teaches the auditor nothing: they cannot tell an application
+    # that has no letter for them from one that failed to produce it, and "no adjustment is
+    # proposed" is itself a real outcome letter that a case may legitimately close on. When the
+    # response is still incomplete the trigger says so, so a premature closure is visible rather
+    # than prevented by hiding the draft.
+    blocking = [g for g in gaps if g.severity == "blocking"]
+    if findings:
+        trigger = f"{len(findings)} finding{'' if len(findings) == 1 else 's'} you accepted"
+    elif blocking:
+        trigger = (f"nothing accepted yet · {len(blocking)} item"
+                   f"{'' if len(blocking) == 1 else 's'} still outstanding")
+    else:
+        trigger = "no finding accepted — the declared position stands"
+    draft = draft_verdict(case, case.taxpayer, recon, inv, findings)
+    out.append({
+        "step": "closure", "kind": "verdict",
+        "title": "Outcome of the review",
+        "trigger": trigger,
+        **draft,
+    })
+
+    # A draft the auditor has edited replaces the generated one, and says so. The generated text
+    # travels alongside as `generated` so "restore the draft" is possible and so the panel can
+    # be honest about the letter no longer being what the engine wrote.
+    saved = {r.kind: r for r in db.scalars(
+        select(LetterDraft).where(LetterDraft.case_id == case_id)).all()}
+    for e in out:
+        row = saved.get(e["kind"])
+        e["generated"] = e.get("text", "")
+        if row is not None and (row.body or "").strip():
+            e["text"] = row.body
+            e["edited"] = True
+            e["edited_at"] = row.edited_at.isoformat() if row.edited_at else ""
+            # An edited letter is the auditor's words, so the verifier's badge no longer
+            # describes it. Saying "verified" over text a model never saw would be a lie about
+            # what was checked.
+            e["source"] = "auditor"
+            e["violations"] = []
+        else:
+            e["edited"] = False
 
     return {"case_id": case_id, "emails": out,
-            "findings": findings, "exposure": inv.get("exposure", {})}
+            "findings": findings, "exposure": inv["exposure"]}
+
+
+class LetterIn(BaseModel):
+    body: str
+    subject: str = ""
+    generated: str = ""
+
+
+@router.put("/cases/{case_id}/letters/{kind}")
+def edit_letter(case_id: str, kind: str, body: LetterIn, db: Session = Depends(get_db)):
+    """Save the letter as the auditor wrote it. An empty body restores the generated draft.
+
+    Every draft in this application has said "a draft for you to edit and send" while offering
+    no way to edit it. A letter is the one artefact here that leaves the building in the
+    Authority's name, so it is the last thing that should be read-only.
+    """
+    _case_or_404(db, case_id)
+    if kind not in LETTER_KINDS:
+        raise HTTPException(422, f"unknown letter kind: {kind}")
+
+    row = db.scalar(select(LetterDraft).where(LetterDraft.case_id == case_id,
+                                              LetterDraft.kind == kind))
+    if not (body.body or "").strip():
+        if row is not None:
+            db.delete(row)
+        action = "letter-draft-restored"
+    else:
+        if row is None:
+            row = LetterDraft(case_id=case_id, kind=kind, original=body.generated or "")
+            db.add(row)
+        elif not row.original:
+            row.original = body.generated or ""
+        row.body = body.body
+        row.subject = body.subject or row.subject
+        action = "letter-edited"
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action=action, payload={"kind": kind}))
+    db.commit()
+    return step_emails(case_id, db)

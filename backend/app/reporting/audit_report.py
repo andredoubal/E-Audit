@@ -239,7 +239,11 @@ def audit_outcome(case, recon: dict, findings: list[dict], exposure: dict,
             # because an alternative characterisation of an excess already counted is exactly
             # the thing an auditor needs to see is not a second amount.
             trace.append({
-                "statement": statement.strip(),
+                # The sentence without the prose layout around it. `statement` carried the
+                # document's own "- " bullet into the inspector, where it rendered as a stray
+                # dash in front of the first finding and nothing in front of the others.
+                "statement": f"{f['statement']}{amount}".strip(),
+                "alternative_reading": not first,
                 "carries_amount": bool(f.get("amount") and first),
                 "amount": round(float(f.get("amount") or 0), 2),
                 "code": f.get("code", ""),

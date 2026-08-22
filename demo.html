@@ -628,6 +628,44 @@ input.letter-input,select.letter-input{min-height:0}
    unanswered fields would look finished when it is not. */
 .kv .v.gap{color:var(--med);font-weight:600}
 
+/* The report's fields, which the auditor writes.
+   A flow layout rather than the old two-column grid: that grid left a phantom bordered cell
+   beside any section with an odd number of fields, and forced a 900-character documents list
+   into half the width. Fields size themselves — a long one takes the row. */
+.rfields{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:10px;overflow:hidden;margin:4px 0 0}
+.rfield{background:var(--surface);padding:9px 12px;display:flex;flex-direction:column;gap:3px;
+  flex:1 1 calc(50% - 1px);min-width:min(280px,100%)}
+.rfield.wide{flex-basis:100%}
+.rfield .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;
+  display:flex;align-items:center;gap:7px}
+.rfield .v{font-size:14px;font-variant-numeric:tabular-nums;white-space:pre-wrap;line-height:1.55}
+.rfield .v.gap{color:var(--med);font-weight:600}
+.rfield.edited{background:color-mix(in srgb,var(--low) 7%,var(--surface))}
+.rfield-tag{font-size:9.5px;font-weight:800;letter-spacing:.5px;color:var(--low);
+  background:color-mix(in srgb,var(--low) 15%,transparent);padding:2px 6px;border-radius:5px}
+.rfield-note{font-size:11.5px;color:var(--faint);line-height:1.45}
+.rfield-actions{display:flex;gap:11px;align-items:center;margin-top:2px}
+/* The row's controls stay out of the way until the field is pointed at — 35 fields each
+   showing a permanent "edit" reads as a wall of links rather than as a document. */
+.rfield:not(.editing) .rfield-actions{opacity:0;transition:opacity .12s}
+.rfield:hover .rfield-actions,.rfield:focus-within .rfield-actions{opacity:1}
+.rfield-actions .linklike{font-size:11.5px}
+.rfield.editing{background:color-mix(in srgb,var(--ai) 5%,var(--surface));flex-basis:100%}
+.rfield-input{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:8px 10px;font:inherit;font-size:13.5px;line-height:1.55;
+  resize:vertical;width:100%}
+.rfield-input:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+.rfield-original{margin:4px 0 0;padding:8px 10px;background:var(--surface-2);
+  border:1px dashed var(--line);border-radius:8px;font-family:var(--sans);font-size:12.5px;
+  line-height:1.5;white-space:pre-wrap;color:var(--muted)}
+
+/* The outbound letter, edited in place. */
+.letter-edit{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:10px;padding:13px 15px;font-family:var(--mono);font-size:12.5px;line-height:1.65;
+  resize:vertical;width:100%;min-height:260px}
+.letter-edit:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+
 .trace{display:flex;flex-direction:column;gap:3px}
 .trace-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
   font-weight:700;margin:0 0 6px}
@@ -843,7 +881,7 @@ the English edition they are shown in.</div>
 <p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list. The <b>case assistant</b> is docked on the right of all three.</p>
 <div class="ctabs"><button class="ctab" data-tab="cases"><b>Cases</b><span>Every case you hold</span></button><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-cases">
 <header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
-<h1>Cases</h1><p class="sub">11 open · ranked by what is worth looking at first</p>
+<h1>Cases</h1><p class="sub">10 open · ranked by what is worth looking at first</p>
 </div><div><span class="btn">+ Add case</span></div></header>
 
 <div class="panel"><div class="panel-head"><h2>Open cases</h2>
@@ -852,7 +890,7 @@ the English edition they are shown in.</div>
 <div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
 <th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
 <th>Period</th><th>Status</th><th></th></tr></thead>
-<tbody><tr class="caserow on"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0002</td><td><b>Chain Walkthrough Co.</b><div class="sub">391100220044009</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0003</td><td><b>Chain Walkthrough Co.</b><div class="sub">391100220044012</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0001</td><td><b>Chain Walkthrough Co.</b><div class="sub">391100220044001</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
+<tbody><tr class="caserow on"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0001</td><td><b>Probe Co.</b><div class="sub">391100220099001</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0002</td><td><b>Probe Co.</b><div class="sub">391100220099001</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
 <p class="detail-note">Open a case and its three modules appear — Taxpayer Correspondence,
 Investigation, Audit Report. In this walkthrough only <b>CASE-2025-0481</b> is populated; the
 tabs above carry its real output.</p></div></div></div><div class="pane" id="pane-correspondence">
@@ -938,7 +976,7 @@ whatever the next question turns out to be.</p></div></div>
 <header class="page-head"><div><h1>Investigation</h1>
 <p class="sub">CASE-2025-0481 · what the evidence shows</p></div>
 <div class="chips"><span class="pill">12 hypotheses</span>
-<span class="pill pri-medium">12 undecided</span>
+<span class="pill pri-medium">10 undecided</span>
 </div></header>
 
 <div class="panel"><div class="panel-head"><div class="ai-h">
@@ -955,48 +993,6 @@ whatever the next question turns out to be.</p></div></div>
 <span class="chip-det">Agents</span><h2>Investigation</h2></div>
 <span class="pill status">∑ Adjudicated (no AI)</span></div>
 <div class="panel-body">
-<div class="hyp"><div class="hyp-side"><code>CA-01</code>
-<span class="pill status">R01</span></div>
-<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
-The sales the taxpayer&#x27;s own listing supports may exceed the sales reported in the return.
-<div class="hyp-why"><b>Why raised</b> Sales_Analysis_Q1_2025.xlsx can be totalled and set against the declared box.</div>
-<div class="verdict verdict-supported"><b>supported</b>
- — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
-<div class="cite needs-validation">
-<div class="cite-head"><span class="pill pri-low">Article 14</span>
-<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
-<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies of goods and services made by a taxable person in the Kingdom in the course of carrying on an economic activity;
-accordingly, taxable sales evidenced by the records but not reflected in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
-<details><summary>read the article</summary>
-<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
-<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
-<div class="hyp-right"><span class="pill pri-low">
-supported</span><span class="pill pri-medium">Moderate confidence</span>
-<b>SAR 618,000</b></div></div>
-<div class="hyp"><div class="hyp-side"><code>CA-02</code>
-<span class="pill status">R01</span></div>
-<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
-Part of the supplies evidenced by the listing may not have been disclosed in the return at all.
-<div class="hyp-why"><b>Why raised</b> If the listing exceeds the return, the excess is either a timing difference or revenue that was never disclosed.</div>
-<div class="verdict verdict-supported"><b>supported</b>
- — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
-<div class="cite needs-validation">
-<div class="cite-head"><span class="pill pri-low">Article 14</span>
-<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
-<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies made in the course of an economic activity, whether or not they are declared;
-accordingly, supplies that were not disclosed in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
-<details><summary>read the article</summary>
-<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
-<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
-<div class="hyp-right"><span class="pill pri-low">
-supported</span><span class="pill pri-medium">Moderate confidence</span>
-<b>SAR 618,000</b></div></div>
 <div class="hyp"><div class="hyp-side"><code>EV-02</code>
 <span class="pill status">R01</span></div>
 <div class="hyp-main"><div class="hyp-agent">EVIDENCE &AMP; COVERAGE</div>
@@ -1183,6 +1179,48 @@ the official version.</span></details></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b></b></div></div>
+<div class="hyp"><div class="hyp-side"><code>CA-01</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
+The sales the taxpayer&#x27;s own listing supports may exceed the sales reported in the return.
+<div class="hyp-why"><b>Why raised</b> Sales_Analysis_Q1_2025.xlsx can be totalled and set against the declared box.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies of goods and services made by a taxable person in the Kingdom in the course of carrying on an economic activity;
+accordingly, taxable sales evidenced by the records but not reflected in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>CA-02</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
+Part of the supplies evidenced by the listing may not have been disclosed in the return at all.
+<div class="hyp-why"><b>Why raised</b> If the listing exceeds the return, the excess is either a timing difference or revenue that was never disclosed.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies made in the course of an economic activity, whether or not they are declared;
+accordingly, supplies that were not disclosed in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
 <p class="detail-note">Every verdict above was settled by the engine against the case's own
 figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
 </div></div></div><div class="pane" id="pane-report">
@@ -1190,13 +1228,18 @@ figures. The audit conclusion is the auditor's: only what you accept reaches the
 <h1>Al-Faisaliah Trading Co.</h1></div>
 <div class="chips"><span class="pill">Download Word</span>
 <span class="pill">Open printable / PDF</span></div></header>
-<div class="callout warn"><b>No finding has been confirmed yet.</b> This report is built from
-the findings you accept in the Investigation tab — the engine's own verdicts are proposals, not
-audit conclusions. 12 hypotheses are still undecided.</div>
+<div class="callout ok"><b>2 findings confirmed by you</b> · 10 hypotheses still undecided in the Investigation tab. The report and the letter below are built from what you accepted, and from nothing else.</div>
 <div class="panel"><div class="panel-head"><h2>Audit report</h2>
-<span class="muted">27 of 35 fields
-answered from the case · 8 need a person or another system
-</span></div><div class="panel-body"><div class="rep-section"><h3 class="rep-h">Taxpayer information</h3><div class="kv"><div><span class="k">Taxpayer name</span><span class="v">Al-Faisaliah Trading Co.</span></div><div><span class="k">Taxpayer TIN</span><span class="v">300012345600003</span></div><div><span class="k">Taxpayer contact details</span><span class="v gap">[not held]</span></div></div></div><div class="rep-section"><h3 class="rep-h">Audit Case information</h3><div class="kv"><div><span class="k">Audit Case ID</span><span class="v">CASE-2025-0481</span></div><div><span class="k">Audit Creation Date</span><span class="v">2026-07-23</span></div><div><span class="k">Case Creation Reason</span><span class="v">Risk Engine</span></div><div><span class="k">Date Audit closed</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Priority</span><span class="v">1</span></div><div><span class="k">Priority risk</span><span class="v">1</span></div><div><span class="k">Audit Case Type</span><span class="v">Limited Scope Audit</span></div><div><span class="k">Tax type</span><span class="v">VAT</span></div><div><span class="k">Audit Case Tax Period</span><span class="v">01 January 2025 to 31 March 2025</span></div><div><span class="k">Confidential Audit</span><span class="v">No</span></div><div><span class="k">Risk Confidentiality</span><span class="v">No</span></div><div><span class="k">Place of conduct of Audit</span><span class="v">Desk audit — conducted on documents supplied</span></div><div><span class="k">Address of Audit location</span><span class="v">Not applicable — desk audit</span></div><div><span class="k">Meeting date</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Field audit report date</span><span class="v">Not applicable — no field visit was made</span></div></div></div><div class="rep-section"><h3 class="rep-h">Assigned Audit Team information</h3><div class="kv"><div><span class="k">Audit Manager</span><span class="v gap">[not held]</span></div><div><span class="k">Audit Supervisor</span><span class="v gap">[not held]</span></div><div><span class="k">Audit Officer</span><span class="v gap">[not held]</span></div></div></div><div class="rep-section"><h3 class="rep-h">Taxpayer documentation</h3><div class="kv"><div><span class="k">Documents required/obtained</span><span class="v">Requested:
+<div class="chips"><span class="pill status">28 of
+35 answered</span>
+<span class="pill pri-medium">7 still open</span></div></div>
+<div class="panel-body">
+<p class="detail-note" style="margin-top:0">Every field here can be written in your own words —
+the ones marked <b>[for the auditor to complete]</b> are judgements the tool has no business
+making, and <b>[not held]</b> is something ZATCA keeps in another system. What you write
+replaces what the engine wrote, is marked as yours, keeps the original beside it, and goes into
+the Word and printable versions too.</p>
+<section class="rep-section"><h3 class="rep-h">Taxpayer information</h3><div class="rfields"><div class="rfield"><span class="k">Taxpayer name</span><span class="v">Al-Faisaliah Trading Co.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Taxpayer TIN</span><span class="v">300012345600003</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Taxpayer contact details</span><span class="v gap">[not held]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Audit Case information</h3><div class="rfields"><div class="rfield"><span class="k">Audit Case ID</span><span class="v">CASE-2025-0481</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Audit Creation Date</span><span class="v">2026-07-23</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Case Creation Reason</span><span class="v">Risk Engine</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Date Audit closed</span><span class="v gap">[for the auditor to complete]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield"><span class="k">Priority</span><span class="v">1</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Priority risk</span><span class="v">1</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Audit Case Type</span><span class="v">Limited Scope Audit</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Tax type</span><span class="v">VAT</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Audit Case Tax Period</span><span class="v">01 January 2025 to 31 March 2025</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Confidential Audit</span><span class="v">No</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Risk Confidentiality</span><span class="v">No</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Place of conduct of Audit</span><span class="v">Desk audit — conducted on documents supplied</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Address of Audit location</span><span class="v">Not applicable — desk audit</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Meeting date</span><span class="v gap">[for the auditor to complete]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield"><span class="k">Field audit report date</span><span class="v">Not applicable — no field visit was made</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Assigned Audit Team information</h3><div class="rfields"><div class="rfield"><span class="k">Audit Manager</span><span class="v gap">[not held]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield"><span class="k">Audit Supervisor</span><span class="v gap">[not held]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield"><span class="k">Audit Officer</span><span class="v gap">[not held]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Taxpayer documentation</h3><div class="rfields"><div class="rfield wide"><span class="k">Documents required/obtained</span><span class="v">Requested:
   - Detailed sales analysis
   - Reconciliation of the return to the ledger
   - Credit and debit note listing
@@ -1209,11 +1252,48 @@ Outstanding at the date of this report (7):
   - Detailed sales analysis: The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 — 39 days are not covered.
   - Detailed sales analysis: The stated total for &#x27;VAT amount&#x27; is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 — a difference of SAR 119,000.00.
   - Reconciliation of the return to the ledger: Nothing was supplied for &#x27;Reconciliation of the return to the ledger&#x27;.
-  - Credit and debit note listing: Nothing was supplied for &#x27;Credit and debit note listing&#x27;.</span></div></div></div><div class="rep-section"><h3 class="rep-h">Audit Outcome</h3><div class="kv"><div><span class="k">Audit objectives</span><span class="v">To establish whether the VAT declared for 01 January 2025 to 31 March 2025 is supported by the records the taxpayer holds, and to quantify any difference.</span></div><div><span class="k">Description of Audit activities</span><span class="v">The review was conducted on the documents supplied by the taxpayer.
+  - Credit and debit note listing: Nothing was supplied for &#x27;Credit and debit note listing&#x27;.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Audit Outcome</h3><div class="rfields"><div class="rfield wide"><span class="k">Audit objectives</span><span class="v">To establish whether the VAT declared for 01 January 2025 to 31 March 2025 is supported by the records the taxpayer holds, and to quantify any difference.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Description of Audit activities</span><span class="v">The review was conducted on the documents supplied by the taxpayer.
 22 lines were read from Sales_Analysis_Q1_2025.xlsx and tested against the conditions for inclusion in Standard-rated sales VAT for the period.
 The records that qualify total SAR 2,618,000.00 against SAR 2,000,000.00 declared, a difference of SAR 618,000.00.
 Four automated checks were then run over the records received — the conditions the law sets for a document, keying and transposition errors, the totals the records support against those declared, and whether there is supporting evidence behind what was claimed. Each proposal was settled against the source records; the findings below are those that were confirmed.
-NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span></div><div><span class="k">Audit Findings</span><span class="v">No finding was established from the records supplied. The declared position is supported by the evidence available.</span></div><div><span class="k">Audit Recommendations</span><span class="v">Close the case. No adjustment is proposed.</span></div><div><span class="k">Rulings</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Assessment</span><span class="v">No measure is proposed. The records supplied support the position declared, within the materiality applied to this review (SAR 10,000.00).</span></div><div><span class="k">Penalties imposed</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Future Audits</span><span class="v">The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span></div></div></div><div class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="kv"><div><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span></div><div><span class="k">Indicator response description</span><span class="v">The referral surfaced a real difference, but the records supplied account for it. No finding.</span></div><div><span class="k">Under reporting driver</span><span class="v">None established</span></div><div><span class="k">Under reporting reason</span><span class="v">Not applicable — no under-reporting was established.</span></div><div><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span></div></div></div></div></div></div>
+NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Findings</span><span class="v">- Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. SAR 618,000.00.
+    Basis: Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.
+  Also characterised as: Sales that were not disclosed in the VAT returns.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Recommendations</span><span class="v">Put the findings above to the taxpayer in writing and invite representations before any assessment is raised. Where a finding rests on a defect in the records rather than on the figures, request the underlying documents.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield edited"><span class="k">Rulings<span class="rfield-tag">yours</span></span><span class="v">No ruling has been issued. The taxpayer accepted the adjustment at the closing meeting.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Assessment</span><span class="v">Output VAT understated: SAR 618,000.00
+Input VAT not recoverable: SAR 0.00
+Total proposed adjustment: SAR 618,000.00
+
+Each amount is stated once. Where several findings describe the same records, the amount is counted against the records and not against each finding.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Penalties imposed</span><span class="v gap">[for the auditor to complete]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield wide"><span class="k">Future Audits</span><span class="v">Findings raised on this period: SAL-HIGHER, SAL-UNDISCLOSED.
+Worth re-testing in the next period to establish whether the cause was corrected.
+The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="rfields"><div class="rfield"><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Indicator response description</span><span class="v">The referral is borne out. 2 findings were established from the records supplied.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Under reporting driver</span><span class="v">Output VAT understated</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Under reporting reason</span><span class="v">Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section></div></div>
+<div class="panel ai-panel"><div class="panel-head">
+<div class="ai-h"><span class="ai-chip">AI</span><h2>Outcome of the review</h2></div>
+<div class="chips"><span class="pill status">2 findings you accepted</span>
+<span class="pill">Edit</span><span class="pill">Copy</span></div></div>
+<div class="panel-body"><pre class="letterpre">Al-Faisaliah Trading Co.
+VAT registration number 300012345600003
+
+Subject: Outcome of the VAT review — period 01 January 2025 to 31 March 2025
+
+Dear Sir or Madam,
+
+[Auditor note: figures agreed at the closing meeting of 12 August.]
+
+The Authority has completed its review of the VAT return filed for the period 01 January 2025 to 31 March 2025. This letter sets out the outcome.
+
+The following matters were established on review of the documents you supplied:
+  - Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. SAR 618,000.00.
+      Also characterised as: Sales that were not disclosed in the VAT returns.
+
+A difference of SAR 618,000.00 remains unexplained, against a materiality threshold of SAR 10,000.00. This is a proposed position and not an assessment.
+
+If you consider the difference to be explained, please respond with the supporting documentation. If no response is received, the Authority will proceed on the basis set out above.
+
+Yours faithfully,
+Zakat, Tax and Customs Authority
+VAT Audit</pre>
+<p class="detail-note">Written from the findings you accepted, and from nothing else — and
+editable in place, because a letter is the one thing here that leaves the building in the
+Authority&rsquo;s name.</p></div></div></div>
 </div>
 <button class="asst-fab" id="asst-open"><span class="ai-chip">AI</span>
 Ask about this case</button>

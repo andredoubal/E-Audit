@@ -41,3 +41,7 @@ from .correspondence import (  # noqa: F401
     CorrespondenceMessage,
     CaseMessage,
 )
+from .reporting import (  # noqa: F401
+    ReportFieldEdit,
+    LetterDraft,
+)

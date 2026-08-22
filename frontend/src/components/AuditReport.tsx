@@ -43,13 +43,24 @@ export default function AuditReport({ id, rev }: { id?: string; rev?: number }) 
       <div className="panel-head">
         <div className="ai-h">
           <span className="ai-chip">AI</span>
-          <h2>Draft audit report</h2>
+          {/* Not "Draft audit report". It sat under the real report calling itself by almost
+              the same name, so it read as a competing version of the document of record — and
+              it would say "SAR 618,000 is a potential finding" directly beneath a report
+              stating that no finding had been established. It is neither a draft of that
+              report nor a conclusion: it is the reconciliation, described. */}
+          <h2>The reconciliation, in words</h2>
         </div>
         <VerifyBadge source={source} />
       </div>
       <div className="ai-body md">
         {text ? renderMd(text) : <span className="muted">Drafting…</span>}
         {streaming && <span className="cursor">▍</span>}
+        <p className="detail-note">
+          What the engine computed for this case, put into sentences — the population, which
+          documents qualified, and how the expected figure compares with the declared one. It
+          is <b>not</b> the audit's conclusion: only the findings you accept reach the report
+          above and the letter below.
+        </p>
       </div>
     </div>
   );
