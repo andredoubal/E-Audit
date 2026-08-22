@@ -40,9 +40,6 @@ export interface CaseInstructions {
   updated_at: string;
   updated_by: string;
   max_length: number;
-  applies_to: { key: string; label: string }[];
-  /** Where the steer deliberately does not reach, and why. */
-  excluded: { key: string; label: string; why: string }[];
 }
 
 export const getInstructions = (id: string) =>

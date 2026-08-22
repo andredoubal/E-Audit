@@ -306,8 +306,6 @@ input.letter-input,select.letter-input{min-height:0}
 .instrbar-open{font-size:12px;font-weight:650;color:var(--brand);white-space:nowrap}
 .instrbar.set{background:color-mix(in srgb,var(--ai) 6%,var(--surface));
   border-color:color-mix(in srgb,var(--ai) 35%,var(--line))}
-.instrbar.off{opacity:.72}
-.instrbar.off .instrbar-text{text-decoration:line-through}
 
 /* Open: the editor, what it reaches, and what it deliberately does not. */
 .instr{border:1px solid color-mix(in srgb,var(--ai) 35%,var(--line));border-radius:12px;
@@ -322,16 +320,8 @@ input.letter-input,select.letter-input{min-height:0}
   resize:vertical;min-height:120px}
 .instr-input:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
 .instr-input::placeholder{color:var(--faint)}
-.instr-meta{display:flex;align-items:center;gap:12px;margin:9px 0 11px;flex-wrap:wrap}
-.instr-meta .sub.over{color:var(--high);font-weight:700}
-.instr-examples{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
-.instr-scope{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;
-  padding-top:13px;border-top:1px solid var(--line)}
-@media(max-width:820px){.instr-scope{grid-template-columns:1fr}}
-.instr-scope h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
-  color:var(--muted);margin:0 0 6px;font-weight:800}
-.instr-scope ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:var(--ink)}
-.instr-scope i{color:var(--muted);font-size:12px}
+.instr .row-actions{margin-top:11px}
+.instr .row-actions .sub.over{color:var(--high);font-weight:700}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:1100px){.grid-2{grid-template-columns:1fr}}

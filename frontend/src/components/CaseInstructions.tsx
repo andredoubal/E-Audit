@@ -19,31 +19,6 @@ import { getInstructions, saveInstructions, type CaseInstructions as Data } from
  *  preamble it cannot reach, and every verifier still runs afterwards, so an instruction that
  *  tries to make the model state a figure produces a rejected draft, not a wrong number. */
 
-/** Starting points, not a menu. Each is a real thing an auditor has to tell a tool that only
- *  ever sees this period's documents. */
-const EXAMPLES = [
-  {
-    label: "Plainer language",
-    text: "Write to this taxpayer in plain language — they are a small business with no tax "
-      + "adviser. Avoid the phrase “economic activity” without explaining it.",
-  },
-  {
-    label: "Context the file lacks",
-    text: "The group restructured on 1 February; the second half of the period trades under a "
-      + "different entity. Say where that could explain a difference rather than treating it "
-      + "as unexplained.",
-  },
-  {
-    label: "Already settled",
-    text: "The credit-note treatment was agreed with this taxpayer in the prior period audit. "
-      + "Do not re-open it, and do not put it in a letter.",
-  },
-  {
-    label: "House style",
-    text: "Keep letters to one page. Lead with what we need from them, not with what we found.",
-  },
-];
-
 export default function CaseInstructions({ id }: { id: string }) {
   const [d, setD] = useState<Data | null>(null);
   const [open, setOpen] = useState(false);
@@ -79,25 +54,18 @@ export default function CaseInstructions({ id }: { id: string }) {
     } finally { setBusy(false); }
   };
 
-  const insert = (text: string) => {
-    setDraft((cur) => (cur.trim() ? `${cur.trim()}\n\n${text}` : text));
-    box.current?.focus();
-  };
-
   // ---------------------------------------------------------------- collapsed
   if (!open) {
     const has = !!d.text.trim();
     return (
-      <button className={"instrbar" + (has ? " set" : "") + (has && !d.enabled ? " off" : "")}
+      <button className={"instrbar" + (has ? " set" : "")}
               onClick={() => setOpen(true)}>
         <span className="ai-chip">AI</span>
         <b>Instructions for this case</b>
         {has ? (
           <>
             <span className="instrbar-text">{d.text}</span>
-            <span className={"pill " + (d.enabled ? "pri-low" : "status")}>
-              {d.enabled ? "in force" : "paused"}
-            </span>
+            <span className="pill pri-low">in force</span>
           </>
         ) : (
           <span className="instrbar-empty">
@@ -141,70 +109,27 @@ export default function CaseInstructions({ id }: { id: string }) {
           onKeyDown={(e) => { if (e.key === "Escape") { setDraft(d.text); setOpen(false); } }}
         />
 
-        <div className="instr-meta">
+        <div className="row-actions">
+          <button className="btn" disabled={busy || over || !dirty}
+                  onClick={() => commit(draft)}>
+            {busy ? "Saving…" : "Save instructions"}
+          </button>
+          {!!d.text.trim() && (
+            <button className="linklike danger" disabled={busy} onClick={() => commit("")}>
+              Clear
+            </button>
+          )}
           <span className={"sub" + (over ? " over" : "")}>
             {draft.length.toLocaleString()} / {d.max_length.toLocaleString()}
           </span>
-          <div className="instr-examples">
-            {EXAMPLES.map((x) => (
-              <button key={x.label} className="qchip" disabled={busy}
-                      title={x.text} onClick={() => insert(x.text)}>
-                + {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="row-actions">
-          {/* "Re-apply" only when there is something to re-apply: with an empty box it read as
-              a disabled button offering to repeat an action never taken. */}
-          <button className="btn" disabled={busy || over || (!dirty && d.enabled)}
-                  onClick={() => commit(draft, true)}>
-            {busy ? "Saving…"
-              : dirty || !d.text.trim() ? "Save instructions"
-              : "Put back in force"}
-          </button>
-          {!!d.text.trim() && (
-            <button className="linklike" disabled={busy}
-                    onClick={() => commit(d.text, !d.enabled)}>
-              {d.enabled ? "pause without deleting" : "put back in force"}
-            </button>
-          )}
-          {!!d.text.trim() && (
-            <button className="linklike danger" disabled={busy} onClick={() => commit("")}>
-              clear
-            </button>
-          )}
           {saved && <span className="pill pri-low">Saved</span>}
           {dirty && !busy && <span className="sub">unsaved</span>}
         </div>
 
-        <div className="instr-scope">
-          <div>
-            <h4>Applies to</h4>
-            <ul>
-              {d.applies_to.map((a) => <li key={a.key}>{a.label}</li>)}
-            </ul>
-          </div>
-          <div>
-            {/* Published, not buried in a tooltip. An auditor is entitled to know where their
-                steer does *not* reach — and the reasons are the interesting part. */}
-            <h4>Deliberately not</h4>
-            <ul>
-              {d.excluded.map((x) => (
-                <li key={x.key}>
-                  {x.label} — <i>{x.why}</i>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
         <p className="detail-note" style={{ marginBottom: 0 }}>
-          This steers <b>wording and emphasis</b>. It cannot make the AI state a figure, change a
-          verdict, or alter a test: every number is computed in Python before any sentence is
-          written, and the existing checks still run over the draft afterwards. An instruction
-          that asked for something they forbid produces a rejected draft, not a wrong number.
+          This steers <b>wording and emphasis</b> across all three modules. It cannot make the AI
+          state a figure, change a verdict, or alter a test — every number is computed in Python
+          before any sentence is written.
         </p>
       </div>
     </section>

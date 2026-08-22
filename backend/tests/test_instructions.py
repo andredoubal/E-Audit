@@ -130,12 +130,10 @@ def get(api, case: str) -> dict:
     return r.json()
 
 
-def test_a_case_starts_with_none_and_says_where_they_would_apply(api, own_case):
+def test_a_case_starts_with_none(api, own_case):
     d = get(api, own_case)
     assert d["text"] == "" and d["enabled"] is True
-    assert [a["key"] for a in d["applies_to"]]
-    assert [x["key"] for x in d["excluded"]], "and where they deliberately would not"
-    assert all(x["why"] for x in d["excluded"]), "with the reason, which is the useful part"
+    assert d["max_length"] > 0, "and the limit is stated rather than discovered by truncation"
 
 
 def test_they_are_written_and_kept(api, own_case):

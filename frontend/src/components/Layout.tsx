@@ -8,9 +8,12 @@ import { NavLink } from "react-router-dom";
  *  demo case whichever case you were actually working — a link that lies about where it goes.
  *  They belong on `CaseTabs`, which knows which case you are in, and you reach them by opening
  *  a case from the list. */
+/** Cases is the whole sidebar. The Rulebook page is still built and still routable at `/rules`
+ *  — it is reference material, not a place the work happens, and an auditor lands here to pick
+ *  up a case rather than to read the rule library. Same treatment as Dossier: dormant, not
+ *  deleted. */
 const NAV = [
   { to: "/", label: "Cases", end: true, icon: "▣" },
-  { to: "/rules", label: "Rulebook", end: false, icon: "▤" },
 ];
 const SOON = ["Legal retrieval"];
 

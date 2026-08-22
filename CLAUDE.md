@@ -219,17 +219,18 @@ docs/                  # VAT Mistakes Rulebook (66 rules) + rendered page
 portal.html            # standalone no-backend build of the workbench (see below)
 ```
 
-**The sidebar is what is global; the tabs are what is inside a case.** An auditor lands on
+**The sidebar is Cases; the tabs are what is inside a case.** An auditor lands on
 **Cases** — the queue, with the priority score and the *Add case* button — and opening one
 shows its three modules: **Taxpayer Correspondence** (what we asked, what arrived),
 **Investigation** (what the evidence shows), **Audit Report** (what you concluded).
 
 That split is load-bearing rather than cosmetic. The three modules were briefly in the sidebar
 pointing at a hard-coded case id, so "Correspondence" opened the demo case whichever case you
-were actually working — a link that lied about where it went. Only `Cases` and `Rulebook` are
-application-wide; everything else needs to know which case it is about, so it lives on
-`CaseTabs`. Opening a case goes to its first module; `Dossier` stays routable at its own path
-but is off the tab bar, being a dormant planning-era screen.
+were actually working — a link that lied about where it went. `Cases` is the whole sidebar;
+everything else needs to know which case it is about, so it lives on `CaseTabs`. Opening a case
+goes to its first module. `Dossier` and `Rulebook` stay routable at their own paths but are off
+the navigation: the first is a dormant planning-era screen, the second is reference material an
+auditor reads rather than a place the work happens.
 
 ## The agents (and what they may not do)
 
@@ -485,12 +486,13 @@ letter states; `parse_calculation` translates a stated method into a query. Thos
 *translators*, and an extractor told what to expect is a reader that finds it — "the group
 restructured, so treat the second half as intra-group" has no business steering how the
 taxpayer's own words are read. Both results are checked against their source and confirmed by
-the auditor anyway, so the steer would add a way to be wrong and nothing else. `applies_to` and
-`excluded` are published by the API and shown in the panel, reasons included: an auditor is
-entitled to know where their steer does *not* reach.
+the auditor anyway, so the steer would add a way to be wrong and nothing else. Which surfaces
+are in and out is a property of `_with_steer` in `llm/service.py`; it was also published by the
+API and listed in the panel, and both are gone — the panel is the box and two buttons, and a
+second place for that answer to live is a second place for it to go stale.
 
-Pausing is kept separate from clearing, because an auditor who wants to see the output without
-their steer should not have to delete what they wrote to find out.
+The UI is deliberately spare: the text, **Save instructions**, **Clear**. `enabled` survives in
+the model and the API for a pause that is not a delete, with no control on it yet.
 
 ## The report is a draft a person signs
 

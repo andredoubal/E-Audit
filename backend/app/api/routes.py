@@ -492,26 +492,12 @@ def _instructions_state(db: Session, case_id: str) -> dict:
         "updated_at": row.updated_at.isoformat() if row and row.updated_at else "",
         "updated_by": row.updated_by if row else "",
         "max_length": MAX_INSTRUCTIONS,
-        # Published rather than described in a tooltip: an auditor is entitled to know exactly
-        # which surfaces their steer reaches, and which it deliberately does not.
-        "applies_to": [
-            {"key": "narration", "label": "The reconciliation narrative"},
-            {"key": "letters", "label": "Outbound letters — the chase and the verdict"},
-            {"key": "report", "label": "The drafted audit report"},
-            {"key": "brief", "label": "The taxpayer brief"},
-        ],
-        "excluded": [
-            {"key": "read_letter",
-             "label": "Reading a taxpayer's letter",
-             "why": "an extractor told what to expect is a reader that finds it"},
-            {"key": "calculation",
-             "label": "Translating your stated method into a query",
-             "why": "the same reason, and the query is shown to you either way"},
-            {"key": "engine",
-             "label": "Every figure, verdict and test",
-             "why": "computed in Python; no instruction reaches them"},
-        ],
     }
+    # Which surfaces the steer reaches is a property of `llm/service.py:_with_steer` — the
+    # narration, the report, the taxpayer brief and the letters, and deliberately not the two
+    # that *read* rather than write. It was published here and listed in the panel; the panel is
+    # now the box and two buttons, and an API field nothing renders is a second place for that
+    # answer to go stale. It lives in the code and in CLAUDE.md instead.
 
 
 @router.get("/cases/{case_id}/instructions")

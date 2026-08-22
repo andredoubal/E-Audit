@@ -109,9 +109,9 @@ def case_list(cases: list, open_case: str) -> str:
 <tbody>{''.join(rows)}</tbody></table></div>
 <p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
 Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
-application&rsquo;s: only <b>Cases</b> and <b>Rulebook</b> are global, because everything else
-has to know which case it is about. In this walkthrough only
-<b>{e(open_case)}</b> carries real output, so that is the row that opens.</p></div></div>"""
+application&rsquo;s: <b>Cases</b> is the whole sidebar, because everything else has to know
+which case it is about. In this walkthrough only <b>{e(open_case)}</b> carries real output, so
+that is the row that opens.</p></div></div>"""
 
 
 # ------------------------------------------------------------------ the three tabs
@@ -361,20 +361,20 @@ def instructions(d: dict) -> str:
 
     It sits under the module tabs rather than on a page because it applies to all three — a
     steer that lived on one of them would be one the auditor believes is in force everywhere
-    and is not, which is worse than not having it. Collapsed here, and expandable, exactly as
-    in the application.
+    and is not, which is worse than not having it.
+
+    This one **works**: type in it, save it, clear it. It is UI state rather than engine output,
+    so a static file can carry it honestly — nothing is persisted anywhere, and the page says so.
     """
-    applies = "".join(f"<li>{e(a['label'])}</li>" for a in d.get("applies_to", []))
-    excluded = "".join(f"<li>{e(x['label'])} — <i>{e(x['why'])}</i></li>"
-                       for x in d.get("excluded", []))
     text = d.get("text", "")
     return f"""
 <button class="instrbar{' set' if text else ''}" id="instr-open">
 <span class="ai-chip">AI</span><b>Instructions for this case</b>
-{f'<span class="instrbar-text">{e(text)}</span><span class="pill pri-low">in force</span>'
- if text else
- '<span class="instrbar-empty">Tell the AI what it cannot see in the documents — context, '
- 'house style, what not to raise. It applies to every module of this case.</span>'}
+<span class="instrbar-text"{'' if text else ' hidden'}></span>
+<span class="pill pri-low" id="instr-force"{'' if text else ' hidden'}>in force</span>
+<span class="instrbar-empty"{' hidden' if text else ''}>Tell the AI what it cannot see in the
+documents — context, house style, what not to raise. It applies to every module of this
+case.</span>
 <span class="instrbar-open">{'Edit' if text else 'Add'}</span></button>
 
 <section class="instr" id="instr">
@@ -382,23 +382,14 @@ def instructions(d: dict) -> str:
 <span class="sub">Applied to every module</span>
 <button class="asst-x" id="instr-close" aria-label="Close">×</button></div>
 <div class="instr-body">
-<textarea class="instr-input" rows="5" readonly>{e(text)}</textarea>
-<div class="instr-meta"><span class="sub">{len(text):,} / {d.get('max_length', 4000):,}</span>
-<div class="instr-examples"><button class="qchip">+ Plainer language</button>
-<button class="qchip">+ Context the file lacks</button>
-<button class="qchip">+ Already settled</button>
-<button class="qchip">+ House style</button></div></div>
-<div class="row-actions"><span class="btn">Save instructions</span>
-<span class="linklike">pause without deleting</span>
-<span class="linklike danger">clear</span></div>
-<div class="instr-scope">
-<div><h4>Applies to</h4><ul>{applies}</ul></div>
-<div><h4>Deliberately not</h4><ul>{excluded}</ul></div></div>
-<p class="detail-note" style="margin-bottom:0">This steers <b>wording and emphasis</b>. It
-cannot make the AI state a figure, change a verdict, or alter a test: every number is computed
-in Python before any sentence is written, and the existing checks still run over the draft
-afterwards. An instruction that asked for something they forbid produces a rejected draft, not
-a wrong number.</p>
+<textarea class="instr-input" id="instr-text" rows="5"
+placeholder="What should the AI know about this case that the documents do not say?">{e(text)}</textarea>
+<div class="row-actions"><button class="btn" id="instr-save">Save instructions</button>
+<button class="linklike danger" id="instr-clear">Clear</button>
+<span class="sub" id="instr-count"></span></div>
+<p class="detail-note" style="margin-bottom:0">This steers <b>wording and emphasis</b> across
+all three modules. It cannot make the AI state a figure, change a verdict, or alter a test —
+every number is computed in Python before any sentence is written.</p>
 </div></section>"""
 
 
@@ -525,6 +516,7 @@ def build() -> str:
     panes = "".join(f'<div class="pane" id="pane-{k}">{body}</div>'
                     for k, (_, _, body) in modules.items())
     taxpayer = next((c["taxpayer"] for c in cases if c["case_id"] == CASE), CASE)
+    case_json = json.dumps(CASE)
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -579,6 +571,13 @@ details[open] summary{{margin-bottom:6px}}
 .backlink{{border:none;background:none;font:inherit;font-size:13px;font-weight:600;
   color:var(--brand);cursor:pointer;padding:0}}
 .backlink:hover{{text-decoration:underline}}
+/* Says why a control did nothing, rather than leaving the click unanswered — an inert button
+   with no feedback is the thing that reads as broken. */
+#toast{{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);z-index:60;
+  max-width:min(640px,90vw);background:var(--ink);color:var(--surface);font-size:13px;
+  line-height:1.5;padding:11px 16px;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28);
+  opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}}
+#toast.on{{opacity:.96;transform:translate(-50%,0)}}
 /* The assistant is conditionally rendered in React; here it is toggled, and the page is
    narrowed while it is docked so it covers nothing. */
 .asst{{display:none}}
@@ -592,7 +591,6 @@ body.asst-on .asst-fab{{display:none}}
 <span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
 <nav>
 <a class="navlink active" data-view="cases"><span class="ic">&#9635;</span>Cases</a>
-<a class="navlink"><span class="ic">&#9636;</span>Rulebook</a>
 <div class="navgroup">Coming next</div>
 <span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
 </nav>
@@ -602,9 +600,12 @@ body.asst-on .asst-fab{{display:none}}
 
 <div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
 citation and gap on this page is the real output of the engine for the seeded demo case
-{e(CASE)}, captured when this file was generated — nothing here recomputes, and most controls
-do not act. Opening the case and moving between its modules does work, so the shape of the
-product is real. The regulations corpus behind the citations holds
+{e(CASE)}, captured when this file was generated. <b>What works here:</b> opening the case,
+moving between its modules, writing the case instructions, and editing the report fields and
+the verdict letter — those are the auditor's own words, so a file with no backend can do the
+whole interaction. <b>What does not:</b> uploading, re-running the investigation and asking the
+assistant, which all need the engine; they say so when you click them rather than going quiet.
+Nothing you change here is saved anywhere. The regulations corpus behind the citations holds
 {cov.get('article_count', 0)} articles, {len(cov.get('amended_since_english_edition', []))} of
 which have been amended since the English edition they are shown in.</div>
 
@@ -614,9 +615,9 @@ which have been amended since the English edition they are shown in.</div>
 <div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
 <span class="mono muted">{e(CASE)}</span>
 <b>{e(taxpayer)}</b></div>
-<p class="tabhint">The three modules of this case. Only <b>Cases</b> and <b>Rulebook</b> are
-application-wide &mdash; everything else needs to know which case it is about, so it lives
-here. The <b>case assistant</b> and the <b>case instructions</b> are docked on all three.</p>
+<p class="tabhint">The three modules of this case. Only <b>Cases</b> is application-wide
+&mdash; everything else needs to know which case it is about, so it lives here. The
+<b>case assistant</b> and the <b>case instructions</b> are on all three.</p>
 <div class="ctabs">{nav}</div>
 {instructions(instr)}
 {panes}
@@ -645,13 +646,146 @@ document.getElementById('back').addEventListener('click', () => view('cases'));
 document.querySelectorAll('.navlink[data-view="cases"]').forEach(
   n => n.addEventListener('click', () => view('cases')));
 
+/* ---------------------------------------------------------- the instructions box
+   Real: type in it, save it, clear it. It is UI state rather than engine output, so a file
+   with no backend can carry it honestly. Nothing is persisted — reload and it is back. */
 const instr = document.getElementById('instr');
 const instrBar = document.getElementById('instr-open');
+const instrText = document.getElementById('instr-text');
+const instrCount = document.getElementById('instr-count');
 const showInstr = on => {{ instr.style.display = on ? 'block' : 'none';
                            instrBar.style.display = on ? 'none' : 'flex'; }};
+function paintInstr() {{
+  const v = instrText.value.trim();
+  instrBar.classList.toggle('set', !!v);
+  instrBar.querySelector('.instrbar-text').textContent = v;
+  instrBar.querySelector('.instrbar-text').hidden = !v;
+  document.getElementById('instr-force').hidden = !v;
+  instrBar.querySelector('.instrbar-empty').hidden = !!v;
+  instrBar.querySelector('.instrbar-open').textContent = v ? 'Edit' : 'Add';
+  instrCount.textContent = instrText.value.length.toLocaleString() + ' / 4,000';
+}}
+instrText.addEventListener('input', () => instrCount.textContent =
+  instrText.value.length.toLocaleString() + ' / 4,000');
 instrBar.addEventListener('click', () => showInstr(true));
 document.getElementById('instr-close').addEventListener('click', () => showInstr(false));
+document.getElementById('instr-save').addEventListener('click', () => {{
+  paintInstr(); showInstr(false); toast('Instructions saved on this case.');
+}});
+document.getElementById('instr-clear').addEventListener('click', () => {{
+  instrText.value = ''; paintInstr(); showInstr(false); toast('Instructions cleared.');
+}});
 showInstr(false);
+paintInstr();
+
+/* ------------------------------------------------------------ editing, for real
+   The report's fields and the outbound letter are edited in place here exactly as in the
+   application. They are the auditor's own words — no engine involved — so this file can do
+   the whole interaction rather than showing a picture of it. */
+function editField(field) {{
+  if (field.querySelector('textarea')) return;
+  const v = field.querySelector('.v');
+  const before = v.textContent;
+  const long = before.length > 90 || before.includes(String.fromCharCode(10));
+  const gap = v.classList.contains('gap');
+  const ta = document.createElement('textarea');
+  ta.className = 'rfield-input';
+  ta.rows = long ? 8 : 2;
+  ta.value = gap ? '' : before;
+  ta.placeholder = 'Write this in your own words…';
+  const bar = document.createElement('div');
+  bar.className = 'rfield-actions';
+  const save = document.createElement('button');
+  save.className = 'btn small'; save.textContent = 'Save';
+  const cancel = document.createElement('button');
+  cancel.className = 'linklike'; cancel.textContent = 'cancel';
+  bar.append(save, cancel);
+  const actions = field.querySelector('.rfield-actions');
+  v.hidden = true; actions.hidden = true;
+  field.classList.add('editing');
+  field.append(ta, bar);
+  ta.focus();
+  const done = () => {{ ta.remove(); bar.remove(); v.hidden = false;
+                        actions.hidden = false; field.classList.remove('editing'); }};
+  cancel.addEventListener('click', done);
+  save.addEventListener('click', () => {{
+    const next = ta.value.trim();
+    if (next) {{
+      v.textContent = next; v.classList.remove('gap');
+      field.classList.add('edited');
+      if (!field.querySelector('.rfield-tag')) {{
+        const tag = document.createElement('span');
+        tag.className = 'rfield-tag'; tag.textContent = 'yours';
+        field.querySelector('.k').append(tag);
+      }}
+      actions.querySelector('.linklike').textContent = 'edit';
+    }}
+    done();
+    toast('Field saved. In the application this also goes into the Word and printable versions.');
+  }});
+}}
+document.querySelectorAll('.rfield').forEach(f => {{
+  const link = f.querySelector('.rfield-actions .linklike');
+  if (link) link.addEventListener('click', () => editField(f));
+}});
+
+const letter = document.querySelector('.ai-panel pre.letterpre');
+const letterPanel = letter && letter.closest('.panel');
+if (letterPanel) {{
+  const chips = letterPanel.querySelectorAll('.panel-head .pill');
+  const editBtn = [...chips].find(c => c.textContent.trim() === 'Edit');
+  const copyBtn = [...chips].find(c => c.textContent.trim() === 'Copy');
+  if (copyBtn) copyBtn.addEventListener('click', () => {{
+    navigator.clipboard && navigator.clipboard.writeText(letter.textContent);
+    toast('Letter copied.');
+  }});
+  if (editBtn) editBtn.addEventListener('click', () => {{
+    if (letterPanel.querySelector('.letter-edit')) return;
+    const ta = document.createElement('textarea');
+    ta.className = 'letter-edit';
+    ta.rows = Math.min(30, letter.textContent.split(String.fromCharCode(10)).length + 3);
+    ta.value = letter.textContent;
+    const bar = document.createElement('div');
+    bar.className = 'row-actions';
+    const save = document.createElement('button');
+    save.className = 'btn'; save.textContent = 'Save the letter';
+    const cancel = document.createElement('button');
+    cancel.className = 'linklike'; cancel.textContent = 'cancel';
+    bar.append(save, cancel);
+    letter.hidden = true;
+    letter.after(ta, bar);
+    ta.focus();
+    const done = () => {{ ta.remove(); bar.remove(); letter.hidden = false; }};
+    cancel.addEventListener('click', done);
+    save.addEventListener('click', () => {{
+      letter.textContent = ta.value;
+      done();
+      toast('Letter saved. The verified badge is replaced by “your wording” — the checker never saw these words.');
+    }});
+  }});
+}}
+
+/* ------------------------------------------------- what a file with no backend cannot do
+   Uploading, re-running the investigation and asking the assistant all need the engine. They
+   say so when clicked rather than doing nothing, which is the thing that reads as broken. */
+let toastTimer;
+function toast(msg) {{
+  let el = document.getElementById('toast');
+  if (!el) {{ el = document.createElement('div'); el.id = 'toast'; document.body.append(el); }}
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 3200);
+}}
+const NEEDS_ENGINE = 'That one needs the engine, so it is inert in this static walkthrough — '
+  + 'it works in the application.';
+document.querySelectorAll('.dropzone, .qchip, .asst-input, .btn[disabled], .instr + * button[disabled]')
+  .forEach(el => el.addEventListener('click', () => toast(NEEDS_ENGINE), true));
+document.querySelectorAll('tr.caserow:not([data-open])').forEach(
+  r => {{ r.style.cursor = 'pointer';
+          r.addEventListener('click', () => toast(
+            'Only ' + {case_json} + ' was captured into this file — the other rows are the real '
+            + 'queue, with no output behind them here.')); }});
 
 const dock = on => document.body.classList.toggle('asst-on', on);
 document.getElementById('asst-open').addEventListener('click', () => dock(true));
