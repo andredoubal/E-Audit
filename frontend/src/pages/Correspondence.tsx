@@ -5,7 +5,9 @@ import LifecycleRail from "../components/LifecycleRail";
 import VerifyBadge from "../components/VerifyBadge";
 import RequestEmailPanel from "../components/RequestEmailPanel";
 import UploadsPanel from "../components/UploadsPanel";
+import CompletenessPanel from "../components/CompletenessPanel";
 import StepEmails from "../components/StepEmails";
+import ThreadTrail from "../components/ThreadTrail";
 import {
   demoResponseFileUrl,
   getFollowup,
@@ -32,6 +34,8 @@ const GAP_LABEL: Record<string, string> = {
   "wrong-format": "Wrong format",
   "unrequested-document": "Not requested",
   "too-vague": "Too vague",
+  "other-worksheet": "On another worksheet",
+  "sparse-column": "Column mostly empty",
 };
 
 const ITEM_STATUS: Record<string, string> = {
@@ -177,7 +181,7 @@ export default function Correspondence() {
     <>
       <header className="page-head">
         <div>
-          <h1>Casework</h1>
+          <h1>Taxpayer correspondence</h1>
           <p className="sub">
             {id} · what we asked for, what arrived, and what is still missing
           </p>
@@ -202,7 +206,9 @@ export default function Correspondence() {
       {/* The request that went out in the auditor's own words, and what came back against it.
           Both live here now: the email and the documents it asked for are one conversation,
           and splitting them across two screens made the auditor hold the link in their head. */}
+      <ThreadTrail id={id} />
       <RequestEmailPanel id={id} />
+      <CompletenessPanel loop={loop} />
       <UploadsPanel
         id={id}
         onUploaded={() => {

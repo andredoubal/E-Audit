@@ -35,3 +35,7 @@ from .investigation import (  # noqa: F401
     AuditorDecision,
     AuditorFinding,
 )
+from .correspondence import (  # noqa: F401
+    CorrespondenceThread,
+    CorrespondenceMessage,
+)

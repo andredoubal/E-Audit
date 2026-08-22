@@ -198,12 +198,13 @@ def extract(filename: str, data: bytes) -> dict:
             text = data.decode("utf-8", errors="replace")
             return {"format": ext or "unknown", "columns": [], "rows": [], "raw_headers": [],
                     "stated_totals": {}, "period_from": None, "period_to": None,
-                    "text": text[:20000], "row_count": 0,
+                    "text": text[:20000], "row_count": 0, "sheet": "", "sheets": [],
                     "note": "Not a tabular format — structured checks cannot run on it."}
     except Exception as exc:                       # noqa: BLE001 - report, do not crash
         return {"format": ext or "unknown", "columns": [], "rows": [], "raw_headers": [],
                 "stated_totals": {}, "period_from": None, "period_to": None, "text": "",
-                "row_count": 0, "note": f"Could not be read: {type(exc).__name__}."}
+                "row_count": 0, "sheet": "", "sheets": [],
+                "note": f"Could not be read: {type(exc).__name__}."}
 
     pf, pt = _period(out["columns"], out["rows"])
     return {
@@ -213,17 +214,47 @@ def extract(filename: str, data: bytes) -> dict:
                  for r in out["rows"]],
         "stated_totals": out["stated_totals"], "period_from": pf, "period_to": pt,
         "text": "", "row_count": len(out["rows"]), "note": "",
+        "sheet": out.get("sheet", ""), "sheets": out.get("sheets", []),
     }
 
 
+def _recognised(columns: list[str]) -> int:
+    """How many of these column names are ones we know. Used to find the data sheet."""
+    return sum(1 for c in columns if c in ALIASES)
+
+
 def _extract_xlsx(data: bytes) -> dict:
+    """Read every worksheet, and analyse the one that actually holds the data.
+
+    Reading only the first sheet was a silent misread waiting to happen: a workbook whose first
+    tab is a cover page or a summary would be reported as having none of the requested columns,
+    which is a false "they did not send it" — the most expensive kind of wrong answer here,
+    because it costs the taxpayer a round trip over a file they already supplied.
+
+    The primary sheet is chosen by how many recognised columns it carries, then by how many rows
+    — item-agnostic, because extraction is format work and must not know what was asked for. The
+    others are kept in `sheets` so the checker can say where the data really is.
+    """
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    ws = wb[wb.sheetnames[0]]
-    grid = [list(r) for r in ws.iter_rows(values_only=True)]
-    wb.close()
-    return _from_grid(grid)
+    read: list[tuple[str, dict]] = []
+    try:
+        for name in wb.sheetnames:
+            grid = [list(r) for r in wb[name].iter_rows(values_only=True)]
+            read.append((name, _from_grid(grid)))
+    finally:
+        wb.close()
+    if not read:
+        return {"columns": [], "rows": [], "stated_totals": {}, "raw_headers": [], "sheets": []}
+
+    name, out = max(read, key=lambda s: (_recognised(s[1]["columns"]), len(s[1]["rows"])))
+    out = dict(out)
+    out["sheet"] = name
+    out["sheets"] = [{"name": n, "columns": s["columns"], "row_count": len(s["rows"]),
+                      "primary": n == name}
+                     for n, s in read]
+    return out
 
 
 def _extract_csv(data: bytes) -> dict:
@@ -245,4 +276,8 @@ def from_structure(payload: dict) -> dict:
         "stated_totals": payload.get("stated_totals", {}) or {},
         "period_from": pf, "period_to": pt, "text": payload.get("text", ""),
         "row_count": len(rows), "note": payload.get("note", ""),
+        "sheet": payload.get("sheet", ""),
+        "sheets": payload.get("sheets") or ([{"name": payload.get("sheet") or "Sheet1",
+                                              "columns": columns, "row_count": len(rows),
+                                              "primary": True}] if columns else []),
     }

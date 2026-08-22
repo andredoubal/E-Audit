@@ -230,6 +230,85 @@ def decide(case_id: str, hypothesis_id: str, body: DecisionIn,
     return inv_service.state(db, c)
 
 
+class RequestInfoIn(BaseModel):
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/hypotheses/{hypothesis_id}/request-info")
+def request_information(case_id: str, hypothesis_id: str, body: RequestInfoIn | None = None,
+                        db: Session = Depends(get_db)):
+    """An investigation that cannot settle a hypothesis asks the taxpayer, rather than guessing.
+
+    This is the loop. It opens a correspondence thread carrying the hypothesis id, marks the
+    hypothesis as waiting on the taxpayer, and drafts the request from the engine's own account
+    of what is missing. When documents arrive against that thread, the investigation offers to
+    re-test *this* hypothesis rather than simply re-running everything.
+    """
+    from ..agents.correspondence import draft_information_request
+    from ..requests import threads as thread_service
+
+    case = _case_or_404(db, case_id)
+    body = body or RequestInfoIn()
+    h = db.scalar(select(PersistedHypothesis).where(
+        PersistedHypothesis.case_id == case_id,
+        PersistedHypothesis.hypothesis_id == hypothesis_id))
+    if h is None:
+        raise HTTPException(404, "hypothesis not found on this case")
+
+    draft = draft_information_request(case, case.taxpayer, h, note=body.note)
+    thread = thread_service.open_for_hypothesis(
+        db, case, hypothesis_id, note=body.note, draft=draft.get("text", ""))
+    return {"thread": thread_service.state(db, case_id),
+            "draft": draft,
+            "hypothesis_id": hypothesis_id}
+
+
+@router.get("/cases/{case_id}/threads")
+def correspondence_threads(case_id: str, db: Session = Depends(get_db)):
+    """The full correspondence history — every enquiry, its messages and what arrived on it."""
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    return thread_service.state(db, case_id)
+
+
+class ThreadIn(BaseModel):
+    subject: str = ""
+
+
+@router.post("/cases/{case_id}/threads")
+def open_correspondence_thread(case_id: str, body: ThreadIn | None = None,
+                               db: Session = Depends(get_db)):
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    body = body or ThreadIn()
+    thread_service.start(db, case_id, subject=body.subject)
+    db.commit()
+    return thread_service.state(db, case_id)
+
+
+class ReplyIn(BaseModel):
+    body: str
+    subject: str = ""
+
+
+@router.post("/cases/{case_id}/threads/reply")
+def record_taxpayer_reply(case_id: str, body: ReplyIn, db: Session = Depends(get_db)):
+    """What the taxpayer wrote back, kept verbatim and attributed to them.
+
+    Their account of their own records is evidence of what they say, not of what is true, so it
+    is stored as theirs and never merged into the engine's own narrative.
+    """
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    if not (body.body or "").strip():
+        raise HTTPException(422, "a reply needs a body")
+    thread_service.record_reply(db, case_id, body=body.body.strip(), subject=body.subject)
+    return thread_service.state(db, case_id)
+
+
 class AuditorFindingIn(BaseModel):
     statement: str
     outcome_code: str = ""
@@ -637,22 +716,31 @@ async def upload_document(case_id: str, file: UploadFile = File(...),
                           item_id: int | None = Form(None),
                           db: Session = Depends(get_db)):
     """Record a file the taxpayer sent, extract it, and re-run the completeness checks."""
+    from ..requests import threads as thread_service
+
     case = _case_or_404(db, case_id)
     req = req_service.current_request(db, case_id)
-    if req is None:
-        raise HTTPException(409, "no information request has been issued on this case")
+    # An enquiry opened from the investigation asks for something without raising a formal
+    # request round, and the answer to it still has to be uploadable. Refusing the file because
+    # no round exists would break the loop at the point it matters most — the moment the
+    # evidence arrives.
+    if req is None and thread_service.open_thread(db, case_id) is None:
+        raise HTTPException(409, "no information request or open enquiry on this case")
     data = await file.read()
     if len(data) > 8_000_000:
         raise HTTPException(413, "file too large for the demo (8 MB limit)")
     doc = req_service.record_document(
         db, case=case, req=req, item_id=item_id, filename=file.filename or "response",
         data=data, file_format=(file.filename or "").rsplit(".", 1)[-1].lower())
-    report = req_service.run_checks(db, case)
+    # Nothing formal was requested, so there is no spec to check the file against. That is not
+    # a failed check — it is the absence of one, and reporting it as a gap would be noise.
+    report = req_service.run_checks(db, case) if req is not None else None
     db.add(EventLog(case_id=case_id, actor="taxpayer", action="document-received",
-                    payload={"round": req.seq, "file": doc.filename,
-                             "gaps": len(report.gaps)}))
+                    payload={"round": req.seq if req else 0, "file": doc.filename,
+                             "gaps": len(report.gaps) if report else 0}))
     db.commit()
-    return {**req_service.state(db, case), "report": report.to_dict()}
+    return {**req_service.state(db, case),
+            "report": report.to_dict() if report else None}
 
 
 @router.post("/cases/{case_id}/requests/check")

@@ -31,6 +31,8 @@ from .extract import display, normalise
 TOLERANCE = 1.0          # SAR — the same one riyal the adjudicator works to
 MAX_CITED_ROWS = 5       # enough for the auditor to find it; not a data dump
 COVERAGE_SLACK = 3       # days: a period end a day or two short is not a gap worth a round trip
+SPARSE_THRESHOLD = 0.5   # a non-mandatory column blank on more than half the rows
+MIN_ROWS_FOR_DENSITY = 8  # below this, "half the rows are blank" is not a pattern
 
 BLOCKING = "blocking"
 ADVISORY = "advisory"
@@ -174,6 +176,63 @@ def _check_mandatory(item, content: dict) -> list[Gap]:
     return gaps
 
 
+def _check_worksheets(item, content: dict) -> list[Gap]:
+    """The requested columns are missing here — are they on another tab of the same workbook?
+
+    A taxpayer who puts a cover sheet in front of the data has supplied the data. Reporting the
+    columns as absent and sending them a chase letter for a file they already sent is the single
+    most annoying way for this tool to be wrong, so when the columns are elsewhere in the
+    workbook we say exactly where.
+    """
+    sheets = [s for s in (content.get("sheets") or []) if not s.get("primary")]
+    if not sheets:
+        return []
+    required = [normalise(c) for c in (item.required_columns or [])]
+    missing = [c for c in required if c not in set(content.get("columns") or [])]
+    if not missing:
+        return []
+    gaps = []
+    for sheet in sheets:
+        found = [c for c in missing if c in set(sheet.get("columns") or [])]
+        if len(found) < max(2, (len(missing) + 1) // 2):
+            continue
+        gaps.append(Gap(
+            kind="other-worksheet", severity=ADVISORY,
+            detail=f"{len(found)} of the {len(missing)} columns reported missing are present on "
+                   f"the '{sheet['name']}' worksheet, which is not the one that was read. The "
+                   f"data may have been supplied on the wrong tab.",
+            citation=f"worksheet '{sheet['name']}' ({sheet.get('row_count', 0)} rows)"))
+    return gaps
+
+
+def _check_null_density(item, content: dict) -> list[Gap]:
+    """A column that is there but mostly empty answers the request in form only.
+
+    Advisory, and deliberately not the mandatory-blank check: nobody asked for every row to be
+    populated. But a supplier VAT number present on four rows out of ninety is not a column an
+    auditor can work from, and it is better to say so in this round than to discover it in the
+    analysis.
+    """
+    rows = _rows_as_dicts(content)
+    if len(rows) < MIN_ROWS_FOR_DENSITY:
+        return []
+    present = set(content.get("columns") or [])
+    mandatory = {normalise(c) for c in (item.mandatory_columns or [])}
+    gaps = []
+    for col in [normalise(c) for c in (item.required_columns or [])]:
+        if col not in present or col in mandatory:
+            continue                       # blanks in a mandatory column are already reported
+        blank = sum(1 for r in rows if is_null(col).evaluate(r))
+        if blank / len(rows) < SPARSE_THRESHOLD:
+            continue
+        gaps.append(Gap(
+            kind="sparse-column", severity=ADVISORY,
+            detail=f"'{display(col)}' was supplied but is empty on {blank} of {len(rows)} rows "
+                   f"({blank / len(rows):.0%}). The column is present without being usable.",
+            citation=f"{blank} of {len(rows)} rows"))
+    return gaps
+
+
 def _check_period(item, content: dict, period_from: date, period_to: date) -> list[Gap]:
     pf, pt = _as_date(content.get("period_from")), _as_date(content.get("period_to"))
     want_from = item.period_from or period_from
@@ -306,7 +365,9 @@ def check(*, case_id: str, round_: int, items: list, documents: list,
             if content.get("columns"):
                 found += _check_is_right_document(item, content)
                 found += _check_columns(item, content)
+                found += _check_worksheets(item, content)
                 found += _check_mandatory(item, content)
+                found += _check_null_density(item, content)
                 found += _check_period(item, content, period_from, period_to)
                 found += _check_footing(item, content)
             elif item.kind == "analysis":
@@ -328,3 +389,96 @@ def check(*, case_id: str, round_: int, items: list, documents: list,
                    f"It may be a misfiled response, or evidence worth reading anyway."))
 
     return report
+
+
+# ------------------------------------------------------------------------------ presentation
+
+RECEIVED = "received"
+MISSING = "missing"
+INCOMPLETE = "incomplete"
+NEEDS_REVIEW = "needs-review"
+
+STATE_LABEL = {
+    RECEIVED: "Received",
+    MISSING: "Missing",
+    INCOMPLETE: "Incomplete",
+    NEEDS_REVIEW: "Needs auditor review",
+}
+
+# Gaps a machine cannot settle: the file may well be the right one under a name we did not
+# expect, on a tab we did not read, or explained in words only a person can weigh. Reporting
+# these as "incomplete" would tell the auditor the taxpayer failed, when what actually happened
+# is that the check reached the end of what it can decide.
+_REVIEW_KINDS = {"wrong-document", "other-worksheet", "too-vague", "unrequested-document"}
+
+_RANK = {MISSING: 3, INCOMPLETE: 2, NEEDS_REVIEW: 1, RECEIVED: 0}
+
+
+def _state_for(gaps: list) -> tuple[str, str]:
+    """The worst thing said about one item, and why."""
+    state, reason = RECEIVED, ""
+    for g in gaps:
+        kind = getattr(g, "kind", "")
+        if kind == "missing-item":
+            candidate = MISSING
+        elif kind in _REVIEW_KINDS or getattr(g, "source", "deterministic") != "deterministic":
+            candidate = NEEDS_REVIEW
+        elif getattr(g, "severity", BLOCKING) == BLOCKING:
+            candidate = INCOMPLETE
+        else:
+            candidate = NEEDS_REVIEW
+        if _RANK[candidate] > _RANK[state]:
+            state, reason = candidate, getattr(g, "detail", "")
+    return state, reason
+
+
+def assessment(items: list, documents: list, gaps: list) -> dict:
+    """Every requested item under one of four words, for the auditor rather than for the engine.
+
+    The engine works in gaps because a gap is what a check produces. An auditor works in "what
+    is still outstanding", and nine gap kinds across two severities do not answer that at a
+    glance. This is presentation over the same rows — nothing new is stored, and the four states
+    are derived fresh every time, so a fixed gap changes the word without any state to reconcile.
+
+    The distinction that earns its place is **incomplete** against **needs auditor review**: the
+    first is a defect the taxpayer must fix, the second is a question the tool cannot answer. A
+    chase letter written from the second is a letter that should not have been sent.
+    """
+    by_item: dict[int | None, list] = {}
+    for g in gaps:
+        by_item.setdefault(getattr(g, "request_item_id", None), []).append(g)
+    docs_by_item: dict[int | None, list] = {}
+    for d in documents:
+        docs_by_item.setdefault(getattr(d, "request_item_id", None), []).append(d)
+
+    rows = []
+    for item in items:
+        if getattr(item, "status", "") == "waived":
+            continue
+        found = by_item.get(item.id, [])
+        state, reason = _state_for(found)
+        if state == MISSING:
+            reason = ""            # "Nothing was supplied for X" under a heading reading X
+        docs = docs_by_item.get(item.id, [])
+        rows.append({
+            "request_item_id": item.id, "label": item.label, "kind": item.kind,
+            "state": state, "state_label": STATE_LABEL[state], "reason": reason,
+            "documents": [d.filename for d in docs],
+            "blocking": sum(1 for g in found if getattr(g, "severity", "") == BLOCKING),
+            "advisory": sum(1 for g in found if getattr(g, "severity", "") == ADVISORY),
+            "kinds": sorted({getattr(g, "kind", "") for g in found}),
+        })
+
+    # Files that answer nothing on the request are the auditor's call, not the checker's.
+    for doc in docs_by_item.get(None, []):
+        rows.append({
+            "request_item_id": None, "label": doc.filename, "kind": "unrequested",
+            "state": NEEDS_REVIEW, "state_label": STATE_LABEL[NEEDS_REVIEW],
+            "reason": "Supplied without answering any item on the request.",
+            "documents": [doc.filename], "blocking": 0, "advisory": 1,
+            "kinds": ["unrequested-document"],
+        })
+
+    summary = {s: sum(1 for r in rows if r["state"] == s)
+               for s in (RECEIVED, MISSING, INCOMPLETE, NEEDS_REVIEW)}
+    return {"items": rows, "summary": summary}

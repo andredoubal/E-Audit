@@ -468,6 +468,31 @@ export interface LoopDocument {
   period_to: string | null;
   note: string;
 }
+/** One of the four words an auditor actually uses about a requested item.
+ *
+ *  `incomplete` and `needs-review` are deliberately not the same thing: the first is a defect
+ *  the taxpayer has to fix, the second is the checker saying it cannot decide. A chase letter
+ *  follows only the first. */
+export type ItemState = "received" | "missing" | "incomplete" | "needs-review";
+
+export interface ItemAssessment {
+  request_item_id: number | null;
+  label: string;
+  kind: string;
+  state: ItemState;
+  state_label: string;
+  reason: string;
+  documents: string[];
+  blocking: number;
+  advisory: number;
+  kinds: string[];
+}
+
+export interface Assessment {
+  items: ItemAssessment[];
+  summary: Record<ItemState, number>;
+}
+
 export interface LoopState {
   case_id: string;
   round: number;
@@ -476,6 +501,7 @@ export interface LoopState {
   rounds: LoopRound[];
   documents: LoopDocument[];
   blocking: number;
+  assessment?: Assessment;
   draft?: Draft;
 }
 export interface Draft {
@@ -868,3 +894,81 @@ export const getAuditReport = (id: string) =>
 export const auditReportDocUrl = (id: string) => `/api/cases/${id}/audit-report.doc`;
 /** The same render with a print stylesheet — the browser's own print-to-PDF does the rest. */
 export const auditReportHtmlUrl = (id: string) => `/api/cases/${id}/audit-report.html`;
+
+/* ---------------------------------------------------------------- the correspondence trail
+   One enquiry is open at a time and closed ones are kept, so a case shows its whole history
+   without leaving "which conversation does this upload answer" ambiguous. */
+
+export interface ThreadMessage {
+  seq: number;
+  direction: "outbound" | "inbound";
+  sender: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  drafted_by: "auditor" | "ai-assisted" | "ai-drafted" | "taxpayer";
+  audit_stage: string;
+  in_reply_to_seq: number | null;
+  sent_at: string;
+  created_at: string;
+}
+
+export interface ThreadDocument {
+  id: number;
+  filename: string;
+  file_format: string;
+  rows: number;
+  columns: number;
+}
+
+export interface CorrespondenceThread {
+  id: number;
+  seq: number;
+  subject: string;
+  status: "open" | "closed";
+  origin: "initial" | "investigation-request" | "clarification";
+  /** set when this enquiry exists because a hypothesis could not be settled without it */
+  origin_hypothesis_id: string;
+  opened_at: string;
+  closed_at: string;
+  messages: ThreadMessage[];
+  documents: ThreadDocument[];
+}
+
+export interface Retestable {
+  hypothesis_id: string;
+  claim: string;
+  documents: string[];
+  note: string;
+}
+
+export interface ThreadState {
+  case_id: string;
+  threads: CorrespondenceThread[];
+  open_thread_id: number | null;
+  /** parked hypotheses whose enquiry has since received something */
+  retestable: Retestable[];
+  unfiled_documents: { id: number; filename: string }[];
+  /** replies that claim an attachment with nothing filed against the enquiry */
+  missing_attachments: {
+    thread_id: number;
+    thread_seq: number;
+    message_seq: number;
+    detail: string;
+  }[];
+}
+
+export const getThreads = (id: string) => getJSON<ThreadState>(`/cases/${id}/threads`);
+
+export const openThread = (id: string, subject = "") =>
+  postJSON<ThreadState>(`/cases/${id}/threads`, { subject });
+
+export const recordReply = (id: string, body: string, subject = "") =>
+  postJSON<ThreadState>(`/cases/${id}/threads/reply`, { body, subject });
+
+/** The loop: park a hypothesis and ask the taxpayer for what would settle it. */
+export const requestInformation = (id: string, hypothesisId: string, note = "") =>
+  postJSON<{ thread: ThreadState; draft: Draft; hypothesis_id: string }>(
+    `/cases/${id}/hypotheses/${hypothesisId}/request-info`,
+    { note },
+  );

@@ -170,8 +170,9 @@ backend/app/
                        #   catalog.py      what an auditor can ask for
                        #   from_email.py   recover the spec from the email that was sent
                        #   planner.py      DORMANT — planning is out of scope
-                       #   extract.py      xlsx/csv -> columns, rows, stated totals
+                       #   extract.py      xlsx/csv -> columns, rows, stated totals (every sheet)
                        #   completeness.py requested vs received, deterministically
+                       #   threads.py      the correspondence trail + the loop back
                        #   service.py      drives the rounds; recomputes gaps each pass
   pipeline/            # predicates.py (Python ⇄ SQL algebra) + rules.py + run.py
                        #   source.py       lines from an uploaded listing, not the feed
@@ -294,6 +295,67 @@ that "you say 65" is not.
 No model touches the number — every signal is read from engine output, same division of labour
 as everywhere else. And confidence is never merged with the amount beside it: a hypothesis can
 be strongly supported and worth very little, or weakly supported and worth a great deal.
+
+## The correspondence trail, and the loop back to the taxpayer
+
+`models/correspondence.py` + `requests/threads.py`. Until this existed, an outbound letter was
+regenerated on every page load and never stored, so the case file could not say what had actually
+been sent — and an investigation that could not settle a hypothesis had no way to ask.
+
+**One thread is open at a time; closed ones accumulate.** A case therefore shows its whole
+history — the opening request, the chase, the round that came out of something the investigation
+found — without ever leaving "which enquiry does this upload answer" ambiguous. A document filed
+against the wrong request is a completeness check answering the wrong question, which is worse
+than not having the check. Opening a thread *closes* the previous one rather than refusing: an
+auditor with a new question should not have to tidy up the last one first.
+
+**The loop is `threads.open_for_hypothesis()`.** An investigation that cannot settle a hypothesis
+on the evidence held is not finished and must not present itself as finished, so:
+
+1. the hypothesis is parked as `pending-info` with the auditor's note — a status that stops an
+   unanswered question being read as a settled verdict;
+2. a thread opens carrying `origin_hypothesis_id`, seeded with a drafted request that **asks**
+   and reaches no conclusion (`fb_information_request` — deterministic, so it works with no key);
+3. when a document arrives *on that thread*, `retestable()` says which hypotheses can now be
+   settled — compared against the thread, not the case, because a file uploaded for a different
+   enquiry is not an answer to this one;
+4. re-running the investigation merges into the same rows by natural key and clears the park.
+
+Uploads are accepted whenever a thread is open, with or without a formal `InformationRequest`
+behind them. Requiring an issued round rejected exactly the documents this loop exists to
+collect.
+
+Every message records **who wrote it** (`auditor` / `ai-assisted` / `ai-drafted` / `taxpayer`).
+A letter the auditor wrote, one they approved from a draft, and the taxpayer's own reply are three
+different kinds of evidence about a case, and a trail that flattened them would mislead. The
+taxpayer's words are kept verbatim: their account of their own records is evidence of what they
+say, not of what is true.
+
+### The completeness review, beyond "a file exists"
+
+Four checks were added to `completeness.py`, each because of a specific way the old one was wrong:
+
+- **Every worksheet is read** (`extract.py`). Reading only the first sheet meant a workbook with
+  a cover tab in front of the data reported *none* of the requested columns — a false "they did
+  not send it", the most expensive way to be wrong, because it costs the taxpayer a round trip
+  over a file they already supplied. The primary sheet is now chosen by how many recognised
+  columns it carries, then by rows — item-agnostic, because extraction is format work and must
+  not know what was asked for — and `other-worksheet` names the tab when the columns are
+  elsewhere.
+- **`sparse-column`** — a non-mandatory column present but blank on more than half the rows.
+  Advisory: nobody asked for every row to be populated, but a supplier VAT number on four rows
+  of ninety is present without being usable, and better said this round than discovered in the
+  analysis.
+- **`missing_attachments`** — a taxpayer reply that says "attached" with nothing filed against
+  the enquiry. A silent failure: in the trail it reads exactly like an answered request, so both
+  sides wait. The check claims only that the words and the files disagree.
+
+`completeness.assessment()` then presents the same gaps in **four words an auditor uses** —
+Received / Missing / Incomplete / Needs auditor review. It is presentation over the existing
+rows, derived fresh every time, so a fixed gap changes the word with no state to reconcile. The
+distinction that earns its place is **incomplete** against **needs auditor review**: the first is
+a defect the taxpayer must fix, the second is the checker admitting it cannot decide. A chase
+letter written from the second asks for something that was already sent.
 
 ## The auditor's own arithmetic
 
@@ -478,7 +540,7 @@ Open http://localhost:5174.
   brands.
 - Frontend build check: `npm run build` (runs `tsc --noEmit` + Vite build).
 - Backend syntax check: `python -m compileall -q app`.
-- Guard tests: `pytest backend/tests` (338 at last count). Three layers, and they answer
+- Guard tests: `pytest backend/tests` (415 at last count). Three layers, and they answer
   different questions — keep them apart:
   - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, …) — is this piece
     right, on a fixture built to isolate it?

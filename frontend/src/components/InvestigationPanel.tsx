@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   decideHypothesis,
   getInvestigationState,
+  requestInformation,
   runInvestigation,
   type DecisionKind,
   type HypothesisStatus,
@@ -46,6 +48,9 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [askNote, setAskNote] = useState("");
+  const nav = useNavigate();
 
   useEffect(() => {
     if (!id) return;
@@ -61,6 +66,24 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
       setD(await decideHypothesis(id, hid, decision, comment));
     } catch {
       /* the panel keeps its last good state rather than blanking on a failed write */
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // The loop. An investigation that cannot settle a hypothesis on what it holds should say
+  // what it needs rather than present itself as finished — so this parks the hypothesis, opens
+  // an enquiry carrying its id, and hands the auditor a draft to edit and send.
+  const askTaxpayer = async (hid: string) => {
+    if (!id) return;
+    setBusy(hid);
+    try {
+      await requestInformation(id, hid, askNote.trim());
+      setAsking(null);
+      setAskNote("");
+      nav(`/cases/${id}/correspondence`);
+    } catch {
+      setD(await getInvestigationState(id));
     } finally {
       setBusy(null);
     }
@@ -165,6 +188,35 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
             busy={busy === h.hypothesis_id}
             onDecide={(dec, comment) => decide(h.hypothesis_id, dec, comment)}
           />
+
+          {h.status === "pending-info" ? (
+            <div className="callout warn" style={{ margin: "8px 0 0" }}>
+              <b>Waiting on the taxpayer.</b>{" "}
+              {h.needs_info_note || "Information has been requested to settle this."} Re-run the
+              investigation once it arrives.
+            </div>
+          ) : asking === h.hypothesis_id ? (
+            <div className="decision open">
+              <input
+                className="decision-comment"
+                placeholder="What do you need from the taxpayer, and why?"
+                value={askNote}
+                onChange={(e) => setAskNote(e.target.value)}
+              />
+              <div className="resp-actions">
+                <button className="btn" onClick={() => askTaxpayer(h.hypothesis_id)}
+                        disabled={busy === h.hypothesis_id}>
+                  {busy === h.hypothesis_id ? "Opening…" : "Draft the request"}
+                </button>
+                <button className="linklike" onClick={() => setAsking(null)}>cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button className="linklike" style={{ marginTop: 7 }}
+                    onClick={() => { setAsking(h.hypothesis_id); setAskNote(""); }}>
+              ✉ Request information from the taxpayer
+            </button>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <span className={"pill " + STATUS_PILL[h.status]}>

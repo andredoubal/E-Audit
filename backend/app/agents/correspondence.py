@@ -325,3 +325,98 @@ def draft_verdict(case, taxpayer, recon, investigation=None, findings=None) -> d
     return llm.draft_letter(
         kind="verdict", facts=facts,
         fallback=lambda: fb_verdict(case, taxpayer, recon, investigation, findings))
+
+
+# ------------------------------------------------- the investigation asks for more evidence
+def information_request_facts(case, taxpayer, hypothesis, note: str = "") -> str:
+    """What the investigation could not settle, and why it needs the taxpayer to answer.
+
+    Built from the hypothesis as the engine left it. The agent's own `claim` is exploratory
+    language written to be tested and does not go outbound; what goes out is what was looked
+    at, what could not be concluded from it, and what would settle it.
+    """
+    lines = [
+        f"Taxpayer: {taxpayer.name}",
+        f"VAT registration number: {taxpayer.vat_registration_number}",
+        f"Case: {case.case_id}",
+        f"Period under review: {case.period_from:%d %B %Y} to {case.period_to:%d %B %Y}",
+        "",
+        "WHY THIS IS BEING ASKED",
+        f"Observation on file: {hypothesis.why}" if hypothesis.why else
+        "The review reached a point it cannot settle from the records held.",
+    ]
+    if hypothesis.explanation:
+        lines.append(f"What the records show so far: {hypothesis.explanation}")
+    detail = hypothesis.detail or {}
+    if detail.get("filename"):
+        lines.append(f"Document examined: {detail['filename']}")
+    if note.strip():
+        lines.append(f"What the auditor needs: {note.strip()}")
+    lines += [
+        "",
+        "The Authority is asking for further information. Nothing has been concluded, and no "
+        "adjustment is proposed at this stage.",
+    ]
+    return "\n".join(lines)
+
+
+def _as_clause(text: str) -> str:
+    """Fit an auditor's note into the middle of a sentence.
+
+    They type "The trial balance as at 31 March 2025." — a sentence. Dropped straight after
+    "Please provide" that reads "Please provide The trial balance as at 31 March 2025..", which
+    is the sort of thing that makes a letter from a tax authority look unread before it was
+    sent.
+    """
+    t = text.strip().rstrip(". \t")
+    if not t:
+        return ""
+    # Lower the first letter only when the first word is ordinary prose. An acronym (VAT), a
+    # filename (Sales_Analysis_Q1.xlsx) or a reference (Q1-2025) is capitalised on purpose, and
+    # "please provide sales_Analysis_Q1.xlsx" names a file the taxpayer never sent.
+    first = t.split()[0]
+    literal = any(c in first for c in "_./\\-") or any(c.isdigit() for c in first) \
+        or any(c.isupper() for c in first[1:])
+    if len(t) > 1 and t[0].isupper() and not literal:
+        t = t[0].lower() + t[1:]
+    return t
+
+
+def fb_information_request(case, taxpayer, hypothesis, note: str = "") -> str:
+    """The deterministic version — complete, sendable, and honest about being a question."""
+    ask = _as_clause(note) or ("the records and explanation supporting the position taken in "
+                               "the return for this period")
+    return "\n".join([
+        f"Dear {taxpayer.name},",
+        "",
+        f"Re: VAT audit {case.case_id} — request for further information",
+        "",
+        f"We are reviewing your VAT position for the period "
+        f"{case.period_from:%d %B %Y} to {case.period_to:%d %B %Y}. To complete that review we "
+        f"need further information from you.",
+        "",
+        f"Please provide {ask}.",
+        "",
+        "This is a request for information. No conclusion has been reached and no adjustment "
+        "is proposed at this stage; the purpose of this letter is to make sure the review is "
+        "based on a complete picture before any view is formed.",
+        "",
+        "Please respond within 20 working days.",
+        "",
+        "Yours faithfully,",
+        SIGNOFF,
+    ])
+
+
+def draft_information_request(case, taxpayer, hypothesis, note: str = "") -> dict:
+    """Draft the letter that goes out when an agent cannot settle a hypothesis.
+
+    Same guard as every other outbound letter: every numeric literal in the draft must already
+    appear in the engine-authored facts block. A request for information is the one letter most
+    likely to be read as an accusation, so the wording stays a question throughout — the
+    fallback says so explicitly, and the facts block tells the model the same.
+    """
+    facts = information_request_facts(case, taxpayer, hypothesis, note)
+    return llm.draft_letter(
+        kind="request", facts=facts,
+        fallback=lambda: fb_information_request(case, taxpayer, hypothesis, note))

@@ -40,6 +40,9 @@ class InformationRequest(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     case_id: Mapped[str] = mapped_column(String(30), index=True)
+    # which line of enquiry this round belongs to. Nullable: rounds predate threads, and a
+    # case seeded before the trail existed still has to open without one.
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     seq: Mapped[int] = mapped_column(Integer, default=1)          # round number, 1-based
     # draft -> issued -> answered -> satisfied. A round is only satisfied when no gap remains.
     status: Mapped[str] = mapped_column(String(20), default="draft")
@@ -102,6 +105,9 @@ class ReceivedDocument(Base):
     # null when the taxpayer sends something nobody asked for — itself worth flagging
     request_item_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey(f"{CORE}.request_item.id"), nullable=True)
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # the message it arrived with, when it came in as an attachment rather than a bare upload
+    message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     filename: Mapped[str] = mapped_column(String(200))
     media_type: Mapped[str] = mapped_column(String(60), default="")
     file_format: Mapped[str] = mapped_column(String(20), default="")    # xlsx/csv/pdf/letter

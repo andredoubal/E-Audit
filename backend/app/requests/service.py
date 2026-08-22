@@ -24,7 +24,7 @@ from ..models import (
     AuditCase, GapFinding, InformationRequest, ReceivedDocument, RequestItem,
 )
 from . import extract as extractor
-from .completeness import BLOCKING, Report, check, superseded_ids
+from .completeness import BLOCKING, Report, assessment, check, superseded_ids
 from .planner import RequestPlan, plan as build_plan
 
 RESPONSE_WINDOW_DAYS = 20
@@ -98,7 +98,7 @@ def issue(db: Session, req: InformationRequest, *, body: str = "", source: str =
     return req
 
 
-def record_document(db: Session, *, case: AuditCase, req: InformationRequest,
+def record_document(db: Session, *, case: AuditCase, req: InformationRequest | None,
                     filename: str, item_id: int | None = None,
                     data: bytes | None = None, structure: dict | None = None,
                     file_format: str = "", received: date | None = None) -> ReceivedDocument:
@@ -110,10 +110,18 @@ def record_document(db: Session, *, case: AuditCase, req: InformationRequest,
     else:
         content = {"format": file_format or "", "columns": [], "rows": [],
                    "stated_totals": {}, "note": "No content supplied."}
+    # File it against whichever enquiry is open. This is what lets the investigation see that
+    # the thing it asked for has arrived: a document with no thread answers no question.
+    from . import threads as thread_service
+    thread = thread_service.open_thread(db, case.case_id)
+
     doc = ReceivedDocument(
-        case_id=case.case_id, request_id=req.id, request_item_id=item_id,
+        case_id=case.case_id, request_id=req.id if req is not None else None,
+        request_item_id=item_id,
+        thread_id=thread.id if thread is not None else None,
         filename=filename, file_format=file_format or content.get("format", ""),
-        media_type="", received_at=received or date.today(), round=req.seq,
+        media_type="", received_at=received or date.today(),
+        round=req.seq if req is not None else 0,
         content=content, extraction_note=content.get("note", ""),
     )
     db.add(doc)
@@ -122,7 +130,9 @@ def record_document(db: Session, *, case: AuditCase, req: InformationRequest,
         item = db.get(RequestItem, item_id)
         if item is not None and item.status == "outstanding":
             item.status = "received"
-    if req.status == "issued":
+    # A document that answers an enquiry raised from the investigation has no formal round to
+    # advance — there was nothing issued to be answered.
+    if req is not None and req.status == "issued":
         req.status = "answered"
         req.answered_at = doc.received_at
     db.flush()
@@ -246,4 +256,8 @@ def state(db: Session, case: AuditCase) -> dict:
             for d in docs
         ],
         "blocking": len(open_blocking),
+        # The same rows, said the way an auditor asks the question: what is still outstanding?
+        "assessment": assessment(list(req.items) if req else [],
+                                 [d for d in docs if d.id not in stale],
+                                 by_round.get(req.seq, []) if req else []),
     }
