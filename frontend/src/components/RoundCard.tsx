@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getFollowup,
-  parseRequestEmail,
-  recordReply,
+  parseRequestChain,
   uploadDocument,
-  uploadEmail,
+  uploadEmails,
   type Assessment,
   type CorrespondenceThread,
   type Draft,
+  type FiledEmail,
   type ItemState,
   type ParsedRequest,
 } from "../api";
@@ -33,7 +33,20 @@ const STATE_PILL: Record<ItemState, string> = {
   received: "pri-low",
 };
 
-const SAMPLE = `Dear Sir/Madam,
+/** A sample chain, as two real `.eml` files rather than as text.
+ *
+ *  It goes in through exactly the path a forwarded email takes — headers, direction, sent order
+ *  and all — so what the sample demonstrates is what the feature does. A sample that took a
+ *  shortcut past the parser would be demonstrating something else. */
+const SAMPLE_CHAIN: { name: string; from: string; to: string; date: string;
+                      subject: string; body: string; attachment?: [string, string] }[] = [
+  {
+    name: "01-request.eml",
+    from: "vat.audit@zatca.gov.sa",
+    to: "finance@taxpayer.example",
+    date: "Mon, 14 Apr 2025 09:12:00 +0300",
+    subject: "VAT audit — Q1 2025 — information request",
+    body: `Dear Sir/Madam,
 
 Further to our review of your VAT position for Q1 2025, please provide the following
 within 20 working days:
@@ -43,10 +56,72 @@ within 20 working days:
    VAT rate and VAT amount.
 2. A detailed purchases analysis on which input VAT was claimed.
 3. The trial balance as at 31 March 2025.
-4. Copies of the tax invoices for the ten largest purchases.
 
 Yours faithfully,
-Zakat, Tax and Customs Authority`;
+Zakat, Tax and Customs Authority`,
+  },
+  {
+    name: "02-reply.eml",
+    from: "finance@taxpayer.example",
+    to: "vat.audit@zatca.gov.sa",
+    date: "Tue, 22 Apr 2025 16:40:00 +0300",
+    subject: "RE: VAT audit — Q1 2025 — information request",
+    body: `Dear Sir,
+
+Please find attached the sales analysis for the quarter. The trial balance is with our
+external accountants and will follow next week.
+
+Kind regards,
+Finance`,
+    // The point of the sample: the spreadsheet arrives with the message, and lands in step 2
+    // without anyone uploading it a second time.
+    attachment: ["Sales_Analysis_Q1_2025.csv",
+      "invoice_date,invoice_number,customer_name,customer_vat_number,taxable_amount,vat_amount\n" +
+      "2025-01-14,INV-2025-1001,Riyadh Trading Est,300044556600003,120000.00,18000.00\n" +
+      "2025-02-03,INV-2025-1002,Jeddah Supplies Co,300055667700003,84000.00,12600.00\n" +
+      "2025-02-27,INV-2025-1003,Dammam Retail LLC,300066778800003,196000.00,29400.00\n" +
+      "2025-03-19,INV-2025-1004,Khobar Wholesale,300077889900003,58000.00,8700.00\n"],
+  },
+  {
+    name: "03-chase.eml",
+    from: "vat.audit@zatca.gov.sa",
+    to: "finance@taxpayer.example",
+    date: "Wed, 07 May 2025 10:05:00 +0300",
+    subject: "RE: VAT audit — Q1 2025 — information request",
+    body: `Dear Sir,
+
+Thank you for the sales analysis. The following are still outstanding, and we would be
+grateful to receive them within 10 working days:
+
+1. The trial balance as at 31 March 2025.
+2. A reconciliation of the return to the ledger for the period.
+3. A credit and debit note listing for the period.
+
+Yours faithfully,
+Zakat, Tax and Customs Authority`,
+  },
+];
+
+function sampleFiles(): File[] {
+  return SAMPLE_CHAIN.map((m) => {
+    const head = `From: ${m.from}\r\nTo: ${m.to}\r\nDate: ${m.date}\r\n` +
+                 `Subject: ${m.subject}\r\nMIME-Version: 1.0\r\n`;
+    if (!m.attachment) {
+      return new File([head + `Content-Type: text/plain; charset="utf-8"\r\n\r\n${m.body}\r\n`],
+                      m.name, { type: "message/rfc822" });
+    }
+    const [name, csv] = m.attachment;
+    const b = "eaudit-sample-boundary";
+    const body =
+      head +
+      `Content-Type: multipart/mixed; boundary="${b}"\r\n\r\n` +
+      `--${b}\r\nContent-Type: text/plain; charset="utf-8"\r\n\r\n${m.body}\r\n\r\n` +
+      `--${b}\r\nContent-Type: text/csv; charset="utf-8"\r\n` +
+      `Content-Disposition: attachment; filename="${name}"\r\n\r\n${csv}\r\n` +
+      `--${b}--\r\n`;
+    return new File([body], m.name, { type: "message/rfc822" });
+  });
+}
 
 function Step({ n, title, note, children }: {
   n: number;
@@ -91,19 +166,20 @@ export default function RoundCard({
   hasFormalRequest: boolean;
   onChanged: () => void;
 }) {
-  const [text, setText] = useState("");
   const [parsed, setParsed] = useState<ParsedRequest | null>(null);
   const [keep, setKeep] = useState<Set<string>>(new Set());
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);
+  const [mailDrag, setMailDrag] = useState(false);
   const [followup, setFollowup] = useState<Draft | null>(null);
+  const [noDraft, setNoDraft] = useState("");
   const [filter, setFilter] = useState<ItemState | null>(null);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
-  const [filed, setFiled] = useState<string[]>([]);
+  const [results, setResults] = useState<FiledEmail[]>([]);
 
   const docs = thread?.documents ?? [];
   const messages = thread?.messages ?? [];
@@ -114,47 +190,42 @@ export default function RoundCard({
   const outstanding = rows.filter((r) => r.state !== "received").length;
 
   const loadFollowup = useCallback(() => {
-    if (!outstanding) { setFollowup(null); return; }
-    getFollowup(id).then(setFollowup).catch(() => setFollowup(null));
+    if (!outstanding) { setFollowup(null); setNoDraft(""); return; }
+    setNoDraft("");
+    getFollowup(id)
+      .then((d) => { setFollowup(d); setNoDraft(""); })
+      // A chase can only be written against an issued request. Saying so beats a spinner that
+      // never resolves, which is what this did before.
+      .catch(() => { setFollowup(null); setNoDraft("no issued request to chase against"); });
   }, [id, outstanding]);
   useEffect(loadFollowup, [loadFollowup]);
 
-  const readEmail = async () => {
-    if (!text.trim()) return;
+  /** Read the spec from the whole chain, not from one message. */
+  const readChain = async () => {
     setBusy("read");
     setErr("");
     setConfirmed(false);
     try {
-      const p = await parseRequestEmail(id, text);
+      const p = await parseRequestChain(id);
       setParsed(p);
       setKeep(new Set(p.items.map((i) => i.key)));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not read that email.");
+      setErr(e instanceof Error ? e.message : "Could not read the chain.");
     } finally { setBusy(""); }
   };
 
-  const fileChain = async () => {
-    if (!text.trim()) return;
-    setBusy("file");
-    try {
-      await recordReply(id, text.trim());
-      setText("");
-      setParsed(null);
-      onChanged();
-    } finally { setBusy(""); }
-  };
-
-  const sendEmail = async (f: File | null) => {
-    if (!f) return;
+  const sendEmails = async (list: File[] | FileList | null) => {
+    const files = list ? Array.from(list) : [];
+    if (!files.length) return;
     setBusy("email");
     setErr("");
     try {
-      const r = await uploadEmail(id, f);
-      setFiled(r.filed);
+      const r = await uploadEmails(id, files);
+      setResults(r.results);
       onChanged();
       loadFollowup();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not read that email.");
+      setErr(e instanceof Error ? e.message : "Could not read those emails.");
     } finally { setBusy(""); }
   };
 
@@ -204,48 +275,82 @@ export default function RoundCard({
               <b>{m.sender}</b>
               <span className="sub">
                 → {m.recipient} · {WHO[m.drafted_by] || m.drafted_by}
-                {m.created_at && ` · ${m.created_at.slice(0, 10)}`}
+                {/* When it was sent, which is not when it was filed. A chain forwarded today
+                    carries messages sent months ago, and stamping them all with today would
+                    put the request and the chase on the same date. */}
+                {m.sent_at
+                  ? ` · sent ${m.sent_at}`
+                  : m.created_at && ` · filed ${m.created_at.slice(0, 10)}`}
               </span>
             </div>
             <pre className="letterpre">{m.body}</pre>
           </div>
         ))}
 
-        <textarea
-          className="letter-input"
-          rows={messages.length ? 4 : 8}
-          value={text}
-          placeholder="Paste the email chain — what you sent, and anything the taxpayer wrote back."
-          onChange={(e) => setText(e.target.value)}
-        />
+        <div
+          className={"dropzone" + (mailDrag ? " over" : "")}
+          onDragOver={(e) => { e.preventDefault(); setMailDrag(true); }}
+          onDragLeave={() => setMailDrag(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setMailDrag(false);
+            sendEmails(e.dataTransfer.files);
+          }}
+          onClick={() => emailRef.current?.click()}
+        >
+          <input ref={emailRef} type="file" multiple accept=".eml,.msg"
+                 style={{ display: "none" }} onChange={(e) => sendEmails(e.target.files)} />
+          <b>
+            {busy === "email" ? "Reading the chain…" : "Drop the email chain here"}
+          </b>
+          <span className="sub">
+            .eml or .msg — as many as you like, filed in the order they were sent, with their
+            attachments
+          </span>
+        </div>
+
         <div className="row-actions">
-          <button className="btn" disabled={!!busy || !text.trim()} onClick={fileChain}>
-            {busy === "file" ? "Filing…" : "Add to the chain"}
-          </button>
-          <button className="btn ghost" disabled={!!busy || !text.trim()} onClick={readEmail}>
+          <button className="btn" disabled={!!busy || !messages.length} onClick={readChain}>
             {busy === "read" ? "Reading…" : "Read what was asked for"}
           </button>
-          <button className="linklike" disabled={!!busy}
-                  onClick={() => emailRef.current?.click()}>
-            {busy === "email" ? "Reading the email…" : "or drop in an .eml / .msg file"}
-          </button>
-          <input ref={emailRef} type="file" accept=".eml,.msg" style={{ display: "none" }}
-                 onChange={(e) => sendEmail(e.target.files?.[0] ?? null)} />
-          {!messages.length && !text && (
-            <button className="linklike" onClick={() => setText(SAMPLE)}>use a sample</button>
+          {!messages.length && (
+            <button className="linklike" disabled={!!busy}
+                    onClick={() => sendEmails(sampleFiles())}>
+              use a sample chain
+            </button>
           )}
         </div>
-        {filed.length > 0 && (
-          <div className="callout ok">
-            <b>Filed {filed.length} attachment{filed.length === 1 ? "" : "s"} from that email.</b>{" "}
-            {filed.join(", ")} — they are in step 2 and already checked in step 3.
+
+        {!!results.length && (
+          <div className="maillist">
+            {results.map((r, n) => (
+              <div className={"mailrow" + (r.ok ? "" : " bad")} key={`${r.filename}-${n}`}>
+                <b>{r.filename}</b>
+                {r.ok ? (
+                  <span className="sub">
+                    {r.direction === "outbound" ? "sent by ZATCA" : "from the taxpayer"}
+                    {r.sent_at ? ` · ${r.sent_at}` : " · no date header"}
+                    {r.filed?.length
+                      ? ` · ${r.filed.length} attachment${r.filed.length === 1 ? "" : "s"} filed: ${r.filed.join(", ")}`
+                      : " · no attachments"}
+                  </span>
+                ) : (
+                  <span className="sub">not filed — {r.note}</span>
+                )}
+                {r.ok && r.note && <span className="sub">{r.note}</span>}
+              </div>
+            ))}
           </div>
         )}
+
         <p className="detail-note">
-          Forwarding the email is usually less work than pasting it, and it brings the
-          attachments with it — the spreadsheets land in step 2 without a second upload.
-          Reading the email turns it into the specification step 3 checks against; nothing binds
-          until you confirm the reading.
+          The chain goes in as files rather than as pasted text because the headers are the
+          part that matters: they say who sent each message, when, and what came attached. The
+          spreadsheets land in step 2 without a second upload, the messages sort into the order
+          they were actually sent, and <b>only ZATCA&rsquo;s own messages define the request</b> —
+          the taxpayer writing &ldquo;please find the sales analysis attached&rdquo; is not them
+          asking themselves for it. Reading the chain turns it into the specification step 3
+          checks against; nothing binds until you confirm the reading.
         </p>
 
         {parsed && (
@@ -256,7 +361,19 @@ export default function RoundCard({
                 <span className="sub">Period read as {parsed.period_from} to {parsed.period_to}</span>
               )}
               {parsed.due_phrase && <span className="sub">Due: {parsed.due_phrase}</span>}
+              {parsed.outbound_read !== undefined && (
+                <span className="sub">
+                  read from {parsed.outbound_read} ZATCA message
+                  {parsed.outbound_read === 1 ? "" : "s"}
+                  {!!parsed.inbound_skipped && `, ${parsed.inbound_skipped} taxpayer reply not read as a request`}
+                </span>
+              )}
             </div>
+            {parsed.period_note && (
+              <div className="callout warn">
+                <b>The chain names two periods.</b> {parsed.period_note}.
+              </div>
+            )}
             {parsed.items.map((i) => (
               <label className={"parsed-item" + (keep.has(i.key) ? " on" : "")} key={i.key}>
                 <input type="checkbox" checked={keep.has(i.key)}
@@ -281,6 +398,27 @@ export default function RoundCard({
                 they were not guessed into an item:
                 <ul>{parsed.unmatched.map((u, n) => <li key={n}>{u}</li>)}</ul>
               </div>
+            )}
+            {!!parsed.messages_read?.length && (
+              <details>
+                <summary>Which message asked for what</summary>
+                <div className="maillist">
+                  {parsed.messages_read.map((m) => (
+                    <div className={"mailrow" + (m.direction === "inbound" ? " muted" : "")}
+                         key={m.seq}>
+                      <b>
+                        {m.direction === "outbound" ? "ZATCA" : "Taxpayer"} · message {m.seq}
+                        {m.subject ? ` — ${m.subject}` : ""}
+                      </b>
+                      <span className="sub">
+                        {m.items.length
+                          ? `first asked for: ${m.items.join(", ")}`
+                          : m.note}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
             <div className="row-actions">
               <button className="btn" disabled={!keep.size} onClick={() => setConfirmed(true)}>
@@ -329,10 +467,14 @@ export default function RoundCard({
           </p>
         ) : !hasFormalRequest || !rows.length ? (
           <p className="detail-note" style={{ margin: 0 }}>
-            This round was raised from the investigation rather than as a formal request with a
-            column specification, so there is no item list to check the response against. What
-            arrived is above; whether it answers the question is settled by re-running the
-            investigation.
+            {thread?.origin === "initial"
+              ? "No specification has been confirmed for this round yet, so there is nothing "
+                + "to check the response against. Read the chain in step 1 and confirm the "
+                + "reading — the item list, and this check, follow from it."
+              : "This round was raised from the investigation rather than as a formal request "
+                + "with a column specification, so there is no item list to check the response "
+                + "against. What arrived is above; whether it answers the question is settled "
+                + "by re-running the investigation."}
           </p>
         ) : (
           <>
@@ -397,6 +539,11 @@ export default function RoundCard({
               </span>
             </div>
           </>
+        ) : noDraft ? (
+          <p className="detail-note" style={{ margin: 0 }}>
+            No chase can be drafted yet — {noDraft}. Confirm the reading in step 1 and the draft
+            is written from whatever step 3 still shows outstanding.
+          </p>
         ) : (
           <p className="detail-note" style={{ margin: 0 }}>Drafting…</p>
         )}

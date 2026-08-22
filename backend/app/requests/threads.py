@@ -15,7 +15,7 @@ answer arrives.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 
@@ -71,14 +71,23 @@ def start(db, case_id: str, *, subject: str, origin: str = ORIGIN_INITIAL,
 def add_message(db, thread: CorrespondenceThread, *, direction: str, body: str,
                 subject: str = "", sender: str = "", recipient: str = "",
                 drafted_by: str = BY_AUDITOR, audit_stage: str = "",
-                request_id: int | None = None) -> CorrespondenceMessage:
+                request_id: int | None = None,
+                sent_at: date | None = None) -> CorrespondenceMessage:
+    """`sent_at` is when the message was *sent*, which is not when it was filed.
+
+    A chain forwarded in August carries messages sent in April and May, and stamping the trail
+    with the day the auditor got round to uploading it would make the correspondence look like
+    it all happened at once — and would put the chase and the request on the same date. Only a
+    file with headers can answer this, so it is left null for anything typed into the app, and
+    the display falls back to the filing time saying as much.
+    """
     seq = 1 + len(list(thread.messages or []))
     msg = CorrespondenceMessage(
         case_id=thread.case_id, thread_id=thread.id, seq=seq, direction=direction,
         sender=sender or ("ZATCA" if direction == DIRECTION_OUT else "Taxpayer"),
         recipient=recipient or ("Taxpayer" if direction == DIRECTION_OUT else "ZATCA"),
         subject=subject or thread.subject, body=body, drafted_by=drafted_by,
-        in_reply_to_seq=seq - 1 if seq > 1 else None,
+        in_reply_to_seq=seq - 1 if seq > 1 else None, sent_at=sent_at,
         audit_stage=audit_stage, request_id=request_id)
     db.add(msg)
     db.flush()

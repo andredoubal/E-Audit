@@ -120,14 +120,18 @@ def correspondence(loop: dict, threads: dict) -> str:
         f'<div class="msg msg-{e(m["direction"])}"><div class="msg-meta"><b>{e(m["sender"])}</b>'
         f'<span class="sub">→ {e(m["recipient"])} · AI draft — review before sending</span></div>'
         f'<pre class="letterpre">{e(m["body"])}</pre></div>' for m in msgs)
-    chain += ('<textarea class="letter-input" rows="3" disabled '
-              'placeholder="Paste the email chain — what you sent, and anything the taxpayer '
-              'wrote back."></textarea>'
-              '<div class="row-actions"><button class="btn" disabled>Add to the chain</button>'
-              '<button class="btn ghost" disabled>Read what was asked for</button>'
-              '<span class="linklike">or drop in an .eml / .msg file</span></div>'
-              '<p class="detail-note">Forwarding the email brings the attachments with it — the '
-              'spreadsheets land in step 2 without a second upload.</p>')
+    chain += ('<div class="dropzone"><b>Drop the email chain here</b>'
+              '<span class="sub">.eml or .msg — as many as you like, filed in the order they '
+              'were sent, with their attachments</span></div>'
+              '<div class="row-actions">'
+              '<button class="btn" disabled>Read what was asked for</button></div>'
+              '<p class="detail-note">The chain goes in as files rather than as pasted text '
+              'because the headers are the part that matters: they say who sent each message, '
+              'when, and what came attached. The spreadsheets land in step 2 without a second '
+              'upload, the messages sort into the order they were actually sent, and '
+              '<b>only ZATCA&rsquo;s own messages define the request</b> — the taxpayer writing '
+              '&ldquo;please find the sales analysis attached&rdquo; is not them asking '
+              'themselves for it.</p>')
 
     received = ('<div class="dropzone"><b>Drop what the taxpayer sent here</b>'
                 '<span class="sub">.xlsx, .xlsm, .csv — read into columns and rows on arrival'

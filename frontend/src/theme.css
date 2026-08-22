@@ -502,6 +502,14 @@ input.letter-input,select.letter-input{min-height:0}
 .docrow{border:1px solid var(--line);border-radius:10px;padding:11px 13px;display:flex;
   flex-direction:column;gap:4px}
 
+/* --- the emails filed onto a round ------------------------------------------------ */
+.maillist{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.mailrow{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:9px;
+  padding:9px 12px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.mailrow .sub{font-size:12px}
+.mailrow.bad{border-left-color:var(--high)}
+.mailrow.muted{border-left-color:var(--line);color:var(--muted)}
+
 /* --- the auditor's calculations --------------------------------------------------- */
 .calc-tabs{display:flex;gap:8px;padding:14px 18px 0}
 .calc-tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);font:inherit;

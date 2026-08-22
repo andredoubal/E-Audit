@@ -15,11 +15,12 @@ PoC needs is in the files the taxpayer sent.
 
 Two jobs, in order:
 
-1. **Did we get what we asked for?** The auditor pastes the email they sent; it is
-   parsed into a checkable spec (`requests/from_email.py`) which they confirm. The
-   uploaded spreadsheets are compared against it — missing items, missing columns,
-   blank mandatory fields, period coverage, totals that do not foot — and the chase
-   email is drafted from the gaps alone.
+1. **Did we get what we asked for?** The auditor drops in the email chain as files; each
+   message is parsed (`requests/email_file.py`), merged into a checkable spec
+   (`requests/from_email.py` + `requests/chain.py`) which they confirm. The uploaded
+   spreadsheets are compared against it — missing items, missing columns, blank mandatory
+   fields, period coverage, totals that do not foot — and the chase email is drafted from
+   the gaps alone.
 2. **What does it mean?** The engine decides which uploaded lines *qualify* for the
    box and the period, sums them into an **expected** return, and compares that with
    what was **declared**. Five agents then propose findings for a deterministic
@@ -174,7 +175,9 @@ backend/app/
                        #   lookup.py       found / needs-validation / not-found
   requests/            # the request/response loop:
                        #   catalog.py      what an auditor can ask for
-                       #   from_email.py   recover the spec from the email that was sent
+                       #   email_file.py   read a forwarded .eml / .msg — headers, body, attachments
+                       #   from_email.py   recover the spec from one message
+                       #   chain.py        merge the spec across a whole chain of them
                        #   planner.py      DORMANT — planning is out of scope
                        #   extract.py      xlsx/csv -> columns, rows, stated totals (every sheet)
                        #   completeness.py requested vs received, deterministically
@@ -354,6 +357,43 @@ that "you say 65" is not.
 No model touches the number — every signal is read from engine output, same division of labour
 as everywhere else. And confidence is never merged with the amount beside it: a hypothesis can
 be strongly supported and worth very little, or weakly supported and worth a great deal.
+
+## The chain goes in as files, and the headers are the point
+
+`requests/email_file.py` + `requests/chain.py`. Step 1 of a round used to be a textarea: paste
+what you sent, and the parser reads it. That works, and it is wrong in four ways that only became
+visible once the messages arrived as files instead.
+
+**A pasted message has no sender**, so the parser could not tell the Authority's request from the
+taxpayer's reply. That matters because *"please find the sales analysis attached"* matches the
+sales-analysis cue exactly as squarely as *"please provide a detailed sales analysis"* does — so
+the taxpayer's own reply could create a request item, which is the taxpayer asking themselves for
+something and then being chased for it. Only ZATCA's messages define the request; inbound ones go
+on the trail and are never read for the spec.
+
+**A pasted message has no date**, so the trail was stamped with the day the auditor got round to
+uploading it — putting the request and the chase weeks apart on the same date. `sent_at` now comes
+from the `Date` header, is left null when there isn't one, and the display says *sent* or *filed*
+accordingly rather than presenting a guess as a fact.
+
+**A pasted message has no attachments.** That is the step that actually costs a round when it is
+done by hand: the auditor is holding the words and the spreadsheets together, and the one that
+gets missed is the one nobody notices until both sides have waited a month.
+
+**And one email is not the request.** The opening request goes out, half of it comes back, and the
+auditor writes again naming what is still outstanding and the column they forgot. Read only the
+first message and the spec is missing what was added later; read only the last and it is missing
+everything already sent. So `chain.py` reads message by message and merges: items union with the
+earliest cue kept (that is the ask the auditor will look for when checking the reading), columns
+union (taking only the last message's list would silently drop the seven in the opening request),
+the **first** period stated stands with any disagreement *reported* rather than resolved — a
+second period is either a typo or a widened scope and a parser cannot know which — and the
+**last** deadline wins, because a chase granting ten more working days replaces the date rather
+than adding to it.
+
+Files are dropped in any order and filed in sent order; one unreadable file is a line in the
+result rather than a rejected upload; and `POST /cases/{id}/threads/emails` shares `_file_email`
+with the single-file endpoint so the two cannot drift on direction, dates or attachments.
 
 ## The correspondence trail, and the loop back to the taxpayer
 

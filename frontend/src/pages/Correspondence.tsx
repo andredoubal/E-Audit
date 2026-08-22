@@ -81,7 +81,10 @@ export default function Correspondence() {
 
       {shown.map((t, i) => (
         <RoundCard
-          key={t?.id ?? "round-1"}
+          /* Keyed by round number, not thread id. The first email filed on a round is what
+             creates its thread, so keying on the id remounted the card at exactly that moment
+             and threw away the result of the upload the auditor had just done. */
+          key={t?.seq ?? i + 1}
           id={id}
           thread={t}
           seq={t?.seq ?? 1}
@@ -96,7 +99,9 @@ export default function Correspondence() {
           another tab — and a round with no question behind it is not a round. */}
       <div className="roundcard soon">
         <div className="round-head">
-          <span className="round-n">Round {rounds.length + 1}</span>
+          {/* `shown`, not `rounds`: a case with no thread yet still shows a Round 1 card, and
+              counting the threads made the placeholder underneath it "Round 1" as well. */}
+          <span className="round-n">Round {shown.length + 1}</span>
           <span className="round-origin">
             Opens from the investigation — when a hypothesis cannot be settled on the evidence
             held, requesting information from the taxpayer starts the next round here.

@@ -751,6 +751,37 @@ export interface ParsedRequest {
   needs_confirmation: boolean;
   catalog: { key: string; label: string; kind: string; description: string;
              required_columns: string[] }[];
+  /** Present when the spec was read from a filed chain rather than from one message. */
+  messages_read?: ChainMessageRead[];
+  outbound_read?: number;
+  /** The taxpayer's own messages are read for the record, never for what was asked for. */
+  inbound_skipped?: number;
+  /** Two messages naming different periods: reported, never silently resolved. */
+  period_note?: string;
+}
+
+/** What one message in the chain contributed to the merged spec. */
+export interface ChainMessageRead {
+  seq: number;
+  direction: "outbound" | "inbound";
+  subject: string;
+  items: string[];
+  note: string;
+}
+
+/** One filed email, or one that could not be read. Reported per file so a single bad
+ *  attachment does not lose the rest of the drop. */
+export interface FiledEmail {
+  filename: string;
+  ok: boolean;
+  subject?: string;
+  sender?: string;
+  recipient?: string;
+  sent_at?: string;
+  direction?: "outbound" | "inbound";
+  filed?: string[];
+  skipped?: string[];
+  note?: string;
 }
 
 export type CalcStatus = "agree" | "disagree" | "not-checkable" | "ok";
@@ -820,6 +851,10 @@ export interface StepEmails {
 
 export const parseRequestEmail = (id: string, text: string) =>
   postJSON<ParsedRequest>(`/cases/${id}/request-email/parse`, { text });
+
+/** Read the spec from every message on the round, merged — see `requests/chain.py`. */
+export const parseRequestChain = (id: string) =>
+  postJSON<ParsedRequest>(`/cases/${id}/request-email/from-chain`, {});
 
 export const askCalc = (id: string, question: string, spec?: CalcQuerySpec) =>
   postJSON<CalcAnswer>(`/cases/${id}/calc/ask`, { question, spec });
@@ -1077,6 +1112,20 @@ export const uploadEmail = async (
   const body = new FormData();
   body.append("file", file);
   const r = await fetch(`${BASE}/cases/${id}/threads/email`, { method: "POST", body });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status}`);
+  return r.json();
+};
+
+/** A whole chain in one drop. Filed in sent order, with a result line per file. */
+export const uploadEmails = async (
+  id: string,
+  files: File[],
+): Promise<ThreadState & {
+  results: FiledEmail[]; read: number; unreadable: number; filed: string[];
+}> => {
+  const body = new FormData();
+  for (const f of files) body.append("files", f);
+  const r = await fetch(`${BASE}/cases/${id}/threads/emails`, { method: "POST", body });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status}`);
   return r.json();
 };

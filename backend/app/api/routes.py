@@ -310,16 +310,123 @@ def record_taxpayer_reply(case_id: str, body: ReplyIn, db: Session = Depends(get
     return thread_service.state(db, case_id)
 
 
+def _file_email(db, case, case_id: str, parsed, *, filename: str) -> dict:
+    """Put one parsed email on the round: the message on the chain, its attachments as documents.
+
+    Direction comes from who sent it. An auditor forwarding their own sent mail and an auditor
+    forwarding the taxpayer's reply are different evidence, and the trail must not flatten them —
+    so the header decides, not the fact that it arrived through this endpoint.
+    """
+    from ..requests import threads as thread_service
+
+    thread = thread_service.open_thread(db, case_id)
+    if thread is None:
+        thread = thread_service.start(db, case_id,
+                                      subject=parsed.subject or "Taxpayer correspondence")
+
+    outbound = "zatca" in (parsed.sender or "").lower()
+    sent = None
+    if parsed.sent_at:
+        try:
+            sent = date.fromisoformat(parsed.sent_at)
+        except ValueError:
+            sent = None
+    thread_service.add_message(
+        db, thread,
+        direction="outbound" if outbound else "inbound",
+        body=parsed.body, subject=parsed.subject,
+        sender=parsed.sender or ("ZATCA" if outbound else "Taxpayer"),
+        recipient=parsed.recipient or ("Taxpayer" if outbound else "ZATCA"),
+        drafted_by="auditor" if outbound else "taxpayer",
+        audit_stage="correspondence", sent_at=sent)
+
+    req = req_service.current_request(db, case_id)
+    filed = []
+    for name, payload in parsed.attachments:
+        doc = req_service.record_document(
+            db, case=case, req=req, filename=name, data=payload,
+            file_format=name.rsplit(".", 1)[-1].lower())
+        filed.append(doc.filename)
+    if filed and req is not None:
+        req_service.run_checks(db, case)
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action="email-filed",
+                    payload={"file": filename, "attachments": filed,
+                             "direction": "outbound" if outbound else "inbound"}))
+    return {"filename": filename, "ok": True, "subject": parsed.subject,
+            "sender": parsed.sender, "recipient": parsed.recipient,
+            "sent_at": parsed.sent_at, "direction": "outbound" if outbound else "inbound",
+            "filed": filed, "skipped": parsed.skipped, "note": parsed.note}
+
+
+@router.post("/cases/{case_id}/threads/emails")
+async def upload_emails(case_id: str, files: list[UploadFile] = File(...),
+                        db: Session = Depends(get_db)):
+    """File a whole chain at once — as many messages as the auditor drops in.
+
+    Three things this does that filing them one at a time does not.
+
+    **They go on the chain in the order they were sent, not the order they were dropped.** A
+    chain selected in a mail client arrives in whatever order the file picker hands it over, and
+    a trail that says the chase went out before the request misrepresents the correspondence.
+    The `Date` header decides; a message without one keeps its position in the drop.
+
+    **One unreadable file does not lose the other four.** Each is reported on its own, so a
+    signature-only forward or an Outlook `.msg` this deployment cannot read is a line in the
+    result rather than a rejected upload.
+
+    **The attachments come with them.** That is the step that costs a round when it is done by
+    hand: the auditor is holding the words and the spreadsheets together, and the attachment
+    that gets missed is the one nobody notices until both sides have waited a month.
+    """
+    from ..requests import email_file
+
+    case = _case_or_404(db, case_id)
+    if not files:
+        raise HTTPException(422, "no files")
+    if len(files) > 40:
+        raise HTTPException(413, "too many files in one drop for the demo (40 limit)")
+
+    read: list[tuple[int, str, object]] = []
+    failed: list[dict] = []
+    for n, f in enumerate(files):
+        name = f.filename or f"message-{n + 1}.eml"
+        data = await f.read()
+        if len(data) > 12_000_000:
+            failed.append({"filename": name, "ok": False,
+                           "note": "file too large for the demo (12 MB limit)"})
+            continue
+        parsed = email_file.parse(name, data)
+        if not parsed.ok:
+            failed.append({"filename": name, "ok": False,
+                           "note": parsed.note or "nothing readable in that email"})
+            continue
+        read.append((n, name, parsed))
+
+    if not read:
+        raise HTTPException(422, failed[0]["note"] if failed else "nothing readable")
+
+    # Sent order, with the drop order as the tiebreak for messages carrying no Date header.
+    read.sort(key=lambda r: (r[2].sent_at or "9999-12-31", r[0]))
+
+    results = [_file_email(db, case, case_id, parsed, filename=name) for _, name, parsed in read]
+    db.commit()
+
+    from ..requests import threads as thread_service
+
+    return {**thread_service.state(db, case_id), "results": results + failed,
+            "read": len(results), "unreadable": len(failed),
+            "filed": [f for r in results for f in r["filed"]]}
+
+
 @router.post("/cases/{case_id}/threads/email")
 async def upload_email(case_id: str, file: UploadFile = File(...),
                        db: Session = Depends(get_db)):
-    """File a forwarded email onto the round: the message on the chain, its attachments as
-    documents.
+    """One forwarded email onto the round. The plural form above is what the UI uses.
 
-    This is the step that costs a round when it is done by hand. An auditor forwarding the
-    taxpayer's reply is holding the words and the spreadsheets together; making them paste one
-    and separately hunt down the other is asking them to do the filing themselves, and the
-    attachment that gets missed is the one nobody notices until both sides have waited a month.
+    Kept because a single file is a legitimate thing to send and because callers already use it;
+    it shares `_file_email` with the chain endpoint so the two cannot drift on direction, dates
+    or attachment handling.
     """
     from ..requests import email_file
     from ..requests import threads as thread_service
@@ -333,40 +440,10 @@ async def upload_email(case_id: str, file: UploadFile = File(...),
     if not parsed.ok:
         raise HTTPException(422, parsed.note or "nothing readable in that email")
 
-    thread = thread_service.open_thread(db, case_id)
-    if thread is None:
-        thread = thread_service.start(db, case_id,
-                                      subject=parsed.subject or "Taxpayer correspondence")
-
-    # Direction from who sent it. An auditor forwarding their own sent mail and an auditor
-    # forwarding the taxpayer's reply are different evidence, and the trail must not flatten
-    # them — so the header decides, not the fact that it arrived through this endpoint.
-    outbound = "zatca" in (parsed.sender or "").lower()
-    thread_service.add_message(
-        db, thread,
-        direction="outbound" if outbound else "inbound",
-        body=parsed.body, subject=parsed.subject,
-        sender=parsed.sender or ("ZATCA" if outbound else "Taxpayer"),
-        recipient=parsed.recipient or ("Taxpayer" if outbound else "ZATCA"),
-        drafted_by="auditor" if outbound else "taxpayer",
-        audit_stage="correspondence")
-
-    req = req_service.current_request(db, case_id)
-    filed = []
-    for name, payload in parsed.attachments:
-        doc = req_service.record_document(
-            db, case=case, req=req, filename=name, data=payload,
-            file_format=name.rsplit(".", 1)[-1].lower())
-        filed.append(doc.filename)
-    if filed and req is not None:
-        req_service.run_checks(db, case)
-
-    db.add(EventLog(case_id=case_id, actor="auditor", action="email-filed",
-                    payload={"file": file.filename, "attachments": filed,
-                             "direction": "outbound" if outbound else "inbound"}))
+    one = _file_email(db, case, case_id, parsed, filename=file.filename or "message.eml")
     db.commit()
     return {**thread_service.state(db, case_id),
-            "filed": filed, "skipped": parsed.skipped, "note": parsed.note}
+            "filed": one["filed"], "skipped": parsed.skipped, "note": parsed.note}
 
 
 @router.get("/regulatory/coverage")
@@ -1159,10 +1236,39 @@ class EmailIn(BaseModel):
 
 @router.post("/cases/{case_id}/request-email/parse")
 def parse_request_email(case_id: str, body: EmailIn, db: Session = Depends(get_db)):
-    """Read the request email into a proposed spec, for the auditor to confirm or edit."""
+    """Read one request email into a proposed spec, for the auditor to confirm or edit."""
     _case_or_404(db, case_id)
     parsed = from_email.parse_email(body.text)
     return {**parsed.to_dict(), "catalog": from_email.catalog_choices()}
+
+
+@router.post("/cases/{case_id}/request-email/from-chain")
+def parse_request_chain(case_id: str, db: Session = Depends(get_db)):
+    """Read the spec from every message filed on the round, rather than from one of them.
+
+    An enquiry is rarely a single email — the opening request goes out, half of it comes back,
+    and the auditor writes again naming what is still outstanding and the column they forgot. A
+    spec read from only the first message is missing what was added later; from only the last,
+    missing everything already sent. So the chain is read message by message and merged.
+
+    Only ZATCA's own messages define the request. A taxpayer reply saying "please find the sales
+    analysis attached" matches the same cue as the auditor asking for it, and letting that create
+    a request item would have the taxpayer asking themselves for something — then be reported as
+    an outstanding gap against them.
+    """
+    from ..requests import chain
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    thread = thread_service.open_thread(db, case_id)
+    if thread is None:
+        raise HTTPException(422, "no round is open, so there is no chain to read")
+    messages = sorted(thread.messages or [], key=lambda m: m.seq)
+    if not messages:
+        raise HTTPException(422, "nothing has been filed on this round yet")
+
+    read = chain.read(messages)
+    return {**read, "catalog": from_email.catalog_choices()}
 
 
 # ============================================================ STEP EMAILS
