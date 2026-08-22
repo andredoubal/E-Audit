@@ -32,7 +32,9 @@ export default function App() {
 
         {/* what ZATCA already holds — dormant under the current scope, still reachable */}
         <Route path="/cases/:id/dossier" element={<Dossier />} />
-        <Route path="/cases/:id" element={<Dossier />} />
+        {/* Opening a case means starting the work, not landing on the dormant
+            planning-era screen. The dossier stays routable at its own path. */}
+        <Route path="/cases/:id" element={<Moved to="/correspondence" />} />
 
         <Route path="/cases/:id/intake" element={<Moved to="/correspondence" />} />
         <Route path="/cases/:id/casework" element={<Moved to="/correspondence" />} />

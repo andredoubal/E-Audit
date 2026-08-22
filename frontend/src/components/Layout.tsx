@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 
-const HERO = "CASE-2025-0481";
+/** What is genuinely global, and nothing else.
+ *
+ *  Correspondence, Investigation and the Audit Report are the three modules of **one case**;
+ *  they were in this sidebar pointing at a hard-coded case id, so "Correspondence" opened the
+ *  demo case whichever case you were actually working — a link that lies about where it goes.
+ *  They belong on `CaseTabs`, which knows which case you are in, and you reach them by opening
+ *  a case from the list. */
 const NAV = [
-  { to: "/", label: "Overview", end: true, icon: "▣" },
-  { to: `/cases/${HERO}/correspondence`, label: "Correspondence", end: false, icon: "✉" },
-  { to: `/cases/${HERO}/investigation`, label: "Investigation", end: false, icon: "▦" },
-  { to: `/cases/${HERO}/report`, label: "Audit report", end: false, icon: "▥" },
-  { to: `/cases/${HERO}/dossier`, label: "Dossier", end: false, icon: "◈" },
+  { to: "/", label: "Cases", end: true, icon: "▣" },
   { to: "/rules", label: "Rulebook", end: false, icon: "▤" },
 ];
 const SOON = ["Legal retrieval"];

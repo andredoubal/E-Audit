@@ -810,6 +810,9 @@ body{margin:0;padding:0 0 60px}
 .kv .v{font-size:13px} .kv .v.gap{color:var(--med);font-weight:600}
 .kv>div{border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--surface)}
 details summary{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600;margin-top:4px}
+.tabhint{font-size:12px;color:var(--muted);margin:0 0 6px}
+.caserow.on{background:var(--surface-2)}
+.caserow.on td{font-weight:600}
 details[open] summary{margin-bottom:6px}
 </style></head><body><div class="wrap">
 <header class="page-head" style="border:none">
@@ -822,7 +825,22 @@ not act. The regulations corpus behind the citations holds 79
 articles, 31 of which have been amended since
 the English edition they are shown in.</div>
 
-<div class="ctabs"><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-correspondence">
+<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list.</p>
+<div class="ctabs"><button class="ctab" data-tab="cases"><b>Cases</b><span>Every case you hold</span></button><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-cases">
+<header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
+<h1>Cases</h1><p class="sub">8 open · ranked by what is worth looking at first</p>
+</div><div><span class="btn">+ Add case</span></div></header>
+
+<div class="panel"><div class="panel-head"><h2>Open cases</h2>
+<span class="muted">Ranked by exposure, deadline, history and how quickly they can be settled
+</span></div>
+<div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
+<th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
+<th>Period</th><th>Status</th><th></th></tr></thead>
+<tbody><tr class="caserow on"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
+<p class="detail-note">Open a case and its three modules appear — Taxpayer Correspondence,
+Investigation, Audit Report. In this walkthrough only <b>CASE-2025-0481</b> is populated; the
+tabs above carry its real output.</p></div></div></div><div class="pane" id="pane-correspondence">
 <header class="page-head"><div><h1>Taxpayer correspondence</h1>
 <p class="sub">CASE-2025-0481 · what we asked for, and what arrived</p></div>
 <div class="chips"><span class="pill pri-high">Round 1</span>
@@ -1188,5 +1206,5 @@ function show(k) {
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
 }
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
-show('correspondence');
+show('cases');
 </script></body></html>

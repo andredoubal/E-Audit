@@ -213,11 +213,17 @@ docs/                  # VAT Mistakes Rulebook (66 rules) + rendered page
 portal.html            # standalone no-backend build of the workbench (see below)
 ```
 
-A case is worked left to right through four tabs — **Intake** (who they are, what
-arrived), **Dossier** (what ZATCA holds), **Casework** (the request/response loop),
-**Reconciliation** (what it means) — with the lifecycle rail on each showing where the
-case is and whose move it is. Under the current scope Intake and Reconciliation carry
-the work; Dossier and Casework are the dormant planning-era screens.
+**The sidebar is what is global; the tabs are what is inside a case.** An auditor lands on
+**Cases** — the queue, with the priority score and the *Add case* button — and opening one
+shows its three modules: **Taxpayer Correspondence** (what we asked, what arrived),
+**Investigation** (what the evidence shows), **Audit Report** (what you concluded).
+
+That split is load-bearing rather than cosmetic. The three modules were briefly in the sidebar
+pointing at a hard-coded case id, so "Correspondence" opened the demo case whichever case you
+were actually working — a link that lied about where it went. Only `Cases` and `Rulebook` are
+application-wide; everything else needs to know which case it is about, so it lives on
+`CaseTabs`. Opening a case goes to its first module; `Dossier` stays routable at its own path
+but is off the tab bar, being a dormant planning-era screen.
 
 ## The agents (and what they may not do)
 

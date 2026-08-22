@@ -43,6 +43,48 @@ def sar(n) -> str:
         return ""
 
 
+# ------------------------------------------------------------------ the case list
+
+def case_list(cases: list, open_case: str) -> str:
+    """Where an auditor starts: every case they hold, and the way to add one.
+
+    The three modules are a *case's* tabs, not the application's. Landing on them would be
+    landing in the middle of one file with no way to see the others, which is not how the work
+    begins — you pick up a case, and the modules are what is inside it.
+    """
+    rows = []
+    for c in cases:
+        p = c.get("priority") or {}
+        band = p.get("band", "")
+        pill = {"high": "pri-high", "medium": "pri-medium"}.get(band.lower(), "pri-low")
+        cls = "caserow on" if c["case_id"] == open_case else "caserow"
+        arrow = '<span class="linklike">open &#9656;</span>' if c["case_id"] == open_case else ""
+        rows.append(
+            f'<tr class="{cls}"><td><span class="pill {pill}">{e(band or "—")}</span></td>'
+            f'<td class="mono">{e(c["case_id"])}</td>'
+            f'<td><b>{e(c["taxpayer"])}</b><div class="sub">{e(c["vat_no"])}</div></td>'
+            f'<td>{e(c["sector"])}</td><td>{e(c["reason"])}</td>'
+            f'<td class="mono">{e(c["period"])}</td>'
+            f'<td><span class="pill status">{e(c["status"])}</span></td>'
+            f'<td>{arrow}</td></tr>')
+
+    return f"""
+<header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
+<h1>Cases</h1><p class="sub">{len(cases)} open · ranked by what is worth looking at first</p>
+</div><div><span class="btn">+ Add case</span></div></header>
+
+<div class="panel"><div class="panel-head"><h2>Open cases</h2>
+<span class="muted">Ranked by exposure, deadline, history and how quickly they can be settled
+</span></div>
+<div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
+<th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
+<th>Period</th><th>Status</th><th></th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table></div>
+<p class="detail-note">Open a case and its three modules appear — Taxpayer Correspondence,
+Investigation, Audit Report. In this walkthrough only <b>{e(open_case)}</b> is populated; the
+tabs above carry its real output.</p></div></div>"""
+
+
 # ------------------------------------------------------------------ the three tabs
 
 def correspondence(loop: dict, threads: dict) -> str:
@@ -234,6 +276,7 @@ def build() -> str:
     z = _get(f"/cases/{CASE}/zatca")
     rep = _get(f"/cases/{CASE}/audit-report")
     cov = _get("/regulatory/coverage")
+    cases = _get("/cases")
     try:
         loop["_followup"] = _get(f"/cases/{CASE}/followup").get("text", "")
     except Exception:                                    # noqa: BLE001
@@ -241,6 +284,7 @@ def build() -> str:
 
     theme = THEME.read_text(encoding="utf-8") if THEME.exists() else ""
     tabs = {
+        "cases": ("Cases", "Every case you hold", case_list(cases, CASE)),
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
         "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
@@ -289,6 +333,9 @@ body{{margin:0;padding:0 0 60px}}
 .kv .v{{font-size:13px}} .kv .v.gap{{color:var(--med);font-weight:600}}
 .kv>div{{border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--surface)}}
 details summary{{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600;margin-top:4px}}
+.tabhint{{font-size:12px;color:var(--muted);margin:0 0 6px}}
+.caserow.on{{background:var(--surface-2)}}
+.caserow.on td{{font-weight:600}}
 details[open] summary{{margin-bottom:6px}}
 </style></head><body><div class="wrap">
 <header class="page-head" style="border:none">
@@ -301,6 +348,7 @@ not act. The regulations corpus behind the citations holds {cov.get('article_cou
 articles, {len(cov.get('amended_since_english_edition', []))} of which have been amended since
 the English edition they are shown in.</div>
 
+<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list.</p>
 <div class="ctabs">{nav}</div>{panes}
 </div><script>
 const tabs = document.querySelectorAll('.ctab');
@@ -309,7 +357,7 @@ function show(k) {{
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
-show('correspondence');
+show('cases');
 </script></body></html>"""
 
 

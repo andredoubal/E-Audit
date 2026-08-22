@@ -128,7 +128,7 @@ export default function Overview() {
               </thead>
               <tbody>
                 {cases.map((c) => (
-                  <tr key={c.case_id} className="rowlink" onClick={() => nav(`/cases/${c.case_id}`)}>
+                  <tr key={c.case_id} className="rowlink" onClick={() => nav(`/cases/${c.case_id}/correspondence`)}>
                     <td>
                       <span
                         className={"pscore pri-" + c.priority.band}
