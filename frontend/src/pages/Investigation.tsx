@@ -8,7 +8,7 @@ import ZatcaPanel from "../components/ZatcaPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
-import LifecycleRail from "../components/LifecycleRail";
+import CaseAssistant from "../components/CaseAssistant";
 import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
 
@@ -446,7 +446,6 @@ export default function Investigation() {
       </div>
 
       <CaseTabs id={id!} />
-      <LifecycleRail id={id!} />
 
       {/* The registration's activities and the audit history — the two facts the roster
           cannot work without: undisclosed secondary-activity revenue is undetectable without
@@ -579,7 +578,8 @@ export default function Investigation() {
             <>
               <p className="detail-note">{modal.detail.note}</p>
               <InvoiceTable invoices={modal.detail.invoices} />
-            </>
+            <CaseAssistant id={id!} />
+    </>
           ) : (
             <DetailBody detail={modal.detail} amount={modal.amount} />
           )}

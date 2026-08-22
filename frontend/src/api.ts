@@ -1033,3 +1033,47 @@ export const removeZatca = async (id: string): Promise<ZatcaState> => {
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 };
+
+// ---------------------------------------------------------------- the case assistant
+
+/** One turn. `action` is the entry from the closed set this turn ran; `did` is set only when
+ *  the turn actually changed something, so an answer reads differently from an action. */
+export interface CaseMessage {
+  seq: number;
+  role: "auditor" | "assistant";
+  content: string;
+  action: string;
+  source: string;
+  did: string;
+  created_at: string;
+}
+export interface AssistantState {
+  case_id: string;
+  messages: CaseMessage[];
+  actions: { key: string; label: string; hint: string }[];
+}
+
+export const getAssistant = (id: string) =>
+  getJSON<AssistantState>(`/cases/${id}/assistant`);
+
+export const askAssistant = (id: string, question: string, action = "") =>
+  postJSON<AssistantState>(`/cases/${id}/assistant`, { question, action });
+
+export const clearAssistant = async (id: string): Promise<AssistantState> => {
+  const r = await fetch(`${BASE}/cases/${id}/assistant`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+};
+
+/** Drop a forwarded email onto the round: the message joins the chain, and any spreadsheets
+ *  attached to it are filed as received documents without a second upload. */
+export const uploadEmail = async (
+  id: string,
+  file: File,
+): Promise<ThreadState & { filed: string[]; skipped: string[]; note: string }> => {
+  const body = new FormData();
+  body.append("file", file);
+  const r = await fetch(`${BASE}/cases/${id}/threads/email`, { method: "POST", body });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status}`);
+  return r.json();
+};

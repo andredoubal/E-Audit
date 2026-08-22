@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
-import LifecycleRail from "../components/LifecycleRail";
 import RoundCard from "../components/RoundCard";
+import CaseAssistant from "../components/CaseAssistant";
 import { getLoop, getThreads, type LoopState, type ThreadState } from "../api";
 
 /** Everything said to the taxpayer, and everything they sent back.
@@ -57,7 +57,6 @@ export default function Correspondence() {
       </header>
 
       <CaseTabs id={id} />
-      <LifecycleRail id={id} />
       {err && <p className="error">{err}</p>}
 
       {/* A reply that claims an attachment with nothing behind it reads, in the trail, exactly
@@ -92,11 +91,28 @@ export default function Correspondence() {
         />
       ))}
 
-      <p className="detail-note">
-        A further round opens only when the investigation cannot settle something on the
-        evidence held and asks for more — from a hypothesis on the{" "}
-        <Link to={`/cases/${id}/investigation`}>Investigation</Link> tab.
-      </p>
+      {/* The next round, shown as the placeholder it is. An auditor should be able to see that
+          the loop exists and where it comes from without having to discover it by accident on
+          another tab — and a round with no question behind it is not a round. */}
+      <div className="roundcard soon">
+        <div className="round-head">
+          <span className="round-n">Round {rounds.length + 1}</span>
+          <span className="round-origin">
+            Opens from the investigation — when a hypothesis cannot be settled on the evidence
+            held, requesting information from the taxpayer starts the next round here.
+          </span>
+          <span className="pill status">coming soon</span>
+        </div>
+        <div className="rstep">
+          <p className="detail-note" style={{ margin: 0 }}>
+            The same four steps, against whatever the next question turns out to be. Raise it
+            from a hypothesis on the{" "}
+            <Link to={`/cases/${id}/investigation`}>Investigation</Link> tab.
+          </p>
+        </div>
+      </div>
+
+      <CaseAssistant id={id} />
     </>
   );
 }

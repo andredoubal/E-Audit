@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
+import CaseAssistant from "../components/CaseAssistant";
 import StepEmails from "../components/StepEmails";
-import LifecycleRail from "../components/LifecycleRail";
 import AuditReport from "../components/AuditReport";
 import TraceInspector from "../components/TraceInspector";
 import {
@@ -58,7 +58,6 @@ export default function Report() {
       </div>
 
       <CaseTabs id={id} />
-      <LifecycleRail id={id} />
 
       {err && <div className="notice err">Could not build the report — {err}</div>}
       {!doc && !err && <p className="muted">Assembling the report…</p>}
@@ -132,6 +131,8 @@ export default function Report() {
           <StepEmails id={id} only={["verdict"]} />
         </>
       )}
+
+      <CaseAssistant id={id} />
     </div>
   );
 }

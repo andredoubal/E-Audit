@@ -4,6 +4,7 @@ import {
   parseRequestEmail,
   recordReply,
   uploadDocument,
+  uploadEmail,
   type Assessment,
   type CorrespondenceThread,
   type Draft,
@@ -101,10 +102,15 @@ export default function RoundCard({
   const [filter, setFilter] = useState<ItemState | null>(null);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const [filed, setFiled] = useState<string[]>([]);
 
   const docs = thread?.documents ?? [];
   const messages = thread?.messages ?? [];
   const rows = assessment?.items ?? [];
+  // A round is not one pass. The chase goes out, they reply with more files, and
+  // steps 3 and 4 recompute against everything on the round.
+  const exchanges = messages.length;
   const outstanding = rows.filter((r) => r.state !== "received").length;
 
   const loadFollowup = useCallback(() => {
@@ -138,6 +144,20 @@ export default function RoundCard({
     } finally { setBusy(""); }
   };
 
+  const sendEmail = async (f: File | null) => {
+    if (!f) return;
+    setBusy("email");
+    setErr("");
+    try {
+      const r = await uploadEmail(id, f);
+      setFiled(r.filed);
+      onChanged();
+      loadFollowup();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not read that email.");
+    } finally { setBusy(""); }
+  };
+
   const send = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy("upload");
@@ -163,6 +183,11 @@ export default function RoundCard({
             <span className="mono"> · {thread.origin_hypothesis_id}</span>
           )}
         </span>
+        {exchanges > 1 && (
+          <span className="pill status" title="Each reply and each chase is an exchange. The round stays open until nothing is outstanding.">
+            {exchanges} exchanges
+          </span>
+        )}
         <span className={"pill " + (thread?.status === "open" ? "pri-low" : "status")}>
           {thread?.status ?? "not started"}
         </span>
@@ -200,13 +225,27 @@ export default function RoundCard({
           <button className="btn ghost" disabled={!!busy || !text.trim()} onClick={readEmail}>
             {busy === "read" ? "Reading…" : "Read what was asked for"}
           </button>
+          <button className="linklike" disabled={!!busy}
+                  onClick={() => emailRef.current?.click()}>
+            {busy === "email" ? "Reading the email…" : "or drop in an .eml / .msg file"}
+          </button>
+          <input ref={emailRef} type="file" accept=".eml,.msg" style={{ display: "none" }}
+                 onChange={(e) => sendEmail(e.target.files?.[0] ?? null)} />
           {!messages.length && !text && (
             <button className="linklike" onClick={() => setText(SAMPLE)}>use a sample</button>
           )}
         </div>
+        {filed.length > 0 && (
+          <div className="callout ok">
+            <b>Filed {filed.length} attachment{filed.length === 1 ? "" : "s"} from that email.</b>{" "}
+            {filed.join(", ")} — they are in step 2 and already checked in step 3.
+          </div>
+        )}
         <p className="detail-note">
-          Reading the email turns it into the specification the response is checked against in
-          step 3. Nothing binds until you confirm the reading.
+          Forwarding the email is usually less work than pasting it, and it brings the
+          attachments with it — the spreadsheets land in step 2 without a second upload.
+          Reading the email turns it into the specification step 3 checks against; nothing binds
+          until you confirm the reading.
         </p>
 
         {parsed && (

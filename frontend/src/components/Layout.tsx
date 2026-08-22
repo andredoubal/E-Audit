@@ -10,7 +10,7 @@ const NAV = [
   { to: `/cases/${HERO}/dossier`, label: "Dossier", end: false, icon: "◈" },
   { to: "/rules", label: "Rulebook", end: false, icon: "▤" },
 ];
-const SOON = ["Legal retrieval", "Case assistant"];
+const SOON = ["Legal retrieval"];
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (

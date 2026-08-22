@@ -39,4 +39,5 @@ from .investigation import (  # noqa: F401
 from .correspondence import (  # noqa: F401
     CorrespondenceThread,
     CorrespondenceMessage,
+    CaseMessage,
 )

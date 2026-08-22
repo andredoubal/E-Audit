@@ -310,6 +310,106 @@ def record_taxpayer_reply(case_id: str, body: ReplyIn, db: Session = Depends(get
     return thread_service.state(db, case_id)
 
 
+@router.post("/cases/{case_id}/threads/email")
+async def upload_email(case_id: str, file: UploadFile = File(...),
+                       db: Session = Depends(get_db)):
+    """File a forwarded email onto the round: the message on the chain, its attachments as
+    documents.
+
+    This is the step that costs a round when it is done by hand. An auditor forwarding the
+    taxpayer's reply is holding the words and the spreadsheets together; making them paste one
+    and separately hunt down the other is asking them to do the filing themselves, and the
+    attachment that gets missed is the one nobody notices until both sides have waited a month.
+    """
+    from ..requests import email_file
+    from ..requests import threads as thread_service
+
+    case = _case_or_404(db, case_id)
+    data = await file.read()
+    if len(data) > 12_000_000:
+        raise HTTPException(413, "file too large for the demo (12 MB limit)")
+
+    parsed = email_file.parse(file.filename or "message.eml", data)
+    if not parsed.ok:
+        raise HTTPException(422, parsed.note or "nothing readable in that email")
+
+    thread = thread_service.open_thread(db, case_id)
+    if thread is None:
+        thread = thread_service.start(db, case_id,
+                                      subject=parsed.subject or "Taxpayer correspondence")
+
+    # Direction from who sent it. An auditor forwarding their own sent mail and an auditor
+    # forwarding the taxpayer's reply are different evidence, and the trail must not flatten
+    # them — so the header decides, not the fact that it arrived through this endpoint.
+    outbound = "zatca" in (parsed.sender or "").lower()
+    thread_service.add_message(
+        db, thread,
+        direction="outbound" if outbound else "inbound",
+        body=parsed.body, subject=parsed.subject,
+        sender=parsed.sender or ("ZATCA" if outbound else "Taxpayer"),
+        recipient=parsed.recipient or ("Taxpayer" if outbound else "ZATCA"),
+        drafted_by="auditor" if outbound else "taxpayer",
+        audit_stage="correspondence")
+
+    req = req_service.current_request(db, case_id)
+    filed = []
+    for name, payload in parsed.attachments:
+        doc = req_service.record_document(
+            db, case=case, req=req, filename=name, data=payload,
+            file_format=name.rsplit(".", 1)[-1].lower())
+        filed.append(doc.filename)
+    if filed and req is not None:
+        req_service.run_checks(db, case)
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action="email-filed",
+                    payload={"file": file.filename, "attachments": filed,
+                             "direction": "outbound" if outbound else "inbound"}))
+    db.commit()
+    return {**thread_service.state(db, case_id),
+            "filed": filed, "skipped": parsed.skipped, "note": parsed.note}
+
+
+# ------------------------------------------------------------------ the case assistant
+
+class AskIn(BaseModel):
+    question: str = ""
+    action: str = ""
+
+
+@router.get("/cases/{case_id}/assistant")
+def assistant_state(case_id: str, db: Session = Depends(get_db)):
+    """The case conversation, and what the assistant is able to do."""
+    from ..agents import assistant
+
+    _case_or_404(db, case_id)
+    return assistant.state(db, case_id)
+
+
+@router.post("/cases/{case_id}/assistant")
+def assistant_ask(case_id: str, body: AskIn, db: Session = Depends(get_db)):
+    """One turn: choose an action from the closed set, run it, record both.
+
+    The assistant cannot run anything this application could not already do from a button — an
+    assistant with open-ended reach would be unauditable, and every figure in its answer is
+    computed by the engine before the reply is written.
+    """
+    from ..agents import assistant
+
+    case = _case_or_404(db, case_id)
+    try:
+        return assistant.ask(db, case, body.question, action=body.action)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.delete("/cases/{case_id}/assistant")
+def assistant_clear(case_id: str, db: Session = Depends(get_db)):
+    from ..agents import assistant
+
+    _case_or_404(db, case_id)
+    return assistant.clear(db, case_id)
+
+
 class AuditorFindingIn(BaseModel):
     statement: str
     outcome_code: str = ""
