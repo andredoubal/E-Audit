@@ -254,9 +254,11 @@ def audit_outcome(case, recon: dict, findings: list[dict], exposure: dict,
                 "decided_at": f.get("decided_at", ""),
                 "decided_by": f.get("decided_by", ""),
                 "auditor_comment": f.get("auditor_comment", ""),
-                # populated once the regulatory agent lands (Phase E); explicit until then,
-                # because "no article was identified" and "nobody looked" must not look alike
-                "regulatory_refs": f.get("regulatory_refs") or [],
+                # The provision the finding rests on. `state` is carried rather than only the
+                # label, because "no article was identified" and "nobody looked" must never
+                # look alike to someone checking a statement before they sign it.
+                "regulatory": f.get("citation") or {"state": "not-found"},
+                "reads_as": f.get("reads_as", ""),
             })
         found = "\n".join(lines)
     else:

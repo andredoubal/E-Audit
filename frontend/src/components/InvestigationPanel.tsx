@@ -11,6 +11,7 @@ import {
   type StoredHypothesis,
 } from "../api";
 import ConfidenceBadge from "./ConfidenceBadge";
+import CitationNote from "./CitationNote";
 import DecisionControls from "./DecisionControls";
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -132,6 +133,9 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
             <b>{STATUS_WORD[h.status]}</b>
             {h.explanation ? " — " + h.explanation : ""}
           </div>
+
+          {/* Why this is a finding in law and not merely a disagreement in a spreadsheet. */}
+          <CitationNote c={h.regulatory} />
 
           {/* a verdict that moved says so, rather than quietly showing only the latest answer */}
           {h.superseded_status && (

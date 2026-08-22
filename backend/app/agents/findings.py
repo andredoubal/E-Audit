@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .. import outcomes as oc
+from ..regulatory import lookup as reg_lookup
 
 
 @dataclass
@@ -41,6 +42,10 @@ class Finding:
     decided_at: str = ""
     decided_by: str = ""
     auditor_comment: str = ""
+    # The provision the finding rests on: what the article establishes, and what follows. A
+    # finding is a finding because an obligation exists, not because a spreadsheet disagreed
+    # with a box — and an auditor defending it to a taxpayer needs the middle of that sentence.
+    citation: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {"code": self.code, "statement": self.statement, "amount": self.amount,
@@ -49,7 +54,18 @@ class Finding:
                 "explanation": self.explanation, "detail": self.detail,
                 "source": self.source, "confidence_band": self.confidence_band,
                 "decided_at": self.decided_at, "decided_by": self.decided_by,
-                "auditor_comment": self.auditor_comment}
+                "auditor_comment": self.auditor_comment, "citation": self.citation,
+                "reads_as": self.reads_as}
+
+
+    @property
+    def reads_as(self) -> str:
+        """Evidence, basis, consequence — the shape an auditor writes a finding in."""
+        c = self.citation or {}
+        if not c or c.get("state") == "not-found":
+            return self.statement
+        return (f"{self.statement} {c['label']} establishes that {c['establishes']}; "
+                f"accordingly, {c['consequence']}.")
 
 
 def _basis(h, a) -> str:
@@ -105,6 +121,7 @@ def from_investigation(hypotheses: list, adjudications: list) -> list[Finding]:
             why=getattr(h, "why", ""),
             explanation=getattr(a, "explanation", None) or (a.get("explanation", "") if isinstance(a, dict) else ""),
             detail=getattr(a, "detail", None) or (a.get("detail", {}) if isinstance(a, dict) else {}),
+            citation=reg_lookup.for_outcome(outcome.code).to_dict(),
         ))
     return sorted(out, key=lambda f: -abs(f.amount))
 

@@ -567,6 +567,8 @@ export interface AuditorDecisionView {
 }
 
 export interface StoredHypothesis {
+  /** the provision this would rest on if accepted; never absent, may be `not-found` */
+  regulatory?: Citation;
   hypothesis_id: string;
   agent: string;
   claim: string;
@@ -862,7 +864,8 @@ export interface ReportTrace {
   decided_at: string;
   decided_by: string;
   auditor_comment: string;
-  regulatory_refs: unknown[];
+  regulatory: Citation;
+  reads_as: string;
 }
 
 export interface ReportField {
@@ -1077,3 +1080,43 @@ export const uploadEmail = async (
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `${r.status}`);
   return r.json();
 };
+
+// ---------------------------------------------------------------- the regulatory basis
+
+/** The provision a finding rests on.
+ *
+ *  `state` is the field to read before quoting anything:
+ *  - `found` — in the corpus, numbering confirmed, English wording current
+ *  - `needs-validation` — the English edition (2021) predates the current Arabic, so the
+ *    wording shown is superseded. Article 14 is in this state and founds six of twelve outcomes
+ *  - `not-found` — no provision identified. Stored and shown, never silence */
+export interface Citation {
+  state: "found" | "needs-validation" | "not-found";
+  outcome_code: string;
+  article: number | null;
+  label: string;
+  title: string;
+  chapter: string;
+  /** editorial gloss of what the article establishes — the article's own text is `text` */
+  establishes: string;
+  consequence: string;
+  text: string;
+  english_current: boolean;
+  last_amended_year: number | null;
+  supporting: { article: number; label: string; title: string }[];
+  note: string;
+}
+
+export interface RegulatoryCoverage {
+  loaded: boolean;
+  article_count: number;
+  english_edition_year: number;
+  amended_since_english_edition: number[];
+  outcomes_total: number;
+  outcomes_with_basis: number;
+  outcomes_without_basis: string[];
+  problems: string[];
+}
+
+export const getRegulatoryCoverage = () =>
+  getJSON<RegulatoryCoverage>("/regulatory/coverage");

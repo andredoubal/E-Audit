@@ -1,4 +1,5 @@
 import { useState } from "react";
+import CitationNote from "./CitationNote";
 import type { ReportTrace } from "../api";
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -102,14 +103,7 @@ export default function TraceInspector({ trace }: { trace: ReportTrace[] }) {
 
                 <div className="trace-step">
                   <span className="k">Regulatory basis</span>
-                  {t.regulatory_refs.length ? (
-                    <span>{t.regulatory_refs.length} reference(s)</span>
-                  ) : (
-                    <span className="muted">
-                      Not identified — the regulatory corpus is not wired in yet, so no article
-                      has been matched to this finding. Stated rather than left blank.
-                    </span>
-                  )}
+                  <CitationNote c={t.regulatory} />
                 </div>
               </div>
             )}

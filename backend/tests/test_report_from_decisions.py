@@ -117,8 +117,15 @@ def test_the_trace_leads_back_to_the_evidence_that_was_tested(api):
     assert entry["basis"], "and the evidence basis the amount is counted against"
     assert entry["evidence"]["document"], "and the document behind it"
     assert entry["evidence"]["rows"], "and how much of it was tested"
-    # the regulatory leg is explicit-but-empty until the corpus lands, never silently absent
-    assert entry["regulatory_refs"] == []
+    # the regulatory leg: the provision the statement rests on, never silently absent
+    reg = entry["regulatory"]
+    assert reg["state"] in ("found", "needs-validation", "not-found")
+    if reg["state"] != "not-found":
+        assert reg["label"].startswith("Article "), "a citation names its article"
+        assert reg["establishes"], "and what that article establishes"
+        assert reg["text"], "and carries the article's own words, so it can be checked"
+        assert entry["reads_as"].startswith(entry["statement"].lstrip("- ")[:30]), \
+            "the finding reads as evidence, then basis, then consequence"
 
 
 def test_an_auditor_authored_finding_reaches_the_report_in_the_auditors_own_words(api):

@@ -42,6 +42,7 @@ from ..recon_engine import reconcile_case
 from ..requests import service as req_service
 from . import calc_service
 from . import zatca_service
+from ..regulatory import lookup as reg_lookup
 
 
 # ---------------------------------------------------------------- context assembly
@@ -154,13 +155,44 @@ def assess_one(h, adj, *, status: str, recon: dict, blocking_gaps: int,
             "A figure recorded on this case could not be reproduced from its source document, "
             "so every amount here is provisional until that is resolved.")
 
+    # The regulatory leg, now that the corpus is loaded. A hypothesis with no outcome code
+    # names no obligation, so it has no provision to rest on and reads `not-found` — which is
+    # correct rather than a gap: the keying tests explain a difference, they do not assert a
+    # breach of anything.
+    citation = reg_lookup.for_outcome(getattr(h, "outcome_code", "") or "")
+
     return conf.assess(
         detail=detail, status=status, blocking_gaps=blocking_gaps,
         corroborating_sources=corroborating,
-        regulatory_state="not-found",       # until the corpus lands (Phase E), honestly absent
+        regulatory_state=citation.state,
         independently_validated=_validated(detail, float(adj.amount or 0)),
         contradictions=contradictions,
     )
+
+
+
+def _record_citation(db, case_id: str, h) -> None:
+    """Write the provision this hypothesis rests on — including when there is none.
+
+    `not-found` is stored as a row rather than as an absent one. A missing row is
+    indistinguishable from nobody having looked, and "the applicable provision could not be
+    identified" is a statement an auditor needs to see rather than infer from silence.
+    """
+    from ..models import HypothesisRegulatoryRef
+
+    c = reg_lookup.for_outcome(getattr(h, "outcome_code", "") or "")
+    row = db.scalar(select(HypothesisRegulatoryRef).where(
+        HypothesisRegulatoryRef.case_id == case_id,
+        HypothesisRegulatoryRef.hypothesis_id == h.id))
+    if row is None:
+        row = HypothesisRegulatoryRef(case_id=case_id, hypothesis_id=h.id)
+        db.add(row)
+    row.lookup_state = c.state
+    row.unit_id = f"vat-ir-art-{c.article}" if c.article else ""
+    row.citation_label = c.label
+    row.authority = "ZATCA"
+    row.article_no = str(c.article or "")
+    row.explanation = c.establishes or c.note
 
 
 # ---------------------------------------------------------------- the run
@@ -204,6 +236,7 @@ def run(db, case: AuditCase, *, trigger: str = "initial", note: str = "") -> Inv
         assessment = assess_one(h, adj, status=status, recon=recon, blocking_gaps=blocking,
                                 all_adjudications=result.adjudications, by_id=by_id,
                                 control_confirmed=control_confirmed)
+        _record_citation(db, case_id, h)
         row = existing.get(h.id)
         if row is None:
             row = PersistedHypothesis(
@@ -358,6 +391,10 @@ def state(db, case: AuditCase) -> dict:
                            "signals": r.confidence_signals or []},
             "contradictions": r.contradictions or [],
             "needs_info_note": r.needs_info_note,
+            # The provision the finding would rest on. Resolved rather than stored, for the
+            # same reason the lifecycle is: it is a pure function of the outcome code and the
+            # corpus, so there is no stale citation to reconcile when either changes.
+            "regulatory": reg_lookup.for_outcome(r.outcome_code or "").to_dict(),
             "first_seen_run": r.first_seen_run, "last_seen_run": r.last_seen_run,
             "stale": r.stale,
             "decision": ({"decision": d.decision, "comment": d.comment,

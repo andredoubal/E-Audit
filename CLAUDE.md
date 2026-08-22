@@ -166,6 +166,12 @@ backend/app/
   casefile/            # the lifecycle machine (derived, never stored)
   dossier/             # everything ZATCA already holds, assembled in one call
   precedent/           # deterministic retrieval + tally over labelled closed cases
+  regulatory/          # the law behind a finding:
+                       #   extract_en.py   article boundaries from an image marker + green title
+                       #   extract_ar.py   article numbers, and what was amended after 2021
+                       #   build.py        both editions joined into a reviewable JSON corpus
+                       #   basis.py        which article founds which outcome (reviewed, not retrieved)
+                       #   lookup.py       found / needs-validation / not-found
   requests/            # the request/response loop:
                        #   catalog.py      what an auditor can ask for
                        #   from_email.py   recover the spec from the email that was sent
@@ -404,6 +410,52 @@ distinction that earns its place is **incomplete** against **needs auditor revie
 a defect the taxpayer must fix, the second is the checker admitting it cannot decide. A chase
 letter written from the second asks for something that was already sent.
 
+## The law behind a finding
+
+`app/regulatory/` + `corpus/`. A finding an auditor can defend has three parts, and until this
+landed the application produced only the first and third:
+
+> what the evidence shows · **why that matters in law** · what follows
+
+`SAL-HIGHER` is not a finding because a spreadsheet totals more than a box. It is a finding
+because **Article 14** imposes VAT on taxable supplies made in the course of an economic
+activity, so supplies the records evidence and the return omits are output tax that was due.
+Article 14 founds six of the twelve outcomes; `basis.py` maps all twelve.
+
+**The mapping is reviewed, not retrieved.** Which provision a finding rests on is a legal
+judgement, and asking a model to pick one per case would answer differently on two runs over
+identical evidence — the one property a tax authority cannot defend. So it is written down,
+validated against the corpus at load time, and a code with no entry resolves to `not-found`
+rather than to whatever ranks first. `establishes` is an editorial gloss so the finding reads as
+a sentence; the article's own text travels with every citation because a paraphrase is what an
+auditor checks *against the source*, not something to rely on.
+
+**Three things about these documents that the code exists to handle:**
+
+- **The English article numbers are images.** Visually every article opens *ARTICLE
+  THIRTY-SEVEN. RELATED PERSONS*, but only the title half is text — the number is a ~10pt
+  picture at the left margin, and pdfplumber, its word-level API and pypdf all return the title
+  with the number silently gone. So `extract_en.py` segments on *structure* (that image marker
+  plus green title text) and takes the number from position.
+- **The number is confirmed by the other edition.** Arabic headers carry the number in words,
+  so `extract_ar.py` parses them and `build.py` only trusts a number both editions agree on.
+  They agree on all 79.
+- **The English is out of date, and says so itself.** It is ZATCA's self-declared *unofficial
+  translation*, Eighth Edition of November 2021; the Arabic carries amendments to November
+  2024. **31 of 79 articles** are therefore shown in superseded wording — Article 14 among
+  them. Those resolve to `needs-validation` with a note naming the amendment year, so
+  superseded text is never quoted as the current rule.
+
+The corpus is a **JSON file committed to the repository**, not a database built at startup:
+somebody has to be able to read what the application believes Article 14 says without running
+anything, and `git diff` has to show it when that changes. Rebuild with
+`python -m app.regulatory.build`.
+
+`HypothesisRegulatoryRef` rows are written on every run — including `not-found` ones, because a
+missing row and "nobody looked" are indistinguishable. The regulatory leg of the confidence
+composite reads from the same lookup, so it is live rather than the flat zero it scored before.
+
+
 ## The auditor's own arithmetic
 
 `app/agents/calculation.py` answers questions off the uploaded documents and checks figures the
@@ -595,7 +647,7 @@ Open http://localhost:5174.
   brands.
 - Frontend build check: `npm run build` (runs `tsc --noEmit` + Vite build).
 - Backend syntax check: `python -m compileall -q app`.
-- Guard tests: `pytest backend/tests` (461 at last count). Three layers, and they answer
+- Guard tests: `pytest backend/tests` (500 at last count). Three layers, and they answer
   different questions — keep them apart:
   - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, …) — is this piece
     right, on a fixture built to isolate it?
@@ -625,10 +677,12 @@ Open http://localhost:5174.
   invented fact under the Authority's letterhead.
 - A **real (redacted) information request** — it defines `required_columns`, and
   the completeness checker is only as good as that spec.
-- **The regulations articles.** The Regulations agent is cite-or-drop: it may not assert a
-  condition without an article behind it. It currently runs the *conditions* checks (field
-  presence, which is deterministic) and a small explicit list of blocked expense categories in
-  `agents/document_tests.py:BLOCKED_TERMS`. That list is a placeholder for the real corpus —
-  when the articles land it becomes a lookup against them, which is data, not code.
+- ~~The regulations articles~~ — supplied. Both editions of the Implementing Regulations are
+  in `corpus/raw/`, and `app/regulatory/` turns them into the citations findings rest on. What
+  is still outstanding is narrower: `agents/document_tests.py:BLOCKED_TERMS` is still twelve
+  substrings rather than a lookup against Article 50's own sub-clauses, and the article's
+  exceptions (re-supply, statutory obligation, the restricted-vehicle carve-outs) are not
+  modelled at all — which is why that test reports "needs review against the article" rather
+  than a disallowance.
 - A **real (redacted) request email.** `requests/from_email.py` is written against a
   conventional one; the cue table is only as good as the phrasing auditors actually use.

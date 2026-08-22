@@ -369,6 +369,30 @@ async def upload_email(case_id: str, file: UploadFile = File(...),
             "filed": filed, "skipped": parsed.skipped, "note": parsed.note}
 
 
+@router.get("/regulatory/coverage")
+def regulatory_coverage():
+    """What the regulations corpus holds, and which outcomes have a provision behind them.
+
+    Published rather than internal: an auditor is entitled to know that six of the twelve
+    outcomes rest on Article 14, and that 31 articles have been amended since the English
+    edition they are shown in.
+    """
+    from ..regulatory import lookup as reg_lookup
+
+    return reg_lookup.coverage()
+
+
+@router.get("/regulatory/articles/{number}")
+def regulatory_article(number: int):
+    """One article, as the corpus holds it."""
+    from ..regulatory import lookup as reg_lookup
+
+    a = reg_lookup.article(number)
+    if a is None:
+        raise HTTPException(404, "article not in the corpus")
+    return a
+
+
 # ------------------------------------------------------------------ the case assistant
 
 class AskIn(BaseModel):
