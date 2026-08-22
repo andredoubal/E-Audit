@@ -708,13 +708,25 @@ def verdict(case_id: str, db: Session = Depends(get_db)):
 # case cannot answer says which kind of gap it is instead of being filled from a guess.
 
 def _audit_report(db: Session, case_id: str) -> dict:
-    """Assemble the report from everything on the case file."""
+    """Assemble the report from everything on the case file.
+
+    The findings here are the ones the **auditor accepted**, not every hypothesis the engine
+    confirmed. That distinction is the whole point: an adjudicated hypothesis is a proposal
+    that survived testing, and it becomes a finding when a person says so. A case with nothing
+    accepted yet reports no finding — which is correct, not broken.
+    """
     from ..agents.calc_service import documents_for
+    from ..agents.findings import exposure
     from ..reporting import audit_report
 
     case = _case_or_404(db, case_id)
     recon = reconcile_case(db, case_id, persist=False)
-    inv = investigate_case(case_id, db)
+    inv_service.ensure_run(db, case)
+    confirmed = inv_service.confirmed_findings(db, case)
+    runs = inv_service.state(db, case)["runs"]
+    inv = {"findings": [f.to_dict() for f in confirmed],
+           "exposure": exposure(confirmed),
+           "conclusion": runs[-1]["conclusion"] if runs else ""}
 
     req = req_service.current_request(db, case_id)
     requested = [{"key": i.catalog_key, "label": i.label} for i in (req.items if req else [])]

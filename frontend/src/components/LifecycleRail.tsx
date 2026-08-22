@@ -39,10 +39,19 @@ export default function LifecycleRail({ id }: { id: string }) {
         {d.no_contact_needed && (
           <span className="pill pri-low">Cleared without contacting the taxpayer</span>
         )}
+        {/* Two stages open at once is the normal shape of this work, not a regression. Said
+            as what it is — the derivation cannot tell whether the case was sent back, so it
+            does not claim that. */}
+        {d.open_with_taxpayer_during_review && (
+          <span className="rail-revisit">
+            ⇄ Review under way with items still outstanding with the taxpayer
+          </span>
+        )}
         <span className="sub">
           <b>{d.current_label}</b>
           {d.next_action ? ` — ${d.next_action}` : ""}
           {d.waiting_on === "taxpayer" && " (waiting on the taxpayer)"}
+          {(d.active?.length ?? 0) > 1 && ` · ${d.active.length} stages open`}
         </span>
       </div>
     </div>

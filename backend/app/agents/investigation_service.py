@@ -28,13 +28,15 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from . import confidence as conf
+from .findings import Finding, exposure
 from .orchestrator import investigate
+from .. import outcomes as oc
 from ..models import (
-    AuditCase, AuditorDecision, EventLog, GapFinding, InvestigationRun, PersistedHypothesis,
-    TaxpayerResponse, VatReturn,
+    AuditCase, AuditorDecision, AuditorFinding, EventLog, GapFinding, InvestigationRun,
+    PersistedHypothesis, TaxpayerResponse, VatReturn,
 )
 from ..models.investigation import (
-    STATUS_INCONCLUSIVE, STATUS_PARTIAL, STATUS_REFUTED, STATUS_SUPPORTED,
+    DECISION_ACCEPTED, STATUS_INCONCLUSIVE, STATUS_PARTIAL, STATUS_REFUTED, STATUS_SUPPORTED,
 )
 from ..recon_engine import reconcile_case
 from ..requests import service as req_service
@@ -260,6 +262,72 @@ def ensure_run(db, case: AuditCase) -> InvestigationRun:
 
 
 # ---------------------------------------------------------------- reading it back
+def confirmed_findings(db, case: AuditCase) -> list[Finding]:
+    """What the auditor accepted — the only thing the report is written from.
+
+    The engine's own verdict is not the audit's conclusion. A hypothesis the adjudicator
+    confirmed is a proposal that survived testing; it becomes a finding when a person says so.
+    Everything else stays on the case file, visible in the investigation, and out of the
+    report.
+
+    Returns the same `Finding` objects the stateless path produces, so `audit_report.build`
+    and `findings.exposure` need no change — they receive the familiar type, just a filtered
+    set, and the basis-dedup arithmetic that keeps one excess from being assessed twice still
+    applies. Auditor-authored findings come through the same door, tagged so the report can
+    tell them apart from anything an agent proposed.
+    """
+    case_id = case.case_id
+    decisions = {
+        d.hypothesis_id: d for d in db.scalars(
+            select(AuditorDecision).where(
+                AuditorDecision.case_id == case_id,
+                AuditorDecision.decision == DECISION_ACCEPTED)).all()
+    }
+    out: list[Finding] = []
+    if decisions:
+        rows = db.scalars(select(PersistedHypothesis).where(
+            PersistedHypothesis.case_id == case_id,
+            PersistedHypothesis.hypothesis_id.in_(list(decisions)))).all()
+        for r in rows:
+            outcome = oc.BY_CODE.get(r.outcome_code or "")
+            if not outcome:
+                # Accepted, but it names no vocabulary entry — a keying explanation, say.
+                # It settled the investigation without being a defect the Authority states.
+                continue
+            d = decisions[r.hypothesis_id]
+            out.append(Finding(
+                code=outcome.code, statement=outcome.statement,
+                amount=round(float(r.amount or 0), 2),
+                effect=outcome.effect, direction=outcome.direction, agent=outcome.agent,
+                hypothesis_id=r.hypothesis_id,
+                basis=(r.detail or {}).get("basis", "") or r.hypothesis_id,
+                why=r.why, explanation=r.explanation, detail=r.detail or {},
+                source="agent-proposed-auditor-confirmed",
+                confidence_band=r.confidence_band,
+                decided_at=d.decided_at.isoformat() if d.decided_at else "",
+                decided_by=d.decided_by, auditor_comment=d.comment))
+
+    for f in db.scalars(select(AuditorFinding).where(AuditorFinding.case_id == case_id)
+                        .order_by(AuditorFinding.seq)).all():
+        outcome = oc.BY_CODE.get(f.outcome_code or "")
+        out.append(Finding(
+            code=f.outcome_code or "AUD-OWN",
+            # The auditor's own words, not the vocabulary's — this did not come from an agent
+            # and must not be dressed in the Authority's standard phrasing as though it had.
+            statement=f.statement,
+            amount=round(float(f.amount or 0), 2),
+            effect=outcome.effect if outcome else oc.DOCUMENTATION,
+            direction=outcome.direction if outcome else "",
+            agent="Auditor", hypothesis_id="",
+            basis=f.basis or f"auditor|{f.seq}",
+            why="Recorded by the auditor during the review.",
+            explanation=f.note, detail={},
+            source="auditor-authored",
+            decided_at=f.created_at.isoformat() if f.created_at else "",
+            decided_by=f.created_by, auditor_comment=f.note))
+    return sorted(out, key=lambda f: -abs(f.amount))
+
+
 def state(db, case: AuditCase) -> dict:
     """The persisted investigation as the UI needs it: hypotheses, decisions, run history."""
     case_id = case.case_id

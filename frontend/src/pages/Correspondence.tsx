@@ -3,6 +3,9 @@ import { useParams } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
 import LifecycleRail from "../components/LifecycleRail";
 import VerifyBadge from "../components/VerifyBadge";
+import RequestEmailPanel from "../components/RequestEmailPanel";
+import UploadsPanel from "../components/UploadsPanel";
+import StepEmails from "../components/StepEmails";
 import {
   demoResponseFileUrl,
   getFollowup,
@@ -112,7 +115,7 @@ function Letter({ draft, title }: { draft: Draft; title: string }) {
  *  starts another round trip measured in weeks. The round counter at the top is the metric
  *  that matters; everything on this page exists to keep it at one.
  */
-export default function Casework() {
+export default function Correspondence() {
   const { id = "" } = useParams();
   const [plan, setPlan] = useState<RequestPlan | null>(null);
   const [loop, setLoop] = useState<LoopState | null>(null);
@@ -195,6 +198,18 @@ export default function Casework() {
       <CaseTabs id={id} />
       <LifecycleRail id={id} />
       {err && <p className="error">{err}</p>}
+
+      {/* The request that went out in the auditor's own words, and what came back against it.
+          Both live here now: the email and the documents it asked for are one conversation,
+          and splitting them across two screens made the auditor hold the link in their head. */}
+      <RequestEmailPanel id={id} />
+      <UploadsPanel
+        id={id}
+        onUploaded={() => {
+          // a new document changes the gaps, so the loop and the chase letter both re-read
+          getLoop(id).then((st) => { setLoop(st); refreshFollowup(st); }).catch(() => {});
+        }}
+      />
 
       {/* ---------------------------------------------- the plan */}
       {plan && (
@@ -457,9 +472,14 @@ export default function Casework() {
       {loop?.complete && started && (
         <div className="callout ok">
           <b>The response meets the request.</b> Nothing blocking remains, so the substantive
-          review can open — see the Reconciliation tab.
+          review can open — see the Investigation tab.
         </div>
       )}
+
+      {/* The drafts that go back out: the chase for what is still missing, and the verdict
+          once there is one. Engine-authored facts, model-written prose, verified before it
+          is shown. */}
+      <StepEmails id={id} />
     </>
   );
 }

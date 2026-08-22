@@ -1,12 +1,15 @@
 import { NavLink } from "react-router-dom";
 
-/** The lifecycle, in order. A case is worked left to right: understand who this is and what
- *  we already hold, decide what to ask for and chase it, then reconcile and conclude. */
+/** The three modules a case is worked in. Not a wizard: an auditor part-way through the
+ *  investigation who finds they need another document goes back to Correspondence and returns,
+ *  so these are places to stand rather than steps to complete in order.
+ *
+ *  Dossier — what ZATCA already holds — is still routable and linked from the case header. It
+ *  is planning-era and dormant under the current scope, so it does not earn a place here. */
 const TABS = [
-  { to: "/intake", label: "Intake", hint: "Who they are, what arrived" },
-  { to: "", label: "Dossier", hint: "What ZATCA already holds" },
-  { to: "/casework", label: "Casework", hint: "Request, response, gaps" },
-  { to: "/reconciliation", label: "Reconciliation", hint: "What qualifies, and what it means" },
+  { to: "/correspondence", label: "Taxpayer Correspondence", hint: "What we asked, what arrived" },
+  { to: "/investigation", label: "Investigation", hint: "What the evidence shows" },
+  { to: "/report", label: "Audit Report", hint: "What you concluded" },
 ];
 
 export default function CaseTabs({ id }: { id: string }) {
@@ -16,7 +19,6 @@ export default function CaseTabs({ id }: { id: string }) {
         <NavLink
           key={t.label}
           to={`/cases/${id}${t.to}`}
-          end={t.to === ""}
           className={({ isActive }) => "casetab" + (isActive ? " active" : "")}
         >
           <b>{t.label}</b>

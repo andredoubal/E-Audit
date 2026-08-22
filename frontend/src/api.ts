@@ -370,6 +370,12 @@ export interface Lifecycle {
   complete: boolean;
   /** the auto-clear claim: this case resolved without any request to the taxpayer */
   no_contact_needed: boolean;
+  /** every stage that is open right now — an audit is not a wizard, and a case that has
+   *  gone back for another document is legitimately in two places at once */
+  active: string[];
+  /** the review is proceeding while something is still outstanding with the taxpayer —
+   *  the normal shape of this work, and not a claim that the case was sent back */
+  open_with_taxpayer_during_review: boolean;
 }
 
 /* ---- the request/response loop (app/requests) ------------------------------- */
@@ -802,3 +808,63 @@ export const deleteCalc = (id: string, calcId: number) =>
   fetch(`/api/cases/${id}/calc/${calcId}`, { method: "DELETE" }).then((r) => r.json());
 
 export const getStepEmails = (id: string) => getJSON<StepEmails>(`/cases/${id}/emails`);
+
+/* ---------------------------------------------------------------- the audit report
+   Built from what the auditor accepted, not from every hypothesis the engine confirmed —
+   so a case with nothing accepted honestly reports no finding. The Word and printable
+   renders come from one HTML render server-side (see backend/app/reporting/render.py). */
+
+export interface ReportTrace {
+  statement: string;
+  carries_amount: boolean;
+  amount: number;
+  code: string;
+  hypothesis_id: string;
+  agent: string;
+  basis: string;
+  why: string;
+  explanation: string;
+  evidence: {
+    document: string;
+    rows: number | null;
+    examples: unknown[];
+    listing_total?: number | null;
+    declared?: number | null;
+  };
+  source: string;
+  confidence_band: string;
+  decided_at: string;
+  decided_by: string;
+  auditor_comment: string;
+  regulatory_refs: unknown[];
+}
+
+export interface ReportField {
+  label: string;
+  value: string;
+  note: string;
+  held: boolean;
+  trace: ReportTrace[];
+}
+
+export interface ReportSection {
+  title: string;
+  fields: ReportField[];
+}
+
+export interface AuditReportDoc {
+  title: string;
+  case_id: string;
+  taxpayer: string;
+  sections: ReportSection[];
+  completeness: { fields: number; filled: number; outstanding: number };
+}
+
+export const getAuditReport = (id: string) =>
+  getJSON<AuditReportDoc>(`/cases/${id}/audit-report`);
+
+/** Served as application/msword — styled HTML that Word opens and can edit, not a native
+ *  .docx binary. Honest about what it is; good enough for a draft an auditor works on. */
+export const auditReportDocUrl = (id: string) => `/api/cases/${id}/audit-report.doc`;
+/** The same render with a print stylesheet — the browser's own print-to-PDF does the rest. */
+export const auditReportHtmlUrl = (id: string) => `/api/cases/${id}/audit-report.html`;

@@ -604,3 +604,38 @@ input.letter-input,select.letter-input{min-height:0}
    part of the audit trail even when it no longer applies — but visibly set back. */
 .hyp.stale{opacity:.72}
 .hyp.stale .agent{font-style:italic}
+
+/* --- the audit report, and where its sentences came from --------------------------- */
+.rep-section{margin:0 0 22px}
+.rep-section:last-child{margin-bottom:0}
+.rep-h{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--brand-deep);margin:0 0 9px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+:root[data-theme="dark"] .rep-h{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .rep-h{color:var(--brand)}}
+/* A field the case cannot answer is styled, never hidden. A report that quietly dropped its
+   unanswered fields would look finished when it is not. */
+.kv .v.gap{color:var(--med);font-weight:600}
+
+.trace{display:flex;flex-direction:column;gap:3px}
+.trace-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
+  font-weight:700;margin:0 0 6px}
+.trace-row{border-bottom:1px solid var(--line)}
+.trace-row:last-child{border-bottom:none}
+.trace-line{display:flex;gap:9px;align-items:baseline;width:100%;text-align:left;border:none;
+  background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;padding:9px 2px;
+  line-height:1.45}
+.trace-line:hover{color:var(--brand-deep)}
+:root[data-theme="dark"] .trace-line:hover{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .trace-line:hover{color:var(--brand)}}
+.trace-mark{color:var(--faint);flex:none}
+.trace-stmt{flex:1}
+.trace-body{padding:2px 2px 13px 24px;display:flex;flex-direction:column;gap:7px}
+.trace-step{display:flex;gap:10px;font-size:12.5px;line-height:1.5;align-items:baseline}
+.trace-step .k{flex:none;width:130px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--faint);font-weight:700}
+.trace-step code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+/* --- the rail, when more than one stage is live ------------------------------------ */
+.rail-stage.revisit{position:relative}
+.rail-revisit{font-size:11.5px;color:var(--med);font-weight:650}

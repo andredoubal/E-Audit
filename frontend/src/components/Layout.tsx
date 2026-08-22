@@ -4,12 +4,13 @@ import { NavLink } from "react-router-dom";
 const HERO = "CASE-2025-0481";
 const NAV = [
   { to: "/", label: "Overview", end: true, icon: "▣" },
-  { to: `/cases/${HERO}`, label: "Dossier", end: true, icon: "◈" },
-  { to: `/cases/${HERO}/casework`, label: "Casework", end: false, icon: "✉" },
-  { to: `/cases/${HERO}/reconciliation`, label: "Reconciliation", end: false, icon: "▦" },
+  { to: `/cases/${HERO}/correspondence`, label: "Correspondence", end: false, icon: "✉" },
+  { to: `/cases/${HERO}/investigation`, label: "Investigation", end: false, icon: "▦" },
+  { to: `/cases/${HERO}/report`, label: "Audit report", end: false, icon: "▥" },
+  { to: `/cases/${HERO}/dossier`, label: "Dossier", end: false, icon: "◈" },
   { to: "/rules", label: "Rulebook", end: false, icon: "▤" },
 ];
-const SOON = ["Legal retrieval", "Audit report", "Auditor approval"];
+const SOON = ["Legal retrieval", "ZATCA invoice match", "Auditor approval"];
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (

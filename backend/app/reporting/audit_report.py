@@ -45,6 +45,12 @@ class Field:
     label: str
     value: str
     note: str = ""          # the guidance the template carries under the label
+    # Where the content came from, when it came from findings. The rendered value stays prose,
+    # because prose is what belongs in the document; the trace carries the same content as
+    # structured references so an auditor can follow a sentence back to the hypothesis, the
+    # evidence and the decision behind it before signing. `render.py` ignores this — the Word
+    # and PDF output is byte-for-byte what it was.
+    trace: list[dict] = field(default_factory=list)
 
     @property
     def held(self) -> bool:
@@ -59,7 +65,20 @@ class Section:
     def to_dict(self) -> dict:
         return {"title": self.title,
                 "fields": [{"label": f.label, "value": f.value, "note": f.note,
-                            "held": f.held} for f in self.fields]}
+                            "held": f.held, "trace": f.trace} for f in self.fields]}
+
+
+def _evidence_ref(detail: dict) -> dict:
+    """The evidence a finding rests on, as the trace needs it: the file, how much of it, and
+    the rows actually cited. Read from the adjudicator's own detail rather than re-derived, so
+    the trace cannot describe something other than what was tested."""
+    rows = next((detail[k] for k in ("rows_matched", "rows_failing", "rows_unsupported",
+                                     "rows_outside", "rows", "rows_tested")
+                 if isinstance(detail.get(k), int)), None)
+    return {"document": detail.get("filename", ""), "rows": rows,
+            "examples": (detail.get("examples") or [])[:5],
+            "listing_total": detail.get("listing_total"),
+            "declared": detail.get("declared")}
 
 
 def _sar(v) -> str:
@@ -202,6 +221,7 @@ def audit_outcome(case, recon: dict, findings: list[dict], exposure: dict,
             "NOTE: the records supplied do not yet meet the terms of the request. The figures "
             "above should be treated as a floor rather than a settled position.")
 
+    trace: list[dict] = []
     if findings:
         lines = []
         seen_basis: set[str] = set()
@@ -211,9 +231,33 @@ def audit_outcome(case, recon: dict, findings: list[dict], exposure: dict,
             seen_basis.add(basis)
             amount = f" {_sar(f['amount'])}." if (f.get("amount") and first) else ""
             prefix = "  Also characterised as: " if not first else "- "
-            lines.append(f"{prefix}{f['statement']}{amount}")
+            statement = f"{prefix}{f['statement']}{amount}"
+            lines.append(statement)
             if first and f.get("explanation"):
                 lines.append(f"    Basis: {f['explanation']}")
+            # The same line, as a reference rather than a sentence. `first` is carried through
+            # because an alternative characterisation of an excess already counted is exactly
+            # the thing an auditor needs to see is not a second amount.
+            trace.append({
+                "statement": statement.strip(),
+                "carries_amount": bool(f.get("amount") and first),
+                "amount": round(float(f.get("amount") or 0), 2),
+                "code": f.get("code", ""),
+                "hypothesis_id": f.get("hypothesis_id", ""),
+                "agent": f.get("agent", ""),
+                "basis": basis,
+                "why": f.get("why", ""),
+                "explanation": f.get("explanation", ""),
+                "evidence": _evidence_ref(f.get("detail") or {}),
+                "source": f.get("source", ""),
+                "confidence_band": f.get("confidence_band", ""),
+                "decided_at": f.get("decided_at", ""),
+                "decided_by": f.get("decided_by", ""),
+                "auditor_comment": f.get("auditor_comment", ""),
+                # populated once the regulatory agent lands (Phase E); explicit until then,
+                # because "no article was identified" and "nobody looked" must not look alike
+                "regulatory_refs": f.get("regulatory_refs") or [],
+            })
         found = "\n".join(lines)
     else:
         found = ("No finding was established from the records supplied. The declared position "
@@ -264,7 +308,7 @@ def audit_outcome(case, recon: dict, findings: list[dict], exposure: dict,
         Field("Description of Audit activities", "\n".join(activities),
               "Note all key actions taken during the audit, including records examined, "
               "creditability checks performed, and the summary results."),
-        Field("Audit Findings", found),
+        Field("Audit Findings", found, trace=trace),
         Field("Audit Recommendations", recommendations),
         Field("Rulings", FOR_AUDITOR,
               "Note details of any rulings given to the taxpayer, verbally or in writing. "

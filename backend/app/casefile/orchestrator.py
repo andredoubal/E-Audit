@@ -231,11 +231,30 @@ def status(db: Session, case: AuditCase, *, recon: dict | None = None,
             summary="Opens once the review can conclude."))
 
     current = next((s for s in stages if s.state in OPEN), stages[-1])
+
+    # An audit is not a wizard. An auditor half-way through the review who finds they need
+    # another document goes back to the taxpayer and returns — so more than one stage can
+    # legitimately be open at once, and the rail has to be able to say so. `current` keeps its
+    # old meaning (the earliest open stage, whose next action is the one to name) because the
+    # rest of the app reads it; `active` is what lets the UI light both.
+    active = [s.key for s in stages if s.state in OPEN]
+    # The review proceeding while something is still outstanding with the taxpayer is the
+    # normal shape of this work, not a regression. Reported as exactly that: this says the two
+    # are open together, which is what can be derived — it does not claim the case was
+    # *sent back*, because nothing here records the order those stages opened in.
+    review = next((s for s in stages if s.key == "review"), None)
+    correspondence = next((s for s in stages if s.key == "correspondence"), None)
+    open_with_taxpayer_during_review = bool(
+        correspondence is not None and correspondence.state in OPEN
+        and review is not None and review.state in OPEN)
+
     return {
         "case_id": case.case_id,
         "stages": [s.to_dict() for s in stages],
         "current": current.key,
         "current_label": current.label,
+        "active": active,
+        "open_with_taxpayer_during_review": open_with_taxpayer_during_review,
         "waiting_on": current.owner if current.state in OPEN else "",
         "next_action": current.next_action,
         "complete": all(s.state in (DONE, SKIPPED) for s in stages),

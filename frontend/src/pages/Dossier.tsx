@@ -391,7 +391,7 @@ export default function Dossier() {
             </div>
             <p className="detail-note">
               A count and a sum only. What the population <i>should</i> add to, once qualification
-              rules run, is the Reconciliation tab.
+              rules run, is the Investigation tab.
             </p>
           </div>
         </div>

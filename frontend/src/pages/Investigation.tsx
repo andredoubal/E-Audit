@@ -3,13 +3,12 @@ import { useParams, Link } from "react-router-dom";
 import TaxpayerBrief from "../components/TaxpayerBrief";
 import AiNarration from "../components/AiNarration";
 import NextBestAction from "../components/NextBestAction";
-import AuditReport from "../components/AuditReport";
 import InvestigationPanel from "../components/InvestigationPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
-import StepEmails from "../components/StepEmails";
 import CaseTabs from "../components/CaseTabs";
 import LifecycleRail from "../components/LifecycleRail";
+import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
 
 /** One step in the narrowing from the population to the qualifying set.
@@ -385,7 +384,7 @@ function Evidence({ d, open }: { d: BoxResult; open: (title: string, detail?: De
   );
 }
 
-export default function Reconciliation() {
+export default function Investigation() {
   const { id } = useParams();
   const [d, setD] = useState<Recon | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -448,6 +447,10 @@ export default function Reconciliation() {
       <CaseTabs id={id!} />
       <LifecycleRail id={id!} />
 
+      {/* The registration's activities and the audit history — the two facts the roster
+          cannot work without: undisclosed secondary-activity revenue is undetectable without
+          the activity list, and a repeat of a prior root cause is the first thing to check. */}
+      <CaseContextPanel id={id!} />
       <TaxpayerBrief id={id} />
 
       <div className="tiles">
@@ -555,14 +558,16 @@ export default function Reconciliation() {
       <FindingsPanel id={id} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
       <NextBestAction id={id} rev={rev} />
+      {/* What the taxpayer offered as an explanation, and how much of the difference the
+          auditor accepts it accounts for. It lives here rather than with the correspondence
+          because it is measured against the difference — without that figure beside it the
+          amount means nothing. */}
       <TaxpayerResponsePanel
         id={id}
         difference={d.unexplained}
         priorPeriodDeclared={d.prior_period_correction_declared}
         onChanged={() => setRev((r) => r + 1)}
       />
-      <StepEmails id={id} rev={rev} />
-      <AuditReport id={id} rev={rev} />
 
       {modal && (
         <Modal title={modal.title} onClose={() => setModal(null)}>

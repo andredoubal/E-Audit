@@ -32,12 +32,24 @@ class Finding:
     why: str = ""             # what triggered the hypothesis
     explanation: str = ""     # the adjudicator's engine-authored account of the verdict
     detail: dict = field(default_factory=dict)
+    # Where this came from, and what the auditor did about it. Empty on the stateless path
+    # (the engine's own view); populated once a finding is read back from the case file, so a
+    # report can show that a person confirmed it and when — and can tell an agent's proposal
+    # apart from something the auditor wrote themselves.
+    source: str = ""          # agent-proposed-auditor-confirmed | auditor-authored
+    confidence_band: str = ""
+    decided_at: str = ""
+    decided_by: str = ""
+    auditor_comment: str = ""
 
     def to_dict(self) -> dict:
         return {"code": self.code, "statement": self.statement, "amount": self.amount,
                 "effect": self.effect, "direction": self.direction, "agent": self.agent,
                 "hypothesis_id": self.hypothesis_id, "basis": self.basis, "why": self.why,
-                "explanation": self.explanation, "detail": self.detail}
+                "explanation": self.explanation, "detail": self.detail,
+                "source": self.source, "confidence_band": self.confidence_band,
+                "decided_at": self.decided_at, "decided_by": self.decided_by,
+                "auditor_comment": self.auditor_comment}
 
 
 def _basis(h, a) -> str:
