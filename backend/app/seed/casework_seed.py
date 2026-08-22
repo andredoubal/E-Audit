@@ -20,6 +20,7 @@ from ..agents.correspondence import draft_request
 from ..models import AuditCase, Taxpayer
 from ..agents import zatca_service
 from ..requests import service
+from ..requests import threads as thread_service
 from . import demo_files
 
 HERO = "CASE-2025-0481"
@@ -39,6 +40,14 @@ def build(db: Session) -> dict:
     issued = (case.referral_date or date.today()) + timedelta(days=4)
     drafted = draft_request(case, taxpayer, req)
     service.issue(db, req, body=drafted["text"], source=drafted["source"], when=issued)
+
+    # Round one is a conversation, so it opens as one and the request letter is the first thing
+    # on it. Seeding the round without its thread left the demo saying "nothing sent yet" above
+    # a chase letter itemising the gaps in a document that had plainly arrived.
+    thread = thread_service.start(db, case.case_id, subject=req.subject)
+    thread_service.add_message(db, thread, direction="outbound", body=drafted["text"],
+                               subject=req.subject, drafted_by="ai-drafted",
+                               audit_stage="request", request_id=req.id)
 
     # the taxpayer answers the sales analysis — late, and not quite as asked
     sales_item = next((i for i in req.items if i.catalog_key == "sales-analysis"), req.items[0])

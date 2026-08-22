@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
+import StepEmails from "../components/StepEmails";
 import LifecycleRail from "../components/LifecycleRail";
 import AuditReport from "../components/AuditReport";
 import TraceInspector from "../components/TraceInspector";
@@ -124,6 +125,11 @@ export default function Report() {
           {/* The AI's narrative pass over the same case — drafted, verified, and clearly
               separate from the structured report above, which is the document of record. */}
           <AuditReport id={id} />
+
+          {/* The letter that closes the case. It belongs here rather than in correspondence:
+              a verdict is what you send once there is a position to report, and the round
+              cards are for the exchange that gets you there. */}
+          <StepEmails id={id} only={["verdict"]} />
         </>
       )}
     </div>

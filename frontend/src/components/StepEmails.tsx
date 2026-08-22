@@ -7,7 +7,13 @@ import VerifyBadge from "./VerifyBadge";
  *  A draft appears only when its trigger exists — a chase with nothing outstanding, or a verdict
  *  before there is a position to report, would train the auditor to ignore the panel. Nothing is
  *  sent from here; every figure in a draft was established by the engine before Claude saw it. */
-export default function StepEmails({ id, rev }: { id?: string; rev?: number }) {
+export default function StepEmails({ id, rev, only }: {
+  id?: string;
+  rev?: number;
+  /** Which drafts to show. The chase now lives beside the gaps it is written from, in step 4
+   *  of the round it belongs to, so the Report tab asks for the verdict alone. */
+  only?: ("follow-up" | "verdict")[];
+}) {
   const [d, setD] = useState<StepEmailsData | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -27,7 +33,7 @@ export default function StepEmails({ id, rev }: { id?: string; rev?: number }) {
 
   return (
     <>
-      {d.emails.map((e) => (
+      {d.emails.filter((e) => !only || only.includes(e.kind)).map((e) => (
         <div className="panel ai-panel" key={e.kind}>
           <div className="panel-head">
             <div className="ai-h">

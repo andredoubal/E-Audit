@@ -110,10 +110,15 @@ def record_document(db: Session, *, case: AuditCase, req: InformationRequest | N
     else:
         content = {"format": file_format or "", "columns": [], "rows": [],
                    "stated_totals": {}, "note": "No content supplied."}
-    # File it against whichever enquiry is open. This is what lets the investigation see that
-    # the thing it asked for has arrived: a document with no thread answers no question.
+    # File it against whichever enquiry is open, opening one if the case has none. A document
+    # with no thread answers no question: it would not show up on the round it belongs to, and
+    # the investigation could not see that the thing it asked for had arrived.
     from . import threads as thread_service
     thread = thread_service.open_thread(db, case.case_id)
+    if thread is None:
+        thread = thread_service.start(
+            db, case.case_id,
+            subject=req.subject if req is not None else "Taxpayer correspondence")
 
     doc = ReceivedDocument(
         case_id=case.case_id, request_id=req.id if req is not None else None,
