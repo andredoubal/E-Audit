@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E-AUDIT — walkthrough</title>
+<style>/* ZATCA VAT Audit Agent — design system (shared with the Rulebook page)
+   Palette: navy/teal with a warm orange accent, cream light theme / deep-navy dark theme. */
+:root{
+  --brand:#1F7A7E; --brand-deep:#123F41; --brand-tint:#E4F2F1; --gold:#FF7F51;
+  --bg:#FAF5EB; --surface:#FFFFFF; --surface-2:#F2ECDC;
+  --ink:#12253F; --muted:#5A7A9A; --faint:#9BB4C9; --line:#E1D9C5;
+  --high:#C4453A; --high-bg:#F7E3E0; --med:#D9812E; --med-bg:#FBEADA; --low:#4C7A2C; --low-bg:#E8F0DD;
+  --shadow:0 1px 2px rgba(18,37,63,.06), 0 10px 26px -16px rgba(18,37,63,.22);
+  --sans:'Cairo',ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:'Fira Code',ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  /* a faint audit/inspection motif used only in the body atmosphere, never behind content */
+  --atmosphere:url('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wgARCADhAZADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAECAwQF/8QAFwEBAQEBAAAAAAAAAAAAAAAAAAECA//aAAwDAQACEAMQAAAB+KO/IAAAAAUigLFlAsASwiyJKXM1JctSXKyVKIAIAACAO46ZAAFAAAAFgUQKFICSiSpZKJNSWTQxNyXLUjKxQAQICu43lYKgoAAAAAAKAACKSLTKwXMNMl1IEtOc7SXjN5lggFQPQN4AAAqCpQAAAABYKg0ZubmpqLYiiTUWKMtDNROs5dq8suc6CUD0DeAAAAAAFgqCgAqCoNSdEy6yXk6YIQqCwAEsGsarhnWc6CUDuN4AWUAAAAAAWUAAAdOfQ2DGN5MgAAASwWVOON4zsJQO43gCoKgoAAAAAKgpsw6U5dVKQw1kzHQ5zrgzNCIKBYTljeM7CUDuN4AAAAqCoKlAAAHbj2LKMzWTVxszzbNgzy6cwQ3z3kqUllTjnWc7CUDureIoiiKIoloiiKIoiiLTPVoTUItJZk49+PQ2kJy3CNwyDNozROWbMbBQPQreIoiiKJQAAAAKJqU6gznWToDnLDK4NlItMtE5tZhLS8dclIzsAD0K1gAKAAAAAFIolDsxRm5OlxYzLkZsJvJOmuXZFYZzgmrmYVmzO0stAA9I1kEAAAACliKgqCg0BLCgzKSNVnKyLYTeYSY1ibmbJqSxoKSlhT0DWQBSKIoAAAAAFkqUBAsgQSQllsQsQZuZqSxqBYKBQPQNRZQAAAVIoiiLIABKEqEqEBEAiUkLElRGkFgtgAUD0DUUoAIsCgBIIsAAEoQEBIBAQiCWBZBYFgtgAUD/xAAkEAABAwQCAgIDAAAAAAAAAAABABARIDAxUAJAEkEhMjNwgP/aAAgBAQABBQL90RTCjVza8dLN2V5Arlw+Njx/HooKhRdH10PFpRu+tCHN30dDxwxvHQ8cMVDSoKiye7C8VAXxSSsrCOLJ7orKy5w5qPdFBQbkuOGONMMVHLnDRV67kVSpYOWlTUe4MsaxcPcDmg3j3Q5oNM0lydBNEo1BydbCj+Pf/8QAGxEAAgIDAQAAAAAAAAAAAAAAAREQQAAgYHD/2gAIAQMBAT8B4BypfmAFV44AqPQcj//EABoRAAEFAQAAAAAAAAAAAAAAAAEAEBFAYFD/2gAIAQIBAT8BwcvGMCNgI2T0SbE6n//EABwQAAEDBQAAAAAAAAAAAAAAAAEAAlAREiKAkP/aAAgBAQAGPwLVbIK5pqJJ8kZI9vf/xAAnEAADAAEDBAICAgMAAAAAAAAAAREQICExQEFQYVFxMIFwgJGh4f/aAAgBAQABPyH+Bp5OEITxcwhEREyQhPCwhVhdNKU2Y27bjXgkjZDyhCaZlMuBbS3tcibhOflD8AuOh4H0PptyMjIyMjIyMjIxJwj+MVlEZ/gj9EfyieyL5J7J7J7J7J7Q17wX4BHAuDblH+NA/A8c8/yrl4Uc9E/CuH4QVDV7FH2en+j9GExdPZ9cV9yMUC2W2GyvAl+gtmgl4GhPR265wwyHCFhohKp2ONMnqduucFo45NuJPtrkMWew/AzQljkFxpkqNkIfItB9WlXilpYZ7jbFRUMxTvg6WUs8R9fO6y+cPn7H0QhNssXJstxuphCHLW5YZY6c6ITYamUhx9Zy0Hnlh4W3HAkeEQm2kN9dcG8UgZUo87P/AIfYTXwXA3hsfgXoeZhBERGwxjY/DMhNVKMf9Bf/2gAMAwEAAgADAAAAEDXbTTTGMjanfHJyXY7kfawwf6fPfeQQQFLo/eKOWmVgdI7igYwfLDAAAHPPPAgAManr+ELJiAQHvPPPDCAAMPPLDEVOwVLID6DfvgAAAAAPLDEMDCL1sp33w1zvfvvPKAAHPPPKAAAFPEICAAFA1fvvPDDAAEEPPDBDCJMCADFPB1fvvPPPPDDCAENOOPOLOGIFAM/fvvPPPPIAAABHOMKBNDOPPMK3/vsMMMJDDDDENAIAPAKKDf6nDPvswgDDDDDGMNALL9qs6vmPElLEwB3/AP8A/wDLzzw0xWOOZnGVu/qUuvfOsshghDDGy88OI+lkQ8Kqwgvqgvvu8cdvv1zy82SrQzCaPwgvoAPnggf3vvgww/nHY4XYQIwgv//EAB0RAQEBAQADAQEBAAAAAAAAAAEAEUAQIDEwQVH/2gAIAQMBAT8Q/LLOjLPbbeZrY2rG1Ig8P1gD03xl8jgPv4MdDHQx0MdH1yOXbZb+3HtszTF/pHDsszWYIRwrLL5yCI4WZjwEERwvqRHg9P/EABwRAAMBAQEBAQEAAAAAAAAAAAABEUAxMCEgQf/aAAgBAgEBPxDxpS+j9aXXD4VEFRExhqYeIbf7X0eB+CH3S60utCOtC4PNRH8MlKUo8ylG8rel6X5f/8QAKBAAAgEDAwIHAQEBAAAAAAAAAAERECExQVFhIHEwQFCBkaGx8NHx/9oACAEBAAE/ECKwQQQRSCCCKW2LbHt1sYxjQ0NDQ/RI62qOjGNDQ0NEEefggS6YGMsQNEEIaGhhoaIII8/JKLUkkZ7UdIIIIoYYYaGiPRJPY9iOCe1ETkOQjuMNhllhrztixalqQJyCyxqwhtoN3qSy5cuSE4leURxDSlIcD1oNegSSDfIMeCWyOgQQQRQ0XQxlmnwJ4K9pP9Iso0HaTdCQ/QMw7sSI8GCCBoaHjcL9GfXcuXLksl7EvYuXLl6XL7kPdEcDsHAcBwI4EcCOD7OD7OD7JC32JztL3EzRfJ2Rp0+iDKgh7/Ik1+R/2BLqtK03fB/EHZ+CW0mUGh9kO0ucpfpn5iSSeprH6jZYgl/Iclh6CZty5Gl+Ez6yM/QEfuKn40efCZ9Uy9B/Sv40eRKcDZZt3HC1XySt+p0WXoKWd6NGXHcRdT2JliO5CT1PZDZ2+FhalqHNie/2N1/SXX9YUs2fQxFl51KILcZAOKLEEJrEjEs0m3U93sMwsFVhR21Hs7kjZqMQaexoOrFmZD85g7URvBIdq+o0qmPy8DlpOpsSSJJQkM/YkbIGImpGv7kTlTRizMh+gZvsNYmxJHaxeNbq/sSOip5QuR8/NGLMz679MeRxDpDeg9pXSvqQat9kRx8s+wyMYxEUbM1G4IWy7ozFkZUY7MZ+btSEqy2IShKxDIh3a7DcKUJaiU2oGTZJDu63bFJbfI16j0m/geTShp8CpdJZxSQxl7EjfEjIUZ5JmzsyJY0Q84wDuoFZDuwvurnIQiTzZJ9jLLVMeXSKjg1VnKb7CKDbbWxCkigmY+qCCCCCCCOxBBBBBBBBBHQFha6TYVMtFlCZCe4mrliqQg5sJhq3hDsrZeOeSHv8CczA17DMknzVi10GAsUy0xNd+NyV9w1iHsxIQUhorrIhLe/3wuDLl5FCuzRRIN0is+XWRMhMTrA3KE6WJFrSu5ItOex2jNjQnDm6e6IyL3/wJDs8bG6/J7UI7vkY3N2yGsjqGiCCCCCCPLLNJqTJM6pnocoRui238iTodgiGSJBhj86qtEVS4gkJgbFSaGGoYx+RgggggggggggjgSv1urIdZRPI3yNjGPwZJ648SXuJ9bq+mw4GMYx+dXhOrGxsbGMfn1WSepkkjY2NjHR+kujHRjHRj8H/2Q==');
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
+  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
+  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
+  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
+}}
+:root[data-theme="dark"]{
+  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
+  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
+  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
+  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;position:relative;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* atmosphere — a faint accent wash + inspection motif behind the app shell; never behind a
+   panel/card (those keep their own opaque surface), and never intercepts clicks. */
+body::before,body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none}
+body::before{
+  background-image:var(--atmosphere);background-size:cover;background-position:center 30%;
+  opacity:.05;
+}
+body::after{
+  background:
+    radial-gradient(ellipse at 82% 4%, color-mix(in srgb,var(--brand) 16%,transparent) 0%, transparent 55%),
+    radial-gradient(ellipse at 6% 100%, color-mix(in srgb,var(--gold) 10%,transparent) 0%, transparent 60%);
+}
+:root[data-theme="dark"] body::before{opacity:.12}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body::before{opacity:.12}}
+#root{position:relative;z-index:1}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+h1{font-size:26px;letter-spacing:-.02em;margin:2px 0}
+h2{font-size:17px;margin:0}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--brand);margin:0 0 4px}
+.muted{color:var(--muted)}
+
+/* shell */
+.app{display:grid;grid-template-columns:236px 1fr;min-height:100%}
+.side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.side .brand{display:flex;align-items:center;gap:11px;padding:18px 18px 16px;border-bottom:1px solid var(--line)}
+.side .brand b{font-size:15px;letter-spacing:.2px}
+.side .brand small{display:block;color:var(--muted);font-size:11px}
+.mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(145deg,var(--brand),var(--brand-deep));display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+.side nav{padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1}
+.navlink{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px}
+.navlink .ic{width:18px;text-align:center;color:var(--faint)}
+.navlink:hover{background:var(--surface-2);color:var(--ink)}
+.navlink.active{background:var(--brand-tint);color:var(--brand-deep)}
+:root[data-theme="dark"] .navlink.active{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .navlink.active{color:var(--brand)}}
+.navlink.disabled{color:var(--faint);cursor:default}
+.navgroup{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:16px 12px 6px}
+.side-foot{padding:14px 18px;border-top:1px solid var(--line);color:var(--faint);font-size:11.5px}
+
+.main{min-width:0}
+.page{max-width:1120px;margin:0 auto;padding:30px 30px 60px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.tile .tn{font-size:28px;font-weight:750;letter-spacing:-.01em;color:var(--brand);font-variant-numeric:tabular-nums}
+.tile .tl{font-size:13px;color:var(--ink);margin-top:4px;line-height:1.35}
+.tile .tnote{font-size:11px;color:var(--faint);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+
+/* panel + table */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+.tablescroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:11px 18px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--surface-2);font-weight:650;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+.rowlink{cursor:pointer}
+.rowlink:hover td{background:var(--surface-2)}
+td .sub{font-size:11.5px;color:var(--faint);margin-top:2px}
+.notice{padding:18px;color:var(--muted)}
+.notice.err{color:var(--high)}
+
+/* pills / badges */
+/* a bare .pill is a neutral chip; the modifiers below tint it by severity */
+.pill{display:inline-block;font-size:11.5px;padding:3px 10px;border-radius:999px;font-weight:650;background:var(--surface-2);color:var(--muted)}
+.pill.status{background:var(--surface-2);color:var(--muted)}
+.pill.pri-high{background:var(--high-bg);color:var(--high)}
+.pill.pri-medium{background:var(--med-bg);color:var(--med)}
+.pill.pri-low{background:var(--low-bg);color:var(--low)}
+.pill.sev-high{background:var(--high-bg);color:var(--high)}
+.pill.sev-medium{background:var(--med-bg);color:var(--med)}
+.pill.sev-low{background:var(--low-bg);color:var(--low)}
+.badge{font-size:11px;padding:4px 9px;border-radius:7px;font-weight:600}
+.badge.gap-yes,.badge.gap-partial{background:var(--brand-tint);color:var(--brand-deep)}
+:root[data-theme="dark"] .badge.gap-yes,:root[data-theme="dark"] .badge.gap-partial{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .badge.gap-yes,:root:not([data-theme="light"]) .badge.gap-partial{color:var(--brand)}}
+.badge.gap-partial{background:transparent;outline:1px dashed color-mix(in srgb,var(--brand) 45%,transparent);outline-offset:-1px}
+.badge.gap-no{background:var(--surface-2);color:var(--faint)}
+
+/* controls + cards (Rulebook page) */
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 20px}
+.search{flex:1;min-width:220px}
+.search input,.chip{font:inherit}
+.search input{width:100%;height:38px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:0 14px;font-size:14px}
+.search input:focus{outline:2px solid var(--brand);outline-offset:1px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer}
+.chip:hover{color:var(--ink);border-color:var(--brand)}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.chip.on.sev-high{background:var(--high);border-color:var(--high)}
+.chip.on.sev-medium{background:var(--med);border-color:var(--med)}
+.chip.on.sev-low{background:var(--low);border-color:var(--low)}
+.rescount{margin-left:auto;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}
+.card.sev-high{border-left-color:var(--high)}.card.sev-medium{border-left-color:var(--med)}.card.sev-low{border-left-color:var(--low)}
+.card-top{display:flex;justify-content:space-between;align-items:center}
+.card .code{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--brand)}
+.card .fam{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.card h3{font-size:15px;line-height:1.3;margin:0;font-weight:650;letter-spacing:-.01em}
+.card-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto}
+@media (max-width:820px){.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto}.side nav{flex-direction:row}.side .brand{border:none}.navgroup,.side-foot,.navlink.disabled{display:none}}
+/* rule code chip, and the explanatory footer under a reconciliation panel */
+.rc{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--brand-deep);background:var(--brand-tint);padding:2px 6px;border-radius:5px}
+:root[data-theme="dark"] .rc{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .rc{color:var(--brand)}}
+.panel-note{padding:14px 18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.5}
+.ct{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;margin-right:4px}
+/* drill-down affordance + modal (the funnel restyles .rowhint for its own rows) */
+.rowhint{color:var(--faint);margin-left:6px;opacity:0;transition:opacity .12s;font-weight:700}
+.linklike{border:none;background:none;color:var(--brand);font:inherit;font-size:13px;cursor:pointer;padding:0}
+.linklike:hover{text-decoration:underline}
+.modal-overlay{position:fixed;inset:0;background:rgba(8,16,13,.55);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:6vh 20px;z-index:100;animation:fade .15s ease}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px -20px rgba(0,0,0,.5);width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;animation:pop .16s ease}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal-head h3{margin:0;font-size:17px;letter-spacing:-.01em}
+.modal-close{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);width:30px;height:30px;border-radius:8px;font-size:19px;line-height:1;cursor:pointer}
+.modal-close:hover{color:var(--ink);border-color:var(--brand)}
+.modal-body{padding:18px 20px;overflow:auto}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:4px 0 14px}
+.kv>div{background:var(--surface);padding:9px 12px;display:flex;flex-direction:column;gap:2px}
+.kv .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kv .v{font-size:14px;font-variant-numeric:tabular-nums}
+.detail-note{color:var(--muted);font-size:13.5px;line-height:1.55;margin:2px 0 14px}
+.formula{display:flex;flex-direction:column;gap:5px;margin:2px 0 12px}
+.formula .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.formula code{font-size:12.5px}
+.rulecard{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:10px;padding:12px 14px;margin-bottom:14px;background:var(--surface-2)}
+.rc-top{display:flex;align-items:center;gap:10px}
+.rc-link{margin-left:auto;font-size:12px}
+.rc-title{font-weight:650;margin-top:6px;font-size:14.5px}
+.rc-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.inv-table{font-size:12.5px;min-width:560px}
+.inv-table th,.inv-table td{padding:7px 10px}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+/* AI surfaces */
+:root{--ai:#6d4bd8}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--ai:#a892ff}}
+:root[data-theme="dark"]{--ai:#a892ff}
+.page{display:flex;flex-direction:column;gap:22px}
+.page-head{margin-bottom:0}
+.tiles{margin-bottom:0}
+.ai-h{display:flex;align-items:center;gap:10px}
+.ai-chip{background:color-mix(in srgb,var(--ai) 15%, transparent);color:var(--ai);font-size:10px;font-weight:800;letter-spacing:.7px;padding:3px 7px;border-radius:6px}
+.ai-body{padding:16px 18px;font-size:14px;line-height:1.6}
+.brief-head{font-weight:600;margin:0 0 8px}
+.brief-points{margin:0 0 6px;padding-left:18px}
+.brief-points li{margin:3px 0}
+.nba-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.nba-top .pill{text-transform:capitalize}
+.ai-body.md h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--brand-deep);margin:16px 0 6px}
+:root[data-theme="dark"] .ai-body.md h4{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .ai-body.md h4{color:var(--brand)}}
+.ai-body.md h4:first-child{margin-top:0}
+.ai-body.md p{margin:6px 0}.ai-body.md ul{margin:6px 0;padding-left:18px}.ai-body.md li{margin:3px 0}
+.pscore{display:inline-block;min-width:32px;text-align:center;font-weight:750;font-variant-numeric:tabular-nums;font-size:14px;padding:3px 9px;border-radius:8px;cursor:help}
+.pscore.pri-high{background:var(--high-bg);color:var(--high)}
+.pscore.pri-medium{background:var(--med-bg);color:var(--med)}
+.pscore.pri-low{background:var(--low-bg);color:var(--low)}
+.resp-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.resp-item{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.5}
+.resp-amt{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums;display:flex;gap:12px;align-items:center;color:var(--low)}
+.resp-form{display:flex;flex-direction:column;gap:9px}
+.resp-row{display:flex;gap:9px}
+.resp-row input:first-child{max-width:280px}
+.resp-form input{flex:1;height:40px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:0 13px;font:inherit;font-size:13.5px}
+.resp-form input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+.resp-form input::placeholder{color:var(--faint)}
+.resp-actions{display:flex;align-items:center;gap:16px;margin-top:3px}
+.btn{background:var(--brand);color:#fff;border:none;border-radius:9px;padding:10px 18px;font:inherit;font-weight:600;font-size:13.5px;cursor:pointer;transition:background .15s}
+.btn:hover:not(:disabled){background:var(--brand-deep)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn-ghost{background:transparent;color:var(--brand);border:1px solid var(--line);border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.btn-ghost:hover:not(:disabled){background:var(--surface-2);border-color:var(--brand)}
+.btn-ghost.confirm{background:var(--high-bg);color:var(--high);border-color:var(--high)}
+.btn-ghost:disabled{opacity:.6;cursor:default}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+.foot-right{display:inline-flex;align-items:center;gap:11px}
+.switch{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.switch-track{width:34px;height:19px;border-radius:19px;background:var(--line);position:relative;transition:background .16s;flex:none}
+.switch-thumb{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .16s}
+.switch input:checked + .switch-track{background:var(--brand)}
+.switch input:checked + .switch-track .switch-thumb{transform:translateX(15px)}
+.switch input:focus-visible + .switch-track{outline:2px solid var(--brand);outline-offset:2px}
+.switch-label{font-size:12px;font-weight:600;color:var(--muted)}
+.switch input:checked ~ .switch-label{color:var(--brand)}
+.live-badge{font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--ai);text-transform:uppercase;white-space:nowrap}
+.card-del{width:26px;height:26px;border:1px solid var(--line);background:transparent;color:var(--faint);border-radius:7px;font-size:16px;line-height:1;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.card-del:hover{border-color:var(--high);color:var(--high);background:var(--high-bg)}
+.del-confirm{display:inline-flex;gap:11px;align-items:center}
+.linklike.danger{color:var(--high);font-weight:650}
+.card.off{opacity:.6}
+.card.off h3{text-decoration:line-through;text-decoration-color:var(--faint)}
+.minibar{display:flex;flex-wrap:wrap;gap:22px;margin-bottom:16px;font-size:13px;color:var(--muted)}
+.minibar b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums;margin-left:5px}
+.letter{display:flex;flex-direction:column;gap:10px}
+.letter-head{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.letter-input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:11px 13px;font:inherit;font-size:13.5px;line-height:1.55;resize:vertical;min-height:96px;width:100%}
+input.letter-input,select.letter-input{min-height:0}
+.letter-input:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+.letter-input::placeholder{color:var(--faint)}
+.extract-card{border:1px solid var(--ai);background:color-mix(in srgb, var(--ai) 7%, transparent);border-radius:12px;padding:14px 15px;display:flex;flex-direction:column;gap:10px}
+.extract-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px}
+.extract-summary{margin:0;font-size:14px;font-weight:550;line-height:1.5;color:var(--ink)}
+.extract-quote{margin:0;padding:8px 12px;border-left:3px solid var(--ai);background:var(--surface-2);border-radius:0 8px 8px 0;font-size:13px;font-style:italic;color:var(--muted)}
+.extract-caveat{margin:0;font-size:12.5px;color:var(--med)}
+.extract-note{margin:0;font-size:11.5px;color:var(--faint)}
+.btn.ghost-fill{align-self:flex-start;background:var(--ai)}
+.btn.ghost-fill:hover:not(:disabled){filter:brightness(1.08)}
+.resp-divider{display:flex;align-items:center;text-align:center;gap:12px;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px}
+.resp-divider::before,.resp-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.cursor{color:var(--brand);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+/* rule taxonomy — explanation / mistake / risk */
+.card-kind{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:-2px}
+.kindtag{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+.kindtag.kind-explanation{background:var(--low-bg);color:var(--low)}
+.kindtag.kind-mistake{background:var(--high-bg);color:var(--high)}
+.kindtag.kind-risk{background:var(--med-bg);color:var(--med)}
+.stagetag{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+.chip.on.kind-explanation{background:var(--low);border-color:var(--low)}
+.chip.on.kind-mistake{background:var(--high);border-color:var(--high)}
+.chip.on.kind-risk{background:var(--med);border-color:var(--med)}
+/* investigation — agents propose, the adjudicator settles */
+.inv-conc{font-size:14px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border-radius:10px;
+  border:1px solid var(--line);border-left:3px solid var(--ai);background:var(--surface-2)}
+.inv-round{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);margin:14px 0 8px}
+.hyp{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:start;padding:10px 12px;
+  border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:13px;line-height:1.5}
+.hyp.lead{border-color:var(--low);background:var(--low-bg)}
+.hyp .hid{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand)}
+.hyp .agent{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.hyp .verdict{font-size:12px;color:var(--muted);margin-top:5px}
+.hyp .amt2{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:650;font-size:13px}
+@media(max-width:640px){.hyp{grid-template-columns:1fr}}
+/* scope card */
+.scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin:14px 0 16px}
+.scope-col h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:0 0 10px}
+:root[data-theme="dark"] .scope-col h4{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .scope-col h4{color:var(--brand)}}
+.scope-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.scope-list li{font-size:13px;line-height:1.45}
+.scope-list b{font-weight:650}
+.scope-list .sub{display:block;color:var(--muted);font-size:12.5px;margin-top:3px;line-height:1.5}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.modal-overlay,.modal,.cursor{animation:none!important}}
+
+/* ============================================================ case lifecycle
+   Added with the dossier / casework pages. A case is worked left to right: what we already
+   hold, what we ask for and chase, then what it means. */
+.casetabs{display:flex;gap:8px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+.casetab{display:flex;flex-direction:column;gap:1px;padding:9px 14px 11px;border-bottom:2px solid transparent;
+  text-decoration:none;color:var(--muted);transition:color .15s,border-color .15s}
+.casetab b{font-size:13.5px;font-weight:600}
+.casetab small{font-size:11px;color:var(--faint)}
+.casetab:hover{color:var(--ink)}
+.casetab.active{color:var(--brand);border-bottom-color:var(--brand)}
+.casetab.active b{color:var(--brand)}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1100px){.grid-2{grid-template-columns:1fr}}
+.panel-body{padding:14px 16px 16px}
+.panel-body h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:18px 0 8px}
+.panel-body h4:first-child{margin-top:0}
+:root[data-theme="dark"] .panel-body h4{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .panel-body h4{color:var(--brand)}}
+.chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.sub{font-size:12px;color:var(--muted)}
+.dim{opacity:.5}
+.error{background:var(--high-bg);color:var(--high);border:1px solid var(--high);border-radius:10px;padding:10px 14px;font-size:13px}
+.actions{display:flex;gap:9px;margin-top:14px}
+.btn.small{padding:6px 12px;font-size:12.5px;text-decoration:none;display:inline-flex;align-items:center}
+.btn.primary{background:var(--brand)}
+.chip-det{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--brand-deep);
+  background:var(--brand-tint);border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+:root[data-theme="dark"] .chip-det{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip-det{color:var(--brand)}}
+.chip-ai{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#fff;
+  background:var(--gold);border-radius:5px;padding:2px 6px;margin-left:7px}
+
+/* a horizontal proportion meter — distinct from .ftrack, the funnel's absolute-scale track */
+.meter{display:inline-block;vertical-align:middle;width:74px;height:7px;border-radius:4px;background:var(--surface-2);
+  border:1px solid var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.meter i.warn{background:var(--high)}
+
+.callout{border-radius:10px;padding:11px 14px;font-size:13px;margin:14px 0 0;border:1px solid var(--line);background:var(--surface-2)}
+.callout.warn{background:var(--med-bg);border-color:var(--med);color:var(--ink)}
+.callout.ok{background:var(--low-bg);border-color:var(--low);color:var(--ink)}
+.drill{margin-top:14px}
+.drill>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--brand);padding:6px 0}
+
+/* ---- dossier: what ZATCA already holds */
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px}
+.srccard{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface-2);opacity:.6}
+.srccard.held{opacity:1;background:var(--surface);border-color:var(--brand)}
+.srccard b{display:block;font-size:13px;font-weight:600}
+.srccard small{display:block;font-size:11px;color:var(--muted)}
+.srcmark{font-weight:700;color:var(--faint);line-height:1.35}
+.srccard.held .srcmark{color:var(--brand)}
+.acts{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.acts li{font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ---- precedent */
+.outcome-bar{display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:0 0 16px}
+.ob-seg{display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:#fff;
+  white-space:nowrap;transition:width .5s ease}
+.ob-clear{background:var(--low)}
+.ob-finding{background:var(--high)}
+.prec-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:900px){.prec-grid{grid-template-columns:1fr}}
+.tally{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.tally li{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.tally li b{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600}
+.prec-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:16px 0 0}
+.prec-facts>div{background:var(--surface);padding:9px 12px;display:flex;flex-direction:column;gap:2px}
+.prec-facts .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.prec-facts .v{font-size:14px;font-variant-numeric:tabular-nums}
+
+/* ---- casework: the plan */
+.planlist{display:flex;flex-direction:column;gap:9px}
+.planitem{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:9px;
+  padding:10px 13px;background:var(--surface-2)}
+.planitem.dropped{border-left-color:var(--faint);opacity:.75}
+.pi-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
+.planitem .sub{margin:0}
+.cols{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:7px 0 0}
+.cols .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-right:3px}
+
+/* ---- casework: gaps and letters */
+.gaps{display:flex;flex-direction:column;gap:14px}
+.gapgroup h4{margin:0 0 7px}
+.gap{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--line);
+  border-radius:9px;background:var(--surface-2);margin-bottom:6px}
+.gap.blocking{border-left:3px solid var(--high)}
+.gap.advisory{border-left:3px solid var(--med)}
+.gap p{margin:0;font-size:13px}
+.gap small{display:block;color:var(--faint);font-size:11px;margin-top:3px}
+.letterpre{white-space:pre-wrap;font-family:var(--sans);font-size:13px;line-height:1.6;margin:0;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:16px 18px;max-height:520px;overflow:auto}
+.uploadbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0 4px;padding:11px 13px;
+  border:1px dashed var(--line);border-radius:10px;background:var(--surface-2)}
+.uploadbar select,.uploadbar input[type=file]{font:inherit;font-size:12.5px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+
+/* ---- the lifecycle rail: where the case is, and whose move it is */
+.rail{margin:0 0 18px}
+.rail-track{display:flex;gap:6px;align-items:stretch}
+.rail-stage{flex:1;display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface-2);font-size:12.5px;color:var(--muted);min-width:0}
+.rail-stage .rs-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rail-stage .rs-mark{font-weight:700;flex:none}
+.rail-stage.done{background:var(--low-bg);border-color:var(--low);color:var(--low)}
+.rail-stage.active{background:var(--surface);border-color:var(--brand);color:var(--brand);font-weight:650;
+  box-shadow:0 0 0 1px var(--brand) inset}
+.rail-stage.waiting{background:var(--med-bg);border-color:var(--med);color:var(--med);font-weight:650}
+.rail-stage.skipped{opacity:.55;border-style:dashed}
+.rail-stage.pending{opacity:.6}
+.rail-note{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:8px}
+@media(max-width:900px){.rail-track{flex-wrap:wrap}.rail-stage{flex:1 1 44%}}
+
+/* ============================================================ the qualification funnel
+   Replaces the reconciliation waterfall. The bars measure DOCUMENTS, not money: a rule does
+   not subtract from a total, it decides which documents are in the box. Amounts are shown
+   alongside so the auditor can see the size of what was set aside, never as a movement. */
+.funnel{padding:6px 16px 4px}
+.frow{display:grid;grid-template-columns:44px minmax(180px,1.25fr) 2fr 130px;align-items:center;
+  gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.frow:last-of-type{border-bottom:none}
+.frow.clickable{cursor:pointer;border-radius:8px}
+.frow.clickable:hover{background:var(--surface-2)}
+.frow .fcount{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;
+  font-weight:650;text-align:right;color:var(--ink)}
+.frow.exclude .fcount,.frow.defer .fcount{color:var(--med)}
+.frow.qualified .fcount{color:var(--brand)}
+.frow .flbl{font-size:13.5px;display:flex;align-items:center;gap:8px;min-width:0}
+.frow .flbl .rowhint{margin-left:auto;color:var(--faint);opacity:0;transition:opacity .12s}
+.frow.clickable:hover .flbl .rowhint{opacity:1}
+.frow .ftrack{height:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;
+  overflow:hidden}
+.frow .fbar{height:100%;border-radius:5px;transition:width .5s ease}
+.fbar.population{background:color-mix(in srgb,var(--muted) 45%, var(--surface))}
+.fbar.exclude,.fbar.defer{background:color-mix(in srgb,var(--med) 60%, var(--surface))}
+.fbar.qualified{background:var(--brand-deep)}
+.frow .famt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
+  text-align:right;color:var(--muted)}
+.frow.qualified .famt{color:var(--ink);font-weight:650;font-size:14.5px}
+.frow.population{opacity:.75}
+.frow.qualified{border-top:2px solid var(--line);padding-top:12px}
+
+.fcomp{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0 4px;margin-left:56px}
+.fchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:999px;padding:5px 13px;font:inherit;font-size:12.5px;color:var(--muted);cursor:pointer}
+.fchip:hover{border-color:var(--brand);color:var(--ink)}
+.fchip b{color:var(--ink);font-variant-numeric:tabular-nums}
+.fchip span{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.fchip span.neg{color:var(--high)}
+
+/* expected − declared = difference */
+.compare{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;padding:14px 16px 4px}
+.cmp{flex:1;min-width:150px;display:flex;flex-direction:column;gap:2px;text-align:left;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 14px;
+  font:inherit;cursor:pointer;transition:border-color .15s}
+.cmp:hover{border-color:var(--brand)}
+.cmp .cl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.cmp .cn{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;font-weight:650;
+  letter-spacing:-.02em}
+.cmp .cs{font-size:11.5px;color:var(--faint)}
+.cop{align-self:center;font-size:19px;color:var(--faint);font-weight:600}
+.cmp.result.risk{background:var(--high-bg);border-color:var(--high)}
+.cmp.result.risk .cn{color:var(--high)}
+.cmp.result.ok{background:var(--low-bg);border-color:var(--low)}
+.cmp.result.ok .cn{color:var(--low)}
+.cmp.result.warn{background:var(--med-bg);border-color:var(--med)}
+.cmp.result.warn .cn{color:var(--med)}
+@media(max-width:820px){.compare{flex-direction:column}.cop{align-self:flex-start;padding-left:8px}}
+
+/* taxpayer evidence — the only thing that accounts for a difference after qualification */
+.evidence{padding:14px 16px 0}
+.evidence h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:0 0 8px}
+:root[data-theme="dark"] .evidence h4{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .evidence h4{color:var(--brand)}}
+.erow{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;
+  border-bottom:1px solid var(--line);padding:8px 0;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.erow:hover{background:var(--surface-2)}
+.erow .elbl{flex:1;min-width:0}
+.erow .eamt{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.erow.total{cursor:default;font-weight:650;border-bottom:none;border-top:2px solid var(--line)}
+.erow.total:hover{background:none}
+
+/* ============================================================ the post-receipt workflow
+   Intake (who they are, what arrived), the auditor's own calculations, the findings in the
+   Authority's wording, and the reasoning behind each hypothesis. */
+
+/* --- case context: registration + audit history --------------------------------- */
+.ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line)}
+.ctx-block{background:var(--surface);padding:16px 18px}
+.ctx-block h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+.acts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.acts li{display:flex;align-items:center;gap:7px;font-size:13px;line-height:1.4;flex-wrap:wrap}
+.kv2{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px}
+.kv2>div{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600}
+.causes{margin-top:11px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+/* --- the request email parse ------------------------------------------------------ */
+.row-actions{display:flex;align-items:center;gap:12px;margin-top:11px;flex-wrap:wrap}
+.parsed-head{display:flex;align-items:baseline;gap:14px;margin:18px 0 10px;flex-wrap:wrap;
+  padding-top:14px;border-top:1px solid var(--line)}
+.parsed-item{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);
+  border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,background .12s}
+.parsed-item:hover{background:var(--surface-2)}
+.parsed-item.on{border-color:var(--brand);background:var(--brand-tint)}
+:root[data-theme="dark"] .parsed-item.on{background:transparent}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .parsed-item.on{background:transparent}}
+.parsed-item input{margin-top:3px;flex:none}
+.parsed-item b{display:inline-flex;align-items:center;gap:8px}
+.cols{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+
+/* --- the dropzone and the received files ------------------------------------------ */
+.dropzone{border:2px dashed var(--line);border-radius:12px;padding:26px 20px;text-align:center;
+  cursor:pointer;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone.over{border-color:var(--brand);background:var(--brand-tint)}
+:root[data-theme="dark"] .dropzone:hover,:root[data-theme="dark"] .dropzone.over{background:var(--surface-2)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .dropzone:hover,
+  :root:not([data-theme="light"]) .dropzone.over{background:var(--surface-2)}}
+.doclist{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.docrow{border:1px solid var(--line);border-radius:10px;padding:11px 13px;display:flex;
+  flex-direction:column;gap:4px}
+
+/* --- the auditor's calculations --------------------------------------------------- */
+.calc-tabs{display:flex;gap:8px;padding:14px 18px 0}
+.calc-tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);font:inherit;
+  font-size:13px;font-weight:600;padding:7px 13px;border-radius:9px;cursor:pointer}
+.calc-tab.on{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-tint)}
+:root[data-theme="dark"] .calc-tab.on{color:var(--brand);background:transparent}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .calc-tab.on{color:var(--brand);background:transparent}}
+.calc-form{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.calc-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.calc-query{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.calc-select{padding:9px 11px}
+.calc-answer{border:1px solid var(--line);border-radius:10px;padding:13px 15px;font-size:22px;
+  font-weight:700;font-variant-numeric:tabular-nums}
+.calc-answer.ok{border-color:var(--brand);background:var(--brand-tint)}
+:root[data-theme="dark"] .calc-answer.ok{background:transparent}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .calc-answer.ok{background:transparent}}
+.calc-answer.warn{border-color:var(--high);font-size:13px;font-weight:500}
+.calc-answer .sub{font-size:12px;font-weight:500;display:block;margin-top:4px}
+.calc-list{padding:0 18px 4px;display:flex;flex-direction:column;gap:10px}
+.calc-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;
+  flex-direction:column;gap:6px}
+.calc-item-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.calc-item-top b{flex:1}
+.calc-figures{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;font-weight:650;
+  font-variant-numeric:tabular-nums}
+.calc-delta{color:var(--high)}
+
+/* --- findings, in the Authority's wording ----------------------------------------- */
+.exposure{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;
+  background:var(--line);border-bottom:1px solid var(--line)}
+.exp{background:var(--surface);padding:13px 16px;display:flex;flex-direction:column;gap:3px}
+.exp-l{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}
+.exp b{font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.exp.total b{color:var(--brand-deep)}
+:root[data-theme="dark"] .exp.total b{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .exp.total b{color:var(--brand)}}
+.findings{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.finding{border:1px solid var(--line);border-radius:11px;padding:14px 16px;display:flex;
+  flex-direction:column;gap:8px}
+.f-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.f-amt{margin-left:auto;font-size:17px;font-variant-numeric:tabular-nums}
+.f-statement{font-size:14px;font-weight:650;line-height:1.45}
+.f-why,.f-also{font-size:12.5px;color:var(--muted);line-height:1.5}
+.f-also ul{margin:5px 0 0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.f-also li{display:flex;gap:7px;align-items:baseline}
+.f-agent{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:700}
+
+/* --- hypothesis reasoning --------------------------------------------------------- */
+.hyp-why{margin-top:7px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.hyp-why b{color:var(--ink);font-weight:650;margin-right:5px}
+.verdict-confirmed b,.verdict-supported b{color:var(--high)}
+.verdict-partially-supported b{color:var(--med)}
+.verdict-inconclusive b,.verdict-pending-info b{color:var(--muted)}
+.verdict-refuted b{color:var(--brand-deep)}
+:root[data-theme="dark"] .verdict-refuted b{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .verdict-refuted b{color:var(--brand)}}
+.hyp-more{margin-top:7px;font-size:12px}
+.hyp-test{margin-top:8px;border-top:1px dashed var(--line);padding-top:9px;display:flex;
+  flex-direction:column;gap:5px;font-size:12.5px}
+.hyp-test .k{margin-right:7px}
+.hyp-test code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+/* where the figures came from — stated, because a listing and an e-invoice feed are not
+   the same evidence and the funnel above looks identical either way */
+.provenance{margin:0 18px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;
+  font-size:12.5px;color:var(--muted);line-height:1.5}
+.provenance b{color:var(--ink)}
+.provenance.warn{border-color:var(--med);background:var(--med-bg)}
+:root[data-theme="dark"] .provenance.warn{background:transparent}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .provenance.warn{background:transparent}}
+.prov-caveat{margin-top:6px;color:var(--med);font-weight:600}
+
+/* --- confidence, and the auditor's decision ---------------------------------------
+   Two facts that must never read as one. Confidence answers "how much weight can this
+   bear"; the amount beside it answers "how much is at stake". A hypothesis can be
+   strongly supported and worth very little, so they are styled apart, never merged. */
+.conf{margin-top:7px}
+.conf > .pill{cursor:pointer;border:none;font:inherit;font-size:11px;font-weight:700}
+.conf-detail{margin-top:8px;text-align:left;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:9px;padding:11px 13px;max-width:340px}
+.conf-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
+  font-weight:700;margin:6px 0 4px}
+.conf-list{margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.conf-list li{display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.4}
+.conf-list li b{font-weight:650;color:var(--ink)}
+.conf-list.met li b{color:var(--muted);font-weight:600}
+
+.decision{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line);
+  display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.decision.open{gap:9px}
+.decision-opts{display:flex;flex-wrap:wrap;gap:7px}
+.decision-note{font-style:italic}
+.decision-comment{width:100%;max-width:520px;height:36px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);border-radius:9px;padding:0 12px;
+  font:inherit;font-size:13px}
+.decision-comment:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+
+/* A hypothesis the roster stopped proposing. Kept on the file — what was investigated is
+   part of the audit trail even when it no longer applies — but visibly set back. */
+.hyp.stale{opacity:.72}
+.hyp.stale .agent{font-style:italic}
+
+/* --- the audit report, and where its sentences came from --------------------------- */
+.rep-section{margin:0 0 22px}
+.rep-section:last-child{margin-bottom:0}
+.rep-h{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--brand-deep);margin:0 0 9px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+:root[data-theme="dark"] .rep-h{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .rep-h{color:var(--brand)}}
+/* A field the case cannot answer is styled, never hidden. A report that quietly dropped its
+   unanswered fields would look finished when it is not. */
+.kv .v.gap{color:var(--med);font-weight:600}
+
+.trace{display:flex;flex-direction:column;gap:3px}
+.trace-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);
+  font-weight:700;margin:0 0 6px}
+.trace-row{border-bottom:1px solid var(--line)}
+.trace-row:last-child{border-bottom:none}
+.trace-line{display:flex;gap:9px;align-items:baseline;width:100%;text-align:left;border:none;
+  background:none;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;padding:9px 2px;
+  line-height:1.45}
+.trace-line:hover{color:var(--brand-deep)}
+:root[data-theme="dark"] .trace-line:hover{color:var(--brand)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .trace-line:hover{color:var(--brand)}}
+.trace-mark{color:var(--faint);flex:none}
+.trace-stmt{flex:1}
+.trace-body{padding:2px 2px 13px 24px;display:flex;flex-direction:column;gap:7px}
+.trace-step{display:flex;gap:10px;font-size:12.5px;line-height:1.5;align-items:baseline}
+.trace-step .k{flex:none;width:130px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--faint);font-weight:700}
+.trace-step code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+/* --- the rail, when more than one stage is live ------------------------------------ */
+.rail-stage.revisit{position:relative}
+.rail-revisit{font-size:11.5px;color:var(--med);font-weight:650}
+
+/* --- the correspondence trail ------------------------------------------------------
+   One enquiry accepts documents at a time; the closed ones stay, set back but readable,
+   because what was asked and answered earlier is part of the file. */
+.thread{border:1px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
+.thread.live{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+.thread-head{display:flex;gap:12px;align-items:center;width:100%;text-align:left;border:none;
+  background:var(--surface-2);font:inherit;cursor:pointer;padding:11px 13px;color:var(--ink)}
+.thread-head:hover{background:var(--surface)}
+.thread-seq{flex:none;width:24px;height:24px;border-radius:50%;background:var(--surface);
+  border:1px solid var(--line);display:grid;place-items:center;font-size:11.5px;font-weight:700;
+  font-family:var(--mono)}
+.thread-subj{flex:1;display:flex;flex-direction:column;gap:2px;font-size:13.5px;font-weight:650}
+.thread-subj .sub{font-weight:400}
+.thread-body{padding:13px;display:flex;flex-direction:column;gap:11px;background:var(--surface)}
+
+/* Outbound and inbound are set apart deliberately: the Authority's words and the taxpayer's
+   are different kinds of evidence about a case and should never read as one voice. */
+.msg{border-left:3px solid var(--line);padding-left:11px}
+.msg-outbound{border-left-color:var(--brand)}
+.msg-inbound{border-left-color:var(--med)}
+.msg-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:12.5px;
+  margin-bottom:5px}
+.msg-meta b{font-weight:650}
+.msg .letterpre{margin:0}
+
+/* ---- requested versus received, in the four words an auditor uses.
+   The counts are a filter as well as a summary: an auditor with eleven items and two problems
+   wants the two, and a list they have to read past the nine settled ones is a list they stop
+   reading. */
+.statebar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.statechip{display:flex;align-items:baseline;gap:7px;padding:8px 13px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface-2);font:inherit;font-size:12.5px;
+  color:var(--ink);cursor:pointer}
+.statechip b{font-size:17px;font-weight:700;font-family:var(--mono)}
+.statechip:hover:not(:disabled){background:var(--surface)}
+.statechip:disabled{opacity:.42;cursor:default}
+.statechip.on{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+.statechip.pri-high b{color:var(--high)}
+.statechip.pri-medium b{color:var(--med)}
+.statechip.pri-low b{color:var(--low)}
+
+.assesslist{display:flex;flex-direction:column;gap:6px}
+.assessrow{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--line);
+  border-radius:9px;background:var(--surface-2)}
+.assessrow.missing,.assessrow.incomplete{border-left:3px solid var(--high)}
+.assessrow.needs-review{border-left:3px solid var(--med)}
+.assessrow.received{border-left:3px solid var(--low)}
+.assessrow b{font-size:13.5px;font-weight:650}
+.assessrow p{margin:3px 0 0;font-size:13px;color:var(--muted)}
+.assessrow small{display:block;color:var(--faint);font-size:11px;margin-top:3px}
+
+/* ---- a round of correspondence: four steps, in the order they happen.
+   Numbered because the order is the point — the chain goes out, documents come back, the two
+   are compared, and what is missing becomes the next email. An auditor should never have to
+   work out which panel they are meant to be filling in. */
+.roundcard{border:1px solid var(--line);border-radius:13px;background:var(--surface);
+  margin-bottom:18px;overflow:hidden}
+.roundcard.live{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+.round-head{display:flex;gap:12px;align-items:baseline;padding:13px 16px;
+  background:var(--surface-2);border-bottom:1px solid var(--line)}
+.round-n{font-size:14.5px;font-weight:700}
+.round-origin{flex:1;font-size:12.5px;color:var(--muted)}
+
+.rstep{border-top:1px solid var(--line);padding:14px 16px}
+.rstep:first-of-type{border-top:none}
+.rstep-head{display:flex;gap:9px;align-items:baseline;margin-bottom:10px}
+.rstep-n{flex:none;width:21px;height:21px;border-radius:50%;background:var(--brand);color:#fff;
+  display:grid;place-items:center;font-size:11.5px;font-weight:700;font-family:var(--mono)}
+.rstep-head h3{margin:0;font-size:13.5px;font-weight:650}
+.rstep-head .sub{margin-left:auto}
+.rstep-body{display:flex;flex-direction:column;gap:10px}
+.rstep-body .msg{margin-bottom:2px}
+.rstep-body .dropzone{margin:0}
+.parsed{display:flex;flex-direction:column;gap:7px}
+
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover:not(:disabled){background:var(--surface-2)}
+
+/* ---- the case assistant: one conversation, reachable from every tab.
+   A docked panel rather than a modal — an auditor asking "what is still missing" wants to read
+   the answer against the page it is about, not on top of it. */
+.asst-fab{position:fixed;right:22px;bottom:22px;z-index:40;display:flex;align-items:center;
+  gap:8px;padding:11px 16px;border-radius:24px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.14)}
+.asst-fab:hover{background:var(--surface-2)}
+
+.asst{position:fixed;right:0;top:0;bottom:0;width:min(430px,100vw);z-index:41;
+  display:flex;flex-direction:column;background:var(--surface);
+  border-left:1px solid var(--line);box-shadow:-8px 0 28px rgba(0,0,0,.13)}
+.asst-head{display:flex;align-items:center;gap:9px;padding:13px 15px;
+  border-bottom:1px solid var(--line);background:var(--surface-2)}
+.asst-head .sub{flex:1;font-family:var(--mono);font-size:11.5px}
+.asst-x{border:none;background:none;font-size:21px;line-height:1;color:var(--muted);
+  cursor:pointer;padding:0 4px}
+.asst-body{flex:1;overflow:auto;padding:14px 15px;display:flex;flex-direction:column;gap:11px}
+.asst-msg{display:flex;flex-direction:column;gap:5px;font-size:13px}
+.asst-msg pre{white-space:pre-wrap;font-family:var(--sans);margin:0;line-height:1.55}
+.asst-msg.auditor pre{background:var(--surface-2);border:1px solid var(--line);
+  border-radius:10px;padding:9px 11px;align-self:flex-end;max-width:88%}
+.asst-msg.auditor{align-items:flex-end}
+.asst-msg.assistant{border-left:3px solid var(--brand);padding-left:11px}
+.asst-msg .pill{align-self:flex-start}
+.asst-did{font-size:11.5px;color:var(--low);font-weight:600}
+
+.asst-foot{border-top:1px solid var(--line);padding:11px 15px;background:var(--surface-2)}
+.asst-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.qchip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;
+  font-size:11.5px;border-radius:14px;padding:5px 10px;cursor:pointer}
+.qchip:hover:not(:disabled){border-color:var(--brand)}
+.qchip:disabled{opacity:.5;cursor:default}
+.asst-input{display:flex;gap:7px}
+.asst-input input{flex:1;font:inherit;font-size:13px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+
+/* a round that has not happened yet, shown so the loop is visible before it fires */
+.roundcard.soon{opacity:.72;border-style:dashed}
+.roundcard.soon .round-head{background:transparent}
+
+/* ---- the legal basis under a finding.
+   A finding is a finding because an obligation exists. The citation says which one, and — for
+   the 31 articles amended since the 2021 English edition — warns that the wording shown is
+   superseded. */
+.cite{border-left:3px solid var(--low);background:var(--surface-2);border-radius:0 9px 9px 0;
+  padding:9px 12px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.cite.needs-validation{border-left-color:var(--med)}
+.cite.none{border-left-color:var(--line);flex-direction:row;align-items:baseline;gap:9px}
+.cite-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.cite-head b{font-size:12.5px;font-weight:650}
+.cite-head .linklike{margin-left:auto}
+.cite-because{margin:0;font-size:13px;line-height:1.55}
+.cite-warn{margin:0;font-size:12px;color:var(--med);font-weight:600}
+.cite-text{max-height:260px;font-size:12.5px;margin:0}
+
+body{margin:0;padding:0 0 60px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.demo-note{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+  padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}
+.ctabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}
+.ctab{background:none;border:none;border-bottom:2px solid transparent;padding:11px 18px 13px;
+  font:inherit;text-align:left;cursor:pointer;color:var(--muted);display:flex;
+  flex-direction:column;gap:2px}
+.ctab b{font-size:14px;color:var(--muted)}
+.ctab span{font-size:11.5px}
+.ctab.on{border-bottom-color:var(--brand)}
+.ctab.on b{color:var(--brand)}
+.pane{display:none} .pane.on{display:block}
+.hyp{display:flex;gap:14px;border:1px solid var(--line);border-radius:11px;padding:13px;
+  margin-bottom:11px;background:var(--surface)}
+.hyp-side{flex:none;width:66px;display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.hyp-side code{font-size:12px;font-weight:700;color:var(--brand)}
+.hyp-main{flex:1;font-size:13.5px;line-height:1.55}
+.hyp-agent{font-size:11px;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}
+.hyp-why{font-size:12.5px;color:var(--muted);margin:6px 0}
+.hyp-right{flex:none;width:160px;display:flex;flex-direction:column;gap:6px;align-items:flex-end;
+  text-align:right}
+.verdict{font-size:12.5px;margin:6px 0;color:var(--high)}
+.verdict-supported{color:var(--low)}
+.rep-h{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  margin:16px 0 8px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.kv .k{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted)}
+.kv .v{font-size:13px} .kv .v.gap{color:var(--med);font-weight:600}
+.kv>div{border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--surface)}
+details summary{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600;margin-top:4px}
+details[open] summary{margin-bottom:6px}
+</style></head><body><div class="wrap">
+<header class="page-head" style="border:none">
+<div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
+
+<div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
+citation and gap on this page is the real output of the engine for the seeded demo case
+CASE-2025-0481, captured when this file was generated — nothing here recomputes, and the controls do
+not act. The regulations corpus behind the citations holds 79
+articles, 31 of which have been amended since
+the English edition they are shown in.</div>
+
+<div class="ctabs"><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-correspondence">
+<header class="page-head"><div><h1>Taxpayer correspondence</h1>
+<p class="sub">CASE-2025-0481 · what we asked for, and what arrived</p></div>
+<div class="chips"><span class="pill pri-high">Round 1</span>
+<span class="pill pri-high">3 outstanding</span></div></header>
+
+<div class="roundcard live">
+  <div class="round-head"><span class="round-n">Round 1</span>
+  <span class="round-origin">Opening request</span>
+  <span class="pill pri-low">open</span></div>
+  <section class="rstep"><div class="rstep-head"><span class="rstep-n">1</span><h3>The email chain</h3><span class="sub">1 message</span></div><div class="rstep-body"><div class="msg msg-outbound"><div class="msg-meta"><b>ZATCA</b><span class="sub">→ Taxpayer · AI draft — review before sending</span></div><pre class="letterpre">Al-Faisaliah Trading Co.
+VAT registration number 300012345600003
+
+Subject: Information request — VAT period 01 January 2025 to 31 March 2025
+
+Dear Sir or Madam,
+
+The Authority is reviewing the VAT return filed for the period 01 January 2025 to 31 March 2025. To complete that review we require the information listed below. Information already held by the Authority has not been requested.
+
+1. Detailed sales analysis
+   A line-by-line analysis of all sales in the period, one row per invoice.
+   The analysis must contain the following columns: invoice_date, invoice_number, customer_name, customer_vat_number, description, taxable_amount, vat_rate, vat_amount.
+   The following must be completed on every row: invoice_date, invoice_number, taxable_amount, vat_amount.
+   Please supply this in xlsx format.
+
+2. Reconciliation of the return to the ledger
+   A reconciliation between the VAT declared in the return and the VAT control account, with each reconciling item explained.
+   The analysis must contain the following columns: item, amount, explanation, supporting_reference.
+   The following must be completed on every row: item, amount, explanation.
+   Please supply this in xlsx format.
+
+3. Credit and debit note listing
+   All credit (381) and debit (383) notes issued or received in the period, with the original invoice each one adjusts.
+   The analysis must contain the following columns: note_date, note_number, note_type, original_invoice_number, taxable_amount, vat_amount, reason.
+   The following must be completed on every row: note_number, original_invoice_number, vat_amount.
+   Please supply this in xlsx format.
+
+Please provide the above by 20 days from the date of this letter. If any item cannot be provided in the form requested, please say so and explain why, rather than omitting it — an incomplete response will require a further request and will extend the review.
+
+Yours faithfully,
+Zakat, Tax and Customs Authority
+VAT Audit</pre></div><textarea class="letter-input" rows="3" disabled placeholder="Paste the email chain — what you sent, and anything the taxpayer wrote back."></textarea><div class="row-actions"><button class="btn" disabled>Add to the chain</button><button class="btn ghost" disabled>Read what was asked for</button><span class="linklike">or drop in an .eml / .msg file</span></div><p class="detail-note">Forwarding the email brings the attachments with it — the spreadsheets land in step 2 without a second upload.</p></div></section>
+  <section class="rstep"><div class="rstep-head"><span class="rstep-n">2</span><h3>Documents received</h3><span class="sub">1 on file</span></div><div class="rstep-body"><div class="dropzone"><b>Drop what the taxpayer sent here</b><span class="sub">.xlsx, .xlsm, .csv — read into columns and rows on arrival</span></div><div class="docrow"><b>Sales_Analysis_Q1_2025.xlsx</b><span class="sub">22 rows · 6 columns</span></div></div></section>
+  <section class="rstep"><div class="rstep-head"><span class="rstep-n">3</span><h3>Requested versus received</h3><span class="sub">3 outstanding of 3</span></div><div class="rstep-body"><div class="statebar"><div class="statechip pri-high"><b>2</b><span>missing</span></div><div class="statechip pri-high"><b>1</b><span>incomplete</span></div><div class="statechip pri-medium"><b>0</b><span>need review</span></div><div class="statechip pri-low"><b>0</b><span>received</span></div></div><div class="assesslist"><div class="assessrow incomplete"><span class="pill pri-high">Incomplete</span><div><b>Detailed sales analysis</b><p>The &#x27;Customer VAT number&#x27; column was requested but is not in the file.</p><small class="mono">Sales_Analysis_Q1_2025.xlsx</small></div></div><div class="assessrow missing"><span class="pill pri-high">Missing</span><div><b>Reconciliation of the return to the ledger</b></div></div><div class="assessrow missing"><span class="pill pri-high">Missing</span><div><b>Credit and debit note listing</b></div></div></div><p class="detail-note"><b>Incomplete</b> is the taxpayer's to fix; <b>needs review</b> is yours to settle. A chase written from the second asks for something that was already sent.</p></div></section>
+  <section class="rstep"><div class="rstep-head"><span class="rstep-n">4</span><h3>The email to send next</h3><span class="sub">drafted deterministically</span></div><div class="rstep-body"><pre class="letterpre">Al-Faisaliah Trading Co.
+VAT registration number 300012345600003
+
+Subject: Outstanding information — VAT period 01 January 2025 to 31 March 2025
+
+Dear Sir or Madam,
+
+Thank you for the information supplied. On review, the following remains outstanding or does not meet the terms of the original request. Items already supplied in full are not repeated here.
+
+1. Detailed sales analysis
+   - The &#x27;Customer VAT number&#x27; column was requested but is not in the file. (header row of xlsx)
+   - The &#x27;Description&#x27; column was requested but is not in the file. (header row of xlsx)
+   - &#x27;Invoice number&#x27; must be completed on every row, but is empty in 3 of 22 rows. (rows 7, 13, 18)
+   - The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 — 39 days are not covered. (latest dated row)
+   - The stated total for &#x27;VAT amount&#x27; is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 — a difference of SAR 119,000.00. (totals row vs 22 data rows)
+
+2. Reconciliation of the return to the ledger
+   - Nothing was supplied for &#x27;Reconciliation of the return to the ledger&#x27;.
+
+3. Credit and debit note listing
+   - Nothing was supplied for &#x27;Credit and debit note listing&#x27;.
+
+Please supply the outstanding items by 16 August 2026.
+
+Yours faithfully,
+Zakat, Tax and Customs Authority
+VAT Audit</pre></div></section>
+</div>
+
+<div class="roundcard soon"><div class="round-head"><span class="round-n">Round 2</span>
+<span class="round-origin">Opens from the investigation — when a hypothesis cannot be settled
+on the evidence held, requesting information from the taxpayer starts the next round here.
+</span><span class="pill status">coming soon</span></div>
+<div class="rstep"><p class="detail-note" style="margin:0">The same four steps, against
+whatever the next question turns out to be.</p></div></div>
+</div><div class="pane" id="pane-investigation">
+<header class="page-head"><div><h1>Investigation</h1>
+<p class="sub">CASE-2025-0481 · what the evidence shows</p></div>
+<div class="chips"><span class="pill">12 hypotheses</span>
+<span class="pill pri-medium">12 undecided</span>
+</div></header>
+
+<div class="panel"><div class="panel-head"><div class="ai-h">
+<span class="chip-det">Deterministic</span><h2>ZATCA's own invoice records</h2></div>
+<span class="muted">22 invoices · ZATCA_Invoices_Q1_2025.xlsx</span>
+</div><div class="panel-body">
+<div class="statebar"><div class="statechip pri-low"><b>19</b>
+<span>matched</span></div><div class="statechip pri-high"><b>3</b><span>omission · SAR 357,000</span></div><div class="statechip pri-high"><b>1</b><span>value · SAR 12,000</span></div><div class="statechip pri-high"><b>1</b><span>identifier</span></div></div>
+<p class="detail-note" style="margin-top:0">22 rows in
+<b>Sales_Analysis_Q1_2025.xlsx</b> against 22 in
+<b>ZATCA_Invoices_Q1_2025.xlsx</b>. Amounts are read per rule, never added across them.</p>
+<div class="assesslist"><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1023 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 20 (INV-2025-1023)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1024 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 21 (INV-2025-1024)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1025 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 22 (INV-2025-1025)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-03</span><div><p>Invoice INV-2025-1005 is listed with VAT of SAR 119,000.00; ZATCA&#x27;s record shows SAR 131,000.00.</p><small class="mono">listing row 5 (INV-2025-1005) · ZATCA row 5 (INV-2025-1005)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-10</span><div><p>3 of 22 rows in the listing carry no invoice number and cannot be matched against ZATCA&#x27;s records.</p><small class="mono">listing row 7, row 13, row 18</small></div></div></div></div></div>
+<div class="panel"><div class="panel-head"><div class="ai-h">
+<span class="chip-det">Agents</span><h2>Investigation</h2></div>
+<span class="pill status">∑ Adjudicated (no AI)</span></div>
+<div class="panel-body">
+<div class="hyp"><div class="hyp-side"><code>CA-01</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
+The sales the taxpayer&#x27;s own listing supports may exceed the sales reported in the return.
+<div class="hyp-why"><b>Why raised</b> Sales_Analysis_Q1_2025.xlsx can be totalled and set against the declared box.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies of goods and services made by a taxable person in the Kingdom in the course of carrying on an economic activity;
+accordingly, taxable sales evidenced by the records but not reflected in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>CA-02</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">CALCULATION</div>
+Part of the supplies evidenced by the listing may not have been disclosed in the return at all.
+<div class="hyp-why"><b>Why raised</b> If the listing exceeds the return, the excess is either a timing difference or revenue that was never disclosed.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies made in the course of an economic activity, whether or not they are declared;
+accordingly, supplies that were not disclosed in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>EV-02</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">EVIDENCE &AMP; COVERAGE</div>
+The documents provided may not correspond to the sales declared in the return.
+<div class="hyp-why"><b>Why raised</b> The documents supplied can be set against the declared sales to see whether they describe the same population.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.</div>
+<div class="cite found">
+<div class="cite-head"><span class="pill pri-low">Article 66</span>
+<b>Records</b></div>
+<p class="cite-because"><b>Article 66</b> establishes that a taxable person must keep records that allow the tax due to be established;
+accordingly, records that do not correspond to the declared supplies do not substantiate the return, and the declared figure cannot be verified from them.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
+<span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>EV-03</code>
+<span class="pill status">R01</span></div>
+<div class="hyp-main"><div class="hyp-agent">EVIDENCE &AMP; COVERAGE</div>
+Sales evidenced by the records submitted may exceed those declared, with no trial balance supplied to substantiate the difference.
+<div class="hyp-why"><b>Why raised</b> No trial balance is among the documents received, so an excess over the return cannot be traced into the accounts.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports. No trial balance was supplied to substantiate it.</div>
+<div class="cite found">
+<div class="cite-head"><span class="pill pri-low">Article 66</span>
+<b>Records</b></div>
+<p class="cite-because"><b>Article 66</b> establishes that a taxable person must keep records adequate to establish the tax due;
+accordingly, an excess of the records over the return that no trial balance reconciles is unsubstantiated, and the supplies behind it remain within the scope of the tax.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
+<span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 618,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>RG-S1</code>
+<span class="pill status">D01</span></div>
+<div class="hyp-main"><div class="hyp-agent">REGULATIONS</div>
+Some rows may not meet all the conditions of a valid tax invoice, which would put the documents themselves in question rather than the arithmetic.
+<div class="hyp-why"><b>Why raised</b> Sales_Analysis_Q1_2025.xlsx carries 22 rows to test against the conditions of a valid tax invoice.</div>
+<div class="verdict verdict-partially-supported"><b>partially supported</b>
+ — 3 of 22 rows in Sales_Analysis_Q1_2025.xlsx are missing invoice_number, carrying SAR 357,000.00 of VAT between them.</div>
+<div class="cite found">
+<div class="cite-head"><span class="pill pri-low">Article 53</span>
+<b>Tax Invoices</b></div>
+<p class="cite-because"><b>Article 53</b> establishes that a tax invoice must be issued for every taxable supply and must contain the particulars the article specifies;
+accordingly, supplies evidenced by documents that do not meet those conditions are not substantiated by a valid tax invoice.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">1- 22 a) Each Taxable Person must issue or arrange for the issuance of a Tax Invoice containing – at a minimum- the information provided in Paragraph (5) of this Article in the following cases: 1. Where the Taxable Person makes a Taxable Supply of Goods or Services which he to another Taxable Person or to a non-taxable legal Person or to an establishment (sole proprietorship) or to any other entity established in accordance with the laws of the Kingdom 2. Where the Taxable Person receives Consideration in respect of and prior to making a Taxable Supply of Goods or Services to an another Taxable Person, to a Nonresident Legal Person, to an establishment (sole proprietorship) or to any other…</pre>
+<span class="sub">CHAPTER NINE: CALCULATION OF TAX PAYABLE · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 357,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>ZR-01</code>
+<span class="pill status">D03</span></div>
+<div class="hyp-main"><div class="hyp-agent">ZATCA RECONCILIATION</div>
+Invoices evidenced in the Authority&#x27;s own records are absent from the sales listing supplied, so the listing may not be a complete record of the period&#x27;s sales.
+<div class="hyp-why"><b>Why raised</b> 3 of the 22 invoices in ZATCA&#x27;s records for this period have no counterpart in Sales_Analysis_Q1_2025.xlsx.</div>
+<div class="verdict verdict-partially-supported"><b>partially supported</b>
+ — 3 of the 22 invoices in ZATCA&#x27;s records for this period are not in the listing supplied, carrying VAT of SAR 357,000.00. The listing therefore cannot be a complete record of the period&#x27;s sales.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on all taxable supplies made in the course of an economic activity, whether or not they are declared;
+accordingly, supplies that were not disclosed in the return may understate taxable supplies and the output VAT due.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 357,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>ZR-02</code>
+<span class="pill status">D03</span></div>
+<div class="hyp-main"><div class="hyp-agent">ZATCA RECONCILIATION</div>
+Invoices appear in both the listing and the Authority&#x27;s records with different VAT amounts, so the documents supplied do not correspond to the Authority&#x27;s record of the same supplies.
+<div class="hyp-why"><b>Why raised</b> 1 of the 19 invoices present in both populations is recorded with a different VAT amount in each.</div>
+<div class="verdict verdict-partially-supported"><b>partially supported</b>
+ — 1 of the 19 invoices present in both the listing and ZATCA&#x27;s records is recorded with a different VAT amount in each, differing by SAR 12,000.00 in total and SAR 12,000.00 on balance. The documents supplied do not correspond to the Authority&#x27;s own record of the same invoices.</div>
+<div class="cite found">
+<div class="cite-head"><span class="pill pri-low">Article 66</span>
+<b>Records</b></div>
+<p class="cite-because"><b>Article 66</b> establishes that a taxable person must keep records that allow the tax due to be established;
+accordingly, records that do not correspond to the declared supplies do not substantiate the return, and the declared figure cannot be verified from them.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
+<span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b>SAR 12,000</b></div></div>
+<div class="hyp"><div class="hyp-side"><code>DE-01</code>
+<span class="pill status">A09</span></div>
+<div class="hyp-main"><div class="hyp-agent">DATA ENTRY</div>
+The declared figure may be the supported one with the decimal point in the wrong place — a keying error rather than an under-declaration.
+<div class="hyp-why"><b>Why raised</b> The declared figure and the figure the documents support differ by more than materiality, which is the precondition for a keying test.</div>
+<div class="verdict verdict-refuted"><b>refuted</b>
+ — No power-of-ten multiple of the declared SAR 2,000,000 reaches the expected SAR 2,618,000.</div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+refuted</span><span class="pill pri-medium">Insufficient confidence</span>
+<b></b></div></div>
+<div class="hyp"><div class="hyp-side"><code>DE-02</code>
+<span class="pill status">A09</span></div>
+<div class="hyp-main"><div class="hyp-agent">DATA ENTRY</div>
+The declared figure may carry the supported figure&#x27;s digits in a different order, which would indicate a transposition when the return was keyed.
+<div class="hyp-why"><b>Why raised</b> A transposition produces the same digits in another order, which is worth excluding before treating the difference as undeclared revenue.</div>
+<div class="verdict verdict-refuted"><b>refuted</b>
+ — The declared and expected figures do not share the same digits.</div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+refuted</span><span class="pill pri-medium">Insufficient confidence</span>
+<b></b></div></div>
+<div class="hyp"><div class="hyp-side"><code>DE-03</code>
+<span class="pill status">R10</span></div>
+<div class="hyp-main"><div class="hyp-agent">DATA ENTRY</div>
+The declaration may be out of character for this taxpayer&#x27;s own trading history, which would support a data-entry explanation over a trading one.
+<div class="hyp-why"><b>Why raised</b> A declaration far outside this taxpayer&#x27;s own filing range supports a keying explanation over a trading one.</div>
+<div class="verdict verdict-inconclusive"><b>inconclusive</b>
+ — Too few prior periods on file to judge the magnitude.</div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+inconclusive</span><span class="pill pri-medium">Insufficient confidence</span>
+<b></b></div></div>
+<div class="hyp"><div class="hyp-side"><code>EV-04</code>
+<span class="pill status">R09</span></div>
+<div class="hyp-main"><div class="hyp-agent">EVIDENCE &AMP; COVERAGE</div>
+The listing may contain supplies from a secondary business activity that the return does not disclose.
+<div class="hyp-why"><b>Why raised</b> The registration carries 2 economic activities, so the listing can be tested for revenue outside the disclosed ones.</div>
+<div class="verdict verdict-inconclusive"><b>inconclusive</b>
+ — Sales_Analysis_Q1_2025.xlsx has no description column, so supplies cannot be matched to the registered activities.</div>
+<div class="cite needs-validation">
+<div class="cite-head"><span class="pill pri-low">Article 14</span>
+<b>Taxable Supplies In The Kingdom</b><span class="pill pri-medium">wording superseded</span></div>
+<p class="cite-because"><b>Article 14</b> establishes that VAT is imposed on taxable supplies made in the course of an economic activity — the activity as carried on, not only as registered;
+accordingly, revenue from an activity the registration does not disclose is still within the scope of the tax and may understate taxable supplies.</p><p class="cite-warn">The English edition dates from 2021 and this article was amended in 2024. The wording shown is superseded — verify against the Arabic before quoting it.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
+<span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-medium">
+inconclusive</span><span class="pill pri-medium">Insufficient confidence</span>
+<b></b></div></div>
+<div class="hyp"><div class="hyp-side"><code>EV-05</code>
+<span class="pill status">D01</span></div>
+<div class="hyp-main"><div class="hyp-agent">EVIDENCE &AMP; COVERAGE</div>
+Items requested from the taxpayer remain outstanding, and claims that depend on them cannot be substantiated.
+<div class="hyp-why"><b>Why raised</b> 2 requested items have still not been supplied.</div>
+<div class="verdict verdict-supported"><b>supported</b>
+ — 2 requested items remain outstanding — Credit and debit note listing, Reconciliation of the return to the ledger. Claims that depend on them cannot be substantiated.</div>
+<div class="cite found">
+<div class="cite-head"><span class="pill pri-low">Article 56</span>
+<b>Right Of The Authority To Obtain Information</b></div>
+<p class="cite-because"><b>Article 56</b> establishes that the Authority may require a taxable person to provide the information and documents it needs to establish the tax due;
+accordingly, claims that depend on documents which were requested and not supplied cannot be substantiated.</p>
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">1- All Persons must provide the Authority with any information requested by the Authority for the purposes of establishing whether that Person is complying fully with its Tax obligations. 2- In addition to the other rights provided for in this Article, the Authority may access relevant information held by third parties directly from those parties including requiring direct access to records generally on an ongoing basis. 3- The third parties to which this Article applies are limited to government entities, banks and other financial institutions regulated in the Kingdom by the Saudi Central Bank or the Capital Market Authority. 4- A failure of a third party to provide access to information…</pre>
+<span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill pri-low">
+supported</span><span class="pill pri-medium">Moderate confidence</span>
+<b></b></div></div>
+<p class="detail-note">Every verdict above was settled by the engine against the case's own
+figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
+</div></div></div><div class="pane" id="pane-report">
+<header class="page-head"><div><p class="eyebrow">Audit report</p>
+<h1>Al-Faisaliah Trading Co.</h1></div>
+<div class="chips"><span class="pill">Download Word</span>
+<span class="pill">Open printable / PDF</span></div></header>
+<div class="callout warn"><b>No finding has been confirmed yet.</b> This report is built from
+the findings you accept in the Investigation tab — the engine's own verdicts are proposals, not
+audit conclusions. 12 hypotheses are still undecided.</div>
+<div class="panel"><div class="panel-head"><h2>Audit report</h2>
+<span class="muted">27 of 35 fields
+answered from the case · 8 need a person or another system
+</span></div><div class="panel-body"><div class="rep-section"><h3 class="rep-h">Taxpayer information</h3><div class="kv"><div><span class="k">Taxpayer name</span><span class="v">Al-Faisaliah Trading Co.</span></div><div><span class="k">Taxpayer TIN</span><span class="v">300012345600003</span></div><div><span class="k">Taxpayer contact details</span><span class="v gap">[not held]</span></div></div></div><div class="rep-section"><h3 class="rep-h">Audit Case information</h3><div class="kv"><div><span class="k">Audit Case ID</span><span class="v">CASE-2025-0481</span></div><div><span class="k">Audit Creation Date</span><span class="v">2026-07-23</span></div><div><span class="k">Case Creation Reason</span><span class="v">Risk Engine</span></div><div><span class="k">Date Audit closed</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Priority</span><span class="v">1</span></div><div><span class="k">Priority risk</span><span class="v">1</span></div><div><span class="k">Audit Case Type</span><span class="v">Limited Scope Audit</span></div><div><span class="k">Tax type</span><span class="v">VAT</span></div><div><span class="k">Audit Case Tax Period</span><span class="v">01 January 2025 to 31 March 2025</span></div><div><span class="k">Confidential Audit</span><span class="v">No</span></div><div><span class="k">Risk Confidentiality</span><span class="v">No</span></div><div><span class="k">Place of conduct of Audit</span><span class="v">Desk audit — conducted on documents supplied</span></div><div><span class="k">Address of Audit location</span><span class="v">Not applicable — desk audit</span></div><div><span class="k">Meeting date</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Field audit report date</span><span class="v">Not applicable — no field visit was made</span></div></div></div><div class="rep-section"><h3 class="rep-h">Assigned Audit Team information</h3><div class="kv"><div><span class="k">Audit Manager</span><span class="v gap">[not held]</span></div><div><span class="k">Audit Supervisor</span><span class="v gap">[not held]</span></div><div><span class="k">Audit Officer</span><span class="v gap">[not held]</span></div></div></div><div class="rep-section"><h3 class="rep-h">Taxpayer documentation</h3><div class="kv"><div><span class="k">Documents required/obtained</span><span class="v">Requested:
+  - Detailed sales analysis
+  - Reconciliation of the return to the ledger
+  - Credit and debit note listing
+Obtained:
+  - Sales_Analysis_Q1_2025.xlsx (22 rows, 6 columns)
+Outstanding at the date of this report (7):
+  - Detailed sales analysis: The &#x27;Customer VAT number&#x27; column was requested but is not in the file.
+  - Detailed sales analysis: The &#x27;Description&#x27; column was requested but is not in the file.
+  - Detailed sales analysis: &#x27;Invoice number&#x27; must be completed on every row, but is empty in 3 of 22 rows.
+  - Detailed sales analysis: The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 — 39 days are not covered.
+  - Detailed sales analysis: The stated total for &#x27;VAT amount&#x27; is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 — a difference of SAR 119,000.00.
+  - Reconciliation of the return to the ledger: Nothing was supplied for &#x27;Reconciliation of the return to the ledger&#x27;.
+  - Credit and debit note listing: Nothing was supplied for &#x27;Credit and debit note listing&#x27;.</span></div></div></div><div class="rep-section"><h3 class="rep-h">Audit Outcome</h3><div class="kv"><div><span class="k">Audit objectives</span><span class="v">To establish whether the VAT declared for 01 January 2025 to 31 March 2025 is supported by the records the taxpayer holds, and to quantify any difference.</span></div><div><span class="k">Description of Audit activities</span><span class="v">The review was conducted on the documents supplied by the taxpayer.
+22 lines were read from Sales_Analysis_Q1_2025.xlsx and tested against the conditions for inclusion in Standard-rated sales VAT for the period.
+The records that qualify total SAR 2,618,000.00 against SAR 2,000,000.00 declared, a difference of SAR 618,000.00.
+Four automated checks were then run over the records received — the conditions the law sets for a document, keying and transposition errors, the totals the records support against those declared, and whether there is supporting evidence behind what was claimed. Each proposal was settled against the source records; the findings below are those that were confirmed.
+NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span></div><div><span class="k">Audit Findings</span><span class="v">No finding was established from the records supplied. The declared position is supported by the evidence available.</span></div><div><span class="k">Audit Recommendations</span><span class="v">Close the case. No adjustment is proposed.</span></div><div><span class="k">Rulings</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Assessment</span><span class="v">No measure is proposed. The records supplied support the position declared, within the materiality applied to this review (SAR 10,000.00).</span></div><div><span class="k">Penalties imposed</span><span class="v gap">[for the auditor to complete]</span></div><div><span class="k">Future Audits</span><span class="v">The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span></div></div></div><div class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="kv"><div><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span></div><div><span class="k">Indicator response description</span><span class="v">The referral surfaced a real difference, but the records supplied account for it. No finding.</span></div><div><span class="k">Under reporting driver</span><span class="v">None established</span></div><div><span class="k">Under reporting reason</span><span class="v">Not applicable — no under-reporting was established.</span></div><div><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span></div></div></div></div></div></div>
+</div><script>
+const tabs = document.querySelectorAll('.ctab');
+function show(k) {
+  tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
+}
+tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+show('correspondence');
+</script></body></html>

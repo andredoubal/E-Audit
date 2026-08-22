@@ -542,6 +542,17 @@ predicate, so it travels into `sql_when()`: a scope applied only in Python would
 mean the batch path silently ran the rule on every taxpayer, which is the one bug
 the predicate algebra exists to prevent. `test_pipeline.py` asserts the two agree.
 
+## Two standalone HTML files (they are not the same thing)
+
+- **** — a working re-implementation of the deterministic core in JavaScript.
+  Toggling a rule there re-runs  and moves the expected figure. It is the offline
+  *product*, and it is currently several passes behind (see the drift note below).
+- **** — a **static walkthrough**, generated from live API responses by
+  . Nothing in it recomputes and the controls do not act; the page says
+  so at the top. It exists so someone can see how the application looks now without standing up
+  Postgres, the API and Vite. Regenerate it whenever the UI changes — being generated is what
+  stops it drifting into describing a product that no longer exists.
+
 ## The standalone portal
 
 `portal.html` is a single self-contained build of the workbench — no backend, no

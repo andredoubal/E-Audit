@@ -1,0 +1,318 @@
+"""Build a single-file visual demo of the workbench.
+
+Not `portal.html`. That file is a working re-implementation of the deterministic core in
+JavaScript — toggle a rule there and the expected figure moves. This is the other thing: a
+**static walkthrough** of how the application looks now, with the seeded case's real output
+baked in, for showing someone the shape of the product without standing up Postgres, the API
+and Vite first.
+
+It is generated rather than hand-written, from live API responses, so it cannot quietly drift
+into describing a product that no longer exists — regenerate it and it tells the truth again.
+Nothing here recomputes: the numbers are the engine's, captured at build time, and the page says
+so rather than implying an engine is running behind it.
+
+    python -m app.demo_page            # reads the running API on :8000
+"""
+from __future__ import annotations
+
+import html
+import json
+import urllib.request
+from pathlib import Path
+
+API = "http://127.0.0.1:8000/api"
+CASE = "CASE-2025-0481"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "demo.html"
+THEME = ROOT / "frontend" / "src" / "theme.css"
+
+
+def _get(path: str) -> dict:
+    with urllib.request.urlopen(f"{API}{path}", timeout=30) as r:
+        return json.loads(r.read().decode())
+
+
+def e(v) -> str:
+    return html.escape(str(v if v is not None else ""))
+
+
+def sar(n) -> str:
+    try:
+        return f"SAR {abs(float(n)):,.0f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+# ------------------------------------------------------------------ the three tabs
+
+def correspondence(loop: dict, threads: dict) -> str:
+    a = loop.get("assessment") or {"items": [], "summary": {}}
+    t = (threads.get("threads") or [{}])[0]
+    msgs = t.get("messages") or []
+    docs = t.get("documents") or []
+    rows = a["items"]
+    outstanding = [i for i in rows if i["state"] != "received"]
+
+    def step(n, title, note, body):
+        return (f'<section class="rstep"><div class="rstep-head"><span class="rstep-n">{n}</span>'
+                f'<h3>{e(title)}</h3><span class="sub">{e(note)}</span></div>'
+                f'<div class="rstep-body">{body}</div></section>')
+
+    chain = "".join(
+        f'<div class="msg msg-{e(m["direction"])}"><div class="msg-meta"><b>{e(m["sender"])}</b>'
+        f'<span class="sub">→ {e(m["recipient"])} · AI draft — review before sending</span></div>'
+        f'<pre class="letterpre">{e(m["body"])}</pre></div>' for m in msgs)
+    chain += ('<textarea class="letter-input" rows="3" disabled '
+              'placeholder="Paste the email chain — what you sent, and anything the taxpayer '
+              'wrote back."></textarea>'
+              '<div class="row-actions"><button class="btn" disabled>Add to the chain</button>'
+              '<button class="btn ghost" disabled>Read what was asked for</button>'
+              '<span class="linklike">or drop in an .eml / .msg file</span></div>'
+              '<p class="detail-note">Forwarding the email brings the attachments with it — the '
+              'spreadsheets land in step 2 without a second upload.</p>')
+
+    received = ('<div class="dropzone"><b>Drop what the taxpayer sent here</b>'
+                '<span class="sub">.xlsx, .xlsm, .csv — read into columns and rows on arrival'
+                '</span></div>')
+    received += "".join(
+        f'<div class="docrow"><b>{e(d["filename"])}</b>'
+        f'<span class="sub">{d["rows"]} rows · {d["columns"]} columns</span></div>' for d in docs)
+
+    pills = {"missing": "pri-high", "incomplete": "pri-high",
+             "needs-review": "pri-medium", "received": "pri-low"}
+    bar = "".join(
+        f'<div class="statechip {pills[s]}"><b>{a["summary"].get(s, 0)}</b>'
+        f'<span>{"need review" if s == "needs-review" else s}</span></div>'
+        for s in ("missing", "incomplete", "needs-review", "received"))
+    compare = f'<div class="statebar">{bar}</div><div class="assesslist">' + "".join(
+        f'<div class="assessrow {e(i["state"])}"><span class="pill {pills[i["state"]]}">'
+        f'{e(i["state_label"])}</span><div><b>{e(i["label"])}</b>'
+        + (f'<p>{e(i["reason"])}</p>' if i["reason"] else "")
+        + (f'<small class="mono">{e(", ".join(i["documents"]))}</small>'
+           if i["documents"] and ", ".join(i["documents"]) != i["label"] else "")
+        + "</div></div>" for i in rows) + (
+        '</div><p class="detail-note"><b>Incomplete</b> is the taxpayer\'s to fix; '
+        '<b>needs review</b> is yours to settle. A chase written from the second asks for '
+        'something that was already sent.</p>')
+
+    chase = (f'<pre class="letterpre">{e(loop.get("_followup", ""))}</pre>'
+             if loop.get("_followup") else
+             '<p class="detail-note">Drafted from the gaps in step 3 and nothing else.</p>')
+
+    return f"""
+<header class="page-head"><div><h1>Taxpayer correspondence</h1>
+<p class="sub">{e(CASE)} · what we asked for, and what arrived</p></div>
+<div class="chips"><span class="pill pri-high">Round 1</span>
+<span class="pill pri-high">{len(outstanding)} outstanding</span></div></header>
+
+<div class="roundcard live">
+  <div class="round-head"><span class="round-n">Round 1</span>
+  <span class="round-origin">Opening request</span>
+  <span class="pill pri-low">open</span></div>
+  {step(1, "The email chain", f"{len(msgs)} message", chain)}
+  {step(2, "Documents received", f"{len(docs)} on file", received)}
+  {step(3, "Requested versus received", f"{len(outstanding)} outstanding of {len(rows)}", compare)}
+  {step(4, "The email to send next", "drafted deterministically", chase)}
+</div>
+
+<div class="roundcard soon"><div class="round-head"><span class="round-n">Round 2</span>
+<span class="round-origin">Opens from the investigation — when a hypothesis cannot be settled
+on the evidence held, requesting information from the taxpayer starts the next round here.
+</span><span class="pill status">coming soon</span></div>
+<div class="rstep"><p class="detail-note" style="margin:0">The same four steps, against
+whatever the next question turns out to be.</p></div></div>
+"""
+
+
+def investigation(inv: dict, z: dict) -> str:
+    cats = "".join(
+        f'<div class="statechip {"pri-high" if c["blocking"] else "pri-medium"}">'
+        f'<b>{c["count"]}</b><span>{e(c["category"])}'
+        + (f' · {sar(c["vat_at_stake"])}' if c["vat_at_stake"] else "") + "</span></div>"
+        for c in z.get("categories", []))
+    mismatches = "".join(
+        f'<div class="assessrow {"incomplete" if m["severity"] == "blocking" else "needs-review"}">'
+        f'<span class="pill {"pri-high" if m["severity"] == "blocking" else "pri-medium"}">'
+        f'{e(m["code"])}</span><div><p>{e(m["detail"])}</p>'
+        f'<small class="mono">{e(m["citation"])}</small></div></div>'
+        for m in z.get("mismatches", []))
+
+    zatca = f"""
+<div class="panel"><div class="panel-head"><div class="ai-h">
+<span class="chip-det">Deterministic</span><h2>ZATCA's own invoice records</h2></div>
+<span class="muted">{z.get("zatca_count", 0)} invoices · {e((z.get("dataset") or {}).get("filename", ""))}</span>
+</div><div class="panel-body">
+<div class="statebar"><div class="statechip pri-low"><b>{z.get("matched_count", 0)}</b>
+<span>matched</span></div>{cats}</div>
+<p class="detail-note" style="margin-top:0">{z.get("listing_count", 0)} rows in
+<b>{e(z.get("listing_name", ""))}</b> against {z.get("zatca_count", 0)} in
+<b>{e(z.get("zatca_name", ""))}</b>. Amounts are read per rule, never added across them.</p>
+<div class="assesslist">{mismatches}</div></div></div>"""
+
+    cards = []
+    for h in inv["hypotheses"]:
+        c = h.get("regulatory") or {}
+        cite = ""
+        if c.get("state") == "not-found":
+            cite = ('<div class="cite none"><span class="pill status">no provision identified'
+                    f'</span><span class="sub">{e(c.get("note", ""))}</span></div>')
+        elif c.get("label"):
+            warn = (f'<p class="cite-warn">{e(c["note"])}</p>'
+                    if c["state"] == "needs-validation" else "")
+            stale = ('<span class="pill pri-medium">wording superseded</span>'
+                     if c["state"] == "needs-validation" else "")
+            cite = f"""<div class="cite {e(c['state'])}">
+<div class="cite-head"><span class="pill pri-low">{e(c['label'])}</span>
+<b>{e(c['title'])}</b>{stale}</div>
+<p class="cite-because"><b>{e(c['label'])}</b> establishes that {e(c['establishes'])};
+accordingly, {e(c['consequence'])}.</p>{warn}
+<details><summary>read the article</summary>
+<pre class="letterpre cite-text">{e(c['text'])}</pre>
+<span class="sub">{e(c['chapter'])} · ZATCA English translation, unofficial — the Arabic is
+the official version.</span></details></div>"""
+
+        band = h["confidence"]["band"]
+        cards.append(f"""
+<div class="hyp"><div class="hyp-side"><code>{e(h['hypothesis_id'])}</code>
+<span class="pill status">{e(h['reason_code'])}</span></div>
+<div class="hyp-main"><div class="hyp-agent">{e(h['agent']).upper()}</div>
+{e(h['claim'])}
+<div class="hyp-why"><b>Why raised</b> {e(h['why'])}</div>
+<div class="verdict verdict-{e(h['status'])}"><b>{e(h['status'].replace('-', ' '))}</b>
+{" — " + e(h['explanation']) if h['explanation'] else ""}</div>
+{cite}
+<div class="row-actions"><button class="btn" disabled>Record your decision</button>
+<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="hyp-right"><span class="pill {'pri-low' if h['status'] == 'supported' else 'pri-medium'}">
+{e(h['status'])}</span><span class="pill pri-medium">{e(band)} confidence</span>
+<b>{sar(h['amount']) if h['amount'] else ''}</b></div></div>""")
+
+    return f"""
+<header class="page-head"><div><h1>Investigation</h1>
+<p class="sub">{e(CASE)} · what the evidence shows</p></div>
+<div class="chips"><span class="pill">{inv['counts']['total']} hypotheses</span>
+<span class="pill pri-medium">{inv['counts']['total'] - inv['counts']['decided']} undecided</span>
+</div></header>
+{zatca}
+<div class="panel"><div class="panel-head"><div class="ai-h">
+<span class="chip-det">Agents</span><h2>Investigation</h2></div>
+<span class="pill status">∑ Adjudicated (no AI)</span></div>
+<div class="panel-body">{"".join(cards)}
+<p class="detail-note">Every verdict above was settled by the engine against the case's own
+figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
+</div></div>"""
+
+
+def report(rep: dict, inv: dict) -> str:
+    sections = "".join(
+        f'<div class="rep-section"><h3 class="rep-h">{e(s["title"])}</h3><div class="kv">' +
+        "".join(f'<div><span class="k">{e(f["label"])}</span>'
+                f'<span class="v{"" if f["held"] else " gap"}">{e(f["value"])}</span></div>'
+                for f in s["fields"]) + "</div></div>"
+        for s in rep["sections"])
+    undecided = inv["counts"]["total"] - inv["counts"]["decided"]
+    return f"""
+<header class="page-head"><div><p class="eyebrow">Audit report</p>
+<h1>{e(rep.get("taxpayer", CASE))}</h1></div>
+<div class="chips"><span class="pill">Download Word</span>
+<span class="pill">Open printable / PDF</span></div></header>
+<div class="callout warn"><b>No finding has been confirmed yet.</b> This report is built from
+the findings you accept in the Investigation tab — the engine's own verdicts are proposals, not
+audit conclusions. {undecided} hypotheses are still undecided.</div>
+<div class="panel"><div class="panel-head"><h2>{e(rep["title"])}</h2>
+<span class="muted">{rep["completeness"]["filled"]} of {rep["completeness"]["fields"]} fields
+answered from the case · {rep["completeness"]["outstanding"]} need a person or another system
+</span></div><div class="panel-body">{sections}</div></div>"""
+
+
+# ------------------------------------------------------------------ the page
+
+def build() -> str:
+    loop = _get(f"/cases/{CASE}/requests")
+    threads = _get(f"/cases/{CASE}/threads")
+    inv = _get(f"/cases/{CASE}/investigation")
+    z = _get(f"/cases/{CASE}/zatca")
+    rep = _get(f"/cases/{CASE}/audit-report")
+    cov = _get("/regulatory/coverage")
+    try:
+        loop["_followup"] = _get(f"/cases/{CASE}/followup").get("text", "")
+    except Exception:                                    # noqa: BLE001
+        loop["_followup"] = ""
+
+    theme = THEME.read_text(encoding="utf-8") if THEME.exists() else ""
+    tabs = {
+        "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
+                           correspondence(loop, threads)),
+        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
+        "report": ("Audit Report", "What you concluded", report(rep, inv)),
+    }
+    nav = "".join(
+        f'<button class="ctab" data-tab="{k}"><b>{e(t)}</b><span>{e(s)}</span></button>'
+        for k, (t, s, _) in tabs.items())
+    panes = "".join(f'<div class="pane" id="pane-{k}">{body}</div>'
+                    for k, (_, _, body) in tabs.items())
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E-AUDIT — walkthrough</title>
+<style>{theme}
+body{{margin:0;padding:0 0 60px}}
+.wrap{{max-width:1180px;margin:0 auto;padding:22px}}
+.demo-note{{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+  padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}}
+.ctabs{{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}}
+.ctab{{background:none;border:none;border-bottom:2px solid transparent;padding:11px 18px 13px;
+  font:inherit;text-align:left;cursor:pointer;color:var(--muted);display:flex;
+  flex-direction:column;gap:2px}}
+.ctab b{{font-size:14px;color:var(--muted)}}
+.ctab span{{font-size:11.5px}}
+.ctab.on{{border-bottom-color:var(--brand)}}
+.ctab.on b{{color:var(--brand)}}
+.pane{{display:none}} .pane.on{{display:block}}
+.hyp{{display:flex;gap:14px;border:1px solid var(--line);border-radius:11px;padding:13px;
+  margin-bottom:11px;background:var(--surface)}}
+.hyp-side{{flex:none;width:66px;display:flex;flex-direction:column;gap:5px;align-items:flex-start}}
+.hyp-side code{{font-size:12px;font-weight:700;color:var(--brand)}}
+.hyp-main{{flex:1;font-size:13.5px;line-height:1.55}}
+.hyp-agent{{font-size:11px;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}}
+.hyp-why{{font-size:12.5px;color:var(--muted);margin:6px 0}}
+.hyp-right{{flex:none;width:160px;display:flex;flex-direction:column;gap:6px;align-items:flex-end;
+  text-align:right}}
+.verdict{{font-size:12.5px;margin:6px 0;color:var(--high)}}
+.verdict-supported{{color:var(--low)}}
+.rep-h{{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  margin:16px 0 8px}}
+.kv{{display:grid;grid-template-columns:1fr 1fr;gap:9px}}
+.kv .k{{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted)}}
+.kv .v{{font-size:13px}} .kv .v.gap{{color:var(--med);font-weight:600}}
+.kv>div{{border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:var(--surface)}}
+details summary{{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600;margin-top:4px}}
+details[open] summary{{margin-bottom:6px}}
+</style></head><body><div class="wrap">
+<header class="page-head" style="border:none">
+<div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
+
+<div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
+citation and gap on this page is the real output of the engine for the seeded demo case
+{e(CASE)}, captured when this file was generated — nothing here recomputes, and the controls do
+not act. The regulations corpus behind the citations holds {cov.get('article_count', 0)}
+articles, {len(cov.get('amended_since_english_edition', []))} of which have been amended since
+the English edition they are shown in.</div>
+
+<div class="ctabs">{nav}</div>{panes}
+</div><script>
+const tabs = document.querySelectorAll('.ctab');
+function show(k) {{
+  tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
+}}
+tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+show('correspondence');
+</script></body></html>"""
+
+
+if __name__ == "__main__":                               # pragma: no cover
+    OUT.write_text(build(), encoding="utf-8")
+    print(f"wrote {OUT} ({OUT.stat().st_size:,} bytes)")
