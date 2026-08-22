@@ -10,8 +10,10 @@ from ..db import get_db
 from ..models import (
     Taxpayer, VatReturn, Invoice, AuditCase, Rule, TaxpayerResponse, EventLog, GapFinding,
     AuditorCalculation, AuditorDecision, AuditorFinding, PersistedHypothesis, LetterDraft,
+    CaseInstruction,
 )
 from ..models.reporting import LETTER_KINDS
+from ..models.instructions import MAX_INSTRUCTIONS
 from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
@@ -469,6 +471,85 @@ def regulatory_article(number: int):
     if a is None:
         raise HTTPException(404, "article not in the corpus")
     return a
+
+
+# ------------------------------------------------- the auditor's standing AI instructions
+# One row per case, reaching every module. See `models/instructions.py` for why it is a case
+# fact rather than a session setting, and `llm/guidance.py` for why it cannot reach the rules
+# that keep figures out of the model's hands.
+
+class InstructionsIn(BaseModel):
+    text: str = ""
+    enabled: bool = True
+
+
+def _instructions_state(db: Session, case_id: str) -> dict:
+    row = db.scalar(select(CaseInstruction).where(CaseInstruction.case_id == case_id))
+    return {
+        "case_id": case_id,
+        "text": row.text if row else "",
+        "enabled": bool(row.enabled) if row else True,
+        "updated_at": row.updated_at.isoformat() if row and row.updated_at else "",
+        "updated_by": row.updated_by if row else "",
+        "max_length": MAX_INSTRUCTIONS,
+        # Published rather than described in a tooltip: an auditor is entitled to know exactly
+        # which surfaces their steer reaches, and which it deliberately does not.
+        "applies_to": [
+            {"key": "narration", "label": "The reconciliation narrative"},
+            {"key": "letters", "label": "Outbound letters — the chase and the verdict"},
+            {"key": "report", "label": "The drafted audit report"},
+            {"key": "brief", "label": "The taxpayer brief"},
+        ],
+        "excluded": [
+            {"key": "read_letter",
+             "label": "Reading a taxpayer's letter",
+             "why": "an extractor told what to expect is a reader that finds it"},
+            {"key": "calculation",
+             "label": "Translating your stated method into a query",
+             "why": "the same reason, and the query is shown to you either way"},
+            {"key": "engine",
+             "label": "Every figure, verdict and test",
+             "why": "computed in Python; no instruction reaches them"},
+        ],
+    }
+
+
+@router.get("/cases/{case_id}/instructions")
+def get_instructions(case_id: str, db: Session = Depends(get_db)):
+    """What the auditor has told the AI about this case, and where it applies."""
+    _case_or_404(db, case_id)
+    return _instructions_state(db, case_id)
+
+
+@router.put("/cases/{case_id}/instructions")
+def set_instructions(case_id: str, body: InstructionsIn, db: Session = Depends(get_db)):
+    """Write the standing instructions. An empty text clears them.
+
+    `enabled` is kept separate from clearing on purpose: an auditor who wants to see what the AI
+    says *without* their steer should not have to delete what they wrote to find out.
+    """
+    _case_or_404(db, case_id)
+    text = (body.text or "").strip()
+    if len(text) > MAX_INSTRUCTIONS:
+        raise HTTPException(422, f"instructions are limited to {MAX_INSTRUCTIONS} characters")
+
+    row = db.scalar(select(CaseInstruction).where(CaseInstruction.case_id == case_id))
+    if not text:
+        if row is not None:
+            db.delete(row)
+        action = "instructions-cleared"
+    else:
+        if row is None:
+            row = CaseInstruction(case_id=case_id)
+            db.add(row)
+        row.text = text
+        row.enabled = bool(body.enabled)
+        action = "instructions-set" if body.enabled else "instructions-paused"
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action=action,
+                    payload={"length": len(text), "enabled": bool(body.enabled)}))
+    db.commit()
+    return _instructions_state(db, case_id)
 
 
 # ------------------------------------------------------------------ the case assistant

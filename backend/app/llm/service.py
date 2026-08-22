@@ -31,7 +31,7 @@ import os
 from typing import Iterator
 
 from ..config import settings
-from . import provider
+from . import guidance, provider
 from .schemas import NextBestAction, TaxpayerSummary, LetterExtraction, CalcQuerySpec
 from .prompts import (
     FROZEN_PREAMBLE, build_context, build_history_context,
@@ -68,11 +68,31 @@ def _system_blocks() -> list:
 
 def _user_blocks(context: str, instr: str, ask: str) -> list:
     # F6: ALL untrusted case data lives here, in the user turn — never system.
-    return [
+    # The auditor's standing instructions for this case ride along — see `_with_steer`. They
+    # sit below the frozen preamble, so the hard rules are above them and out of their reach.
+    return _with_steer([
         {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
         {"type": "text", "text": instr},
-        {"type": "text", "text": ask},
-    ]
+    ], ask)
+
+
+def _with_steer(blocks: list, ask: str) -> list:
+    """Append the auditor's case instructions, then the ask.
+
+    For the surfaces that **write**: the narration, the report, the taxpayer brief, the letters.
+
+    Deliberately NOT for the two that **read** — `read_letter`, which extracts the figure a
+    taxpayer's own letter states, and `parse_calculation`, which translates a stated method into
+    a query. Those are translators, and an auditor's expectation is the last thing that should
+    be whispered to them: "the group restructured, so treat the second half as intra-group"
+    steering how the taxpayer's own words are read is how a reader finds what it was told to
+    find. What those two return is checked against the source and confirmed by the auditor
+    anyway, so the steer would add a way to be wrong and nothing else.
+    """
+    steer = guidance.block()
+    if steer:
+        blocks = blocks + [{"type": "text", "text": steer}]
+    return blocks + [{"type": "text", "text": ask}]
 
 
 def _src(reason: str) -> str:
@@ -180,9 +200,10 @@ class LLMService:
         ctx = build_history_context(profile, prior_returns, prior_cases, alias=_ALIAS)
         s, err = provider.parse_structured(
             system_blocks=_system_blocks(),
-            user_content=[{"type": "text", "text": ctx, "cache_control": {"type": "ephemeral"}},
-                          {"type": "text", "text": SUMMARY_INSTR},
-                          {"type": "text", "text": "Write the taxpayer brief now."}],
+            user_content=_with_steer(
+                [{"type": "text", "text": ctx, "cache_control": {"type": "ephemeral"}},
+                 {"type": "text", "text": SUMMARY_INSTR}],
+                "Write the taxpayer brief now."),
             max_tokens=900, output_model=TaxpayerSummary,
         )
         if err:
@@ -297,11 +318,10 @@ class LLMService:
             return provider.stream_text(
                 system_blocks=[{"type": "text", "text": DRAFT_LETTER_SYSTEM,
                                 "cache_control": {"type": "ephemeral"}}],
-                user_content=[
+                user_content=_with_steer([
                     {"type": "text", "text": fence_facts(facts)},
                     {"type": "text", "text": instr},
-                    {"type": "text", "text": ask},
-                ],
+                ], ask),
                 max_tokens=1400,
             )
 

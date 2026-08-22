@@ -293,6 +293,49 @@ input.letter-input,select.letter-input{min-height:0}
 .casetab:hover{color:var(--ink)}
 .casetab.active{color:var(--brand);border-bottom-color:var(--brand)}
 .casetab.active b{color:var(--brand)}
+.casetabs+.instrbar,.casetabs+.instr{margin-top:-8px}
+
+/* --- the auditor's standing instructions for a case ------------------------------- */
+/* Collapsed: one line under the tabs. A case with nothing written costs no attention, and a
+   case with instructions shows them rather than hiding a live steer behind an icon. */
+.instrbar{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:9px 13px;margin:0 0 18px;color:var(--muted);transition:border-color .15s}
+.instrbar:hover{border-color:var(--ai)}
+.instrbar b{font-size:12.5px;color:var(--ink);white-space:nowrap}
+.instrbar-empty{font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.instrbar-text{font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--ink);font-style:italic}
+.instrbar-open{font-size:12px;font-weight:650;color:var(--brand);white-space:nowrap}
+.instrbar.set{background:color-mix(in srgb,var(--ai) 6%,var(--surface));
+  border-color:color-mix(in srgb,var(--ai) 35%,var(--line))}
+.instrbar.off{opacity:.72}
+.instrbar.off .instrbar-text{text-decoration:line-through}
+
+/* Open: the editor, what it reaches, and what it deliberately does not. */
+.instr{border:1px solid color-mix(in srgb,var(--ai) 35%,var(--line));border-radius:12px;
+  background:var(--surface);margin:0 0 18px;overflow:hidden}
+.instr-head{display:flex;align-items:center;gap:9px;padding:11px 14px;
+  background:color-mix(in srgb,var(--ai) 7%,var(--surface));border-bottom:1px solid var(--line)}
+.instr-head b{font-size:13.5px}
+.instr-head .sub{flex:1;font-size:11.5px}
+.instr-body{padding:13px 14px 14px}
+.instr-input{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:10px;padding:11px 13px;font:inherit;font-size:13.5px;line-height:1.6;
+  resize:vertical;min-height:120px}
+.instr-input:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:transparent}
+.instr-input::placeholder{color:var(--faint)}
+.instr-meta{display:flex;align-items:center;gap:12px;margin:9px 0 11px;flex-wrap:wrap}
+.instr-meta .sub.over{color:var(--high);font-weight:700}
+.instr-examples{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.instr-scope{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;
+  padding-top:13px;border-top:1px solid var(--line)}
+@media(max-width:820px){.instr-scope{grid-template-columns:1fr}}
+.instr-scope h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin:0 0 6px;font-weight:800}
+.instr-scope ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:var(--ink)}
+.instr-scope i{color:var(--muted);font-size:12px}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:1100px){.grid-2{grid-template-columns:1fr}}
@@ -825,7 +868,9 @@ input.letter-input,select.letter-input{min-height:0}
 .cite-text{max-height:260px;font-size:12.5px;margin:0}
 
 body{margin:0;padding:0 0 60px}
-.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 30px 60px}
+.navlink{cursor:pointer}
+.side{position:sticky;top:0;height:100vh}
 .demo-note{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}
 .ctabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}
@@ -859,29 +904,49 @@ details summary{cursor:pointer;font-size:12px;color:var(--brand);font-weight:600
 .tabhint{font-size:12px;color:var(--muted);margin:0 0 6px}
 .caserow.on{background:var(--surface-2)}
 .caserow.on td{font-weight:600}
+/* The row that opens. Only the seeded case carries real output, so it is the only one that
+   goes anywhere — and it says so rather than looking broken when the others do not. */
+tr[data-open]{cursor:pointer}
+tr[data-open]:hover{background:color-mix(in srgb,var(--brand) 8%,var(--surface))}
 details[open] summary{margin-bottom:6px}
+/* Two views, not four tabs: the queue, and one case opened out of it. */
+.view{display:none} .view.on{display:block}
+.casebar{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.backlink{border:none;background:none;font:inherit;font-size:13px;font-weight:600;
+  color:var(--brand);cursor:pointer;padding:0}
+.backlink:hover{text-decoration:underline}
 /* The assistant is conditionally rendered in React; here it is toggled, and the page is
    narrowed while it is docked so it covers nothing. */
 .asst{display:none}
 body.asst-on .asst{display:flex}
 body.asst-on .asst-fab{display:none}
-body.asst-on{padding-right:430px}
+.app.asst-on,body.asst-on{padding-right:430px}
 @media (max-width:1000px){body.asst-on{padding-right:0}}
-</style></head><body><div class="wrap">
-<header class="page-head" style="border:none">
-<div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
+</style></head><body><div class="app">
+<aside class="side">
+<div class="brand"><span class="mark">ZC</span>
+<span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
+<nav>
+<a class="navlink active" data-view="cases"><span class="ic">&#9635;</span>Cases</a>
+<a class="navlink"><span class="ic">&#9636;</span>Rulebook</a>
+<div class="navgroup">Coming next</div>
+<span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
+</nav>
+<div class="side-foot">ZATCA VAT Audit Agent</div>
+</aside>
+<main class="main"><div class="wrap">
 
 <div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
 citation and gap on this page is the real output of the engine for the seeded demo case
-CASE-2025-0481, captured when this file was generated — nothing here recomputes, and the controls do
-not act. The regulations corpus behind the citations holds 79
-articles, 31 of which have been amended since
-the English edition they are shown in.</div>
+CASE-2025-0481, captured when this file was generated — nothing here recomputes, and most controls
+do not act. Opening the case and moving between its modules does work, so the shape of the
+product is real. The regulations corpus behind the citations holds
+79 articles, 31 of
+which have been amended since the English edition they are shown in.</div>
 
-<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list. The <b>case assistant</b> is docked on the right of all three.</p>
-<div class="ctabs"><button class="ctab" data-tab="cases"><b>Cases</b><span>Every case you hold</span></button><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div><div class="pane" id="pane-cases">
+<div class="view on" id="view-cases">
 <header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
-<h1>Cases</h1><p class="sub">10 open · ranked by what is worth looking at first</p>
+<h1>Cases</h1><p class="sub">8 open · ranked by what is worth looking at first</p>
 </div><div><span class="btn">+ Add case</span></div></header>
 
 <div class="panel"><div class="panel-head"><h2>Open cases</h2>
@@ -890,10 +955,55 @@ the English edition they are shown in.</div>
 <div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
 <th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
 <th>Period</th><th>Status</th><th></th></tr></thead>
-<tbody><tr class="caserow on"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0001</td><td><b>Probe Co.</b><div class="sub">391100220099001</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2026-0002</td><td><b>Probe Co.</b><div class="sub">391100220099001</div></td><td></td><td></td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
-<p class="detail-note">Open a case and its three modules appear — Taxpayer Correspondence,
-Investigation, Audit Report. In this walkthrough only <b>CASE-2025-0481</b> is populated; the
-tabs above carry its real output.</p></div></div></div><div class="pane" id="pane-correspondence">
+<tbody><tr class="caserow on" data-open="1"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
+<p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
+Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
+application&rsquo;s: only <b>Cases</b> and <b>Rulebook</b> are global, because everything else
+has to know which case it is about. In this walkthrough only
+<b>CASE-2025-0481</b> carries real output, so that is the row that opens.</p></div></div></div>
+
+<div class="view" id="view-case">
+<div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
+<span class="mono muted">CASE-2025-0481</span>
+<b>Al-Faisaliah Trading Co.</b></div>
+<p class="tabhint">The three modules of this case. Only <b>Cases</b> and <b>Rulebook</b> are
+application-wide &mdash; everything else needs to know which case it is about, so it lives
+here. The <b>case assistant</b> and the <b>case instructions</b> are docked on all three.</p>
+<div class="ctabs"><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div>
+
+<button class="instrbar set" id="instr-open">
+<span class="ai-chip">AI</span><b>Instructions for this case</b>
+<span class="instrbar-text">The group restructured on 1 February; the second half of the period trades under a different entity. Say where that could explain a difference rather than treating it as unexplained.
+
+Keep letters to one page, and lead with what we need from them.</span><span class="pill pri-low">in force</span>
+<span class="instrbar-open">Edit</span></button>
+
+<section class="instr" id="instr">
+<div class="instr-head"><span class="ai-chip">AI</span><b>Instructions for this case</b>
+<span class="sub">Applied to every module</span>
+<button class="asst-x" id="instr-close" aria-label="Close">×</button></div>
+<div class="instr-body">
+<textarea class="instr-input" rows="5" readonly>The group restructured on 1 February; the second half of the period trades under a different entity. Say where that could explain a difference rather than treating it as unexplained.
+
+Keep letters to one page, and lead with what we need from them.</textarea>
+<div class="instr-meta"><span class="sub">247 / 4,000</span>
+<div class="instr-examples"><button class="qchip">+ Plainer language</button>
+<button class="qchip">+ Context the file lacks</button>
+<button class="qchip">+ Already settled</button>
+<button class="qchip">+ House style</button></div></div>
+<div class="row-actions"><span class="btn">Save instructions</span>
+<span class="linklike">pause without deleting</span>
+<span class="linklike danger">clear</span></div>
+<div class="instr-scope">
+<div><h4>Applies to</h4><ul><li>The reconciliation narrative</li><li>Outbound letters — the chase and the verdict</li><li>The drafted audit report</li><li>The taxpayer brief</li></ul></div>
+<div><h4>Deliberately not</h4><ul><li>Reading a taxpayer&#x27;s letter — <i>an extractor told what to expect is a reader that finds it</i></li><li>Translating your stated method into a query — <i>the same reason, and the query is shown to you either way</i></li><li>Every figure, verdict and test — <i>computed in Python; no instruction reaches them</i></li></ul></div></div>
+<p class="detail-note" style="margin-bottom:0">This steers <b>wording and emphasis</b>. It
+cannot make the AI state a figure, change a verdict, or alter a test: every number is computed
+in Python before any sentence is written, and the existing checks still run over the draft
+afterwards. An instruction that asked for something they forbid produces a rejected draft, not
+a wrong number.</p>
+</div></section>
+<div class="pane" id="pane-correspondence">
 <header class="page-head"><div><h1>Taxpayer correspondence</h1>
 <p class="sub">CASE-2025-0481 · what we asked for, and what arrived</p></div>
 <div class="chips"><span class="pill pri-high">Round 1</span>
@@ -1258,7 +1368,7 @@ The records that qualify total SAR 2,618,000.00 against SAR 2,000,000.00 declare
 Four automated checks were then run over the records received — the conditions the law sets for a document, keying and transposition errors, the totals the records support against those declared, and whether there is supporting evidence behind what was claimed. Each proposal was settled against the source records; the findings below are those that were confirmed.
 NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Findings</span><span class="v">- Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. SAR 618,000.00.
     Basis: Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.
-  Also characterised as: Sales that were not disclosed in the VAT returns.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Recommendations</span><span class="v">Put the findings above to the taxpayer in writing and invite representations before any assessment is raised. Where a finding rests on a defect in the records rather than on the figures, request the underlying documents.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield edited"><span class="k">Rulings<span class="rfield-tag">yours</span></span><span class="v">No ruling has been issued. The taxpayer accepted the adjustment at the closing meeting.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Assessment</span><span class="v">Output VAT understated: SAR 618,000.00
+  Also characterised as: Sales that were not disclosed in the VAT returns.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Recommendations</span><span class="v">Put the findings above to the taxpayer in writing and invite representations before any assessment is raised. Where a finding rests on a defect in the records rather than on the figures, request the underlying documents.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide edited"><span class="k">Rulings<span class="rfield-tag">yours</span></span><span class="v">No ruling has been issued. The taxpayer accepted the adjustment at the closing meeting of 12 August.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Assessment</span><span class="v">Output VAT understated: SAR 618,000.00
 Input VAT not recoverable: SAR 0.00
 Total proposed adjustment: SAR 618,000.00
 
@@ -1275,8 +1385,6 @@ VAT registration number 300012345600003
 Subject: Outcome of the VAT review — period 01 January 2025 to 31 March 2025
 
 Dear Sir or Madam,
-
-[Auditor note: figures agreed at the closing meeting of 12 August.]
 
 The Authority has completed its review of the VAT return filed for the period 01 January 2025 to 31 March 2025. This letter sets out the outcome.
 
@@ -1295,6 +1403,8 @@ VAT Audit</pre>
 editable in place, because a letter is the one thing here that leaves the building in the
 Authority&rsquo;s name.</p></div></div></div>
 </div>
+
+</div></div>
 <button class="asst-fab" id="asst-open"><span class="ai-chip">AI</span>
 Ask about this case</button>
 <aside class="asst" id="asst">
@@ -1321,10 +1431,32 @@ function show(k) {
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
 }
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
-show('cases');
+
+function view(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + name));
+  // The assistant is a *case* assistant, so it is docked inside a case and nowhere else. Left
+  // over the queue it squeezed the table for a panel that had nothing to say about it.
+  dock(name === 'case');
+  document.querySelectorAll('.navlink[data-view]').forEach(
+    n => n.classList.toggle('active', n.dataset.view === (name === 'case' ? 'cases' : name)));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('tr[data-open]').forEach(
+  r => r.addEventListener('click', () => { view('case'); show('correspondence'); }));
+document.getElementById('back').addEventListener('click', () => view('cases'));
+document.querySelectorAll('.navlink[data-view="cases"]').forEach(
+  n => n.addEventListener('click', () => view('cases')));
+
+const instr = document.getElementById('instr');
+const instrBar = document.getElementById('instr-open');
+const showInstr = on => { instr.style.display = on ? 'block' : 'none';
+                           instrBar.style.display = on ? 'none' : 'flex'; };
+instrBar.addEventListener('click', () => showInstr(true));
+document.getElementById('instr-close').addEventListener('click', () => showInstr(false));
+showInstr(false);
 
 const dock = on => document.body.classList.toggle('asst-on', on);
 document.getElementById('asst-open').addEventListener('click', () => dock(true));
 document.getElementById('asst-close').addEventListener('click', () => dock(false));
-dock(true);
+view('cases');
 </script></body></html>

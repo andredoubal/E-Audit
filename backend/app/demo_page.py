@@ -40,6 +40,14 @@ def _post(path: str, body: dict) -> dict:
         return json.loads(r.read().decode())
 
 
+def _put(path: str, body: dict) -> dict:
+    req = urllib.request.Request(
+        f"{API}{path}", data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"}, method="PUT")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode())
+
+
 def _delete(path: str) -> None:
     req = urllib.request.Request(f"{API}{path}", method="DELETE")
     try:
@@ -75,8 +83,11 @@ def case_list(cases: list, open_case: str) -> str:
         pill = {"high": "pri-high", "medium": "pri-medium"}.get(band.lower(), "pri-low")
         cls = "caserow on" if c["case_id"] == open_case else "caserow"
         arrow = '<span class="linklike">open &#9656;</span>' if c["case_id"] == open_case else ""
+        # Only the seeded case carries real output, so it is the only row that goes anywhere.
+        opens = ' data-open="1"' if c["case_id"] == open_case else ""
         rows.append(
-            f'<tr class="{cls}"><td><span class="pill {pill}">{e(band or "—")}</span></td>'
+            f'<tr class="{cls}"{opens}>'
+            f'<td><span class="pill {pill}">{e(band or "—")}</span></td>'
             f'<td class="mono">{e(c["case_id"])}</td>'
             f'<td><b>{e(c["taxpayer"])}</b><div class="sub">{e(c["vat_no"])}</div></td>'
             f'<td>{e(c["sector"])}</td><td>{e(c["reason"])}</td>'
@@ -96,9 +107,11 @@ def case_list(cases: list, open_case: str) -> str:
 <th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
 <th>Period</th><th>Status</th><th></th></tr></thead>
 <tbody>{''.join(rows)}</tbody></table></div>
-<p class="detail-note">Open a case and its three modules appear — Taxpayer Correspondence,
-Investigation, Audit Report. In this walkthrough only <b>{e(open_case)}</b> is populated; the
-tabs above carry its real output.</p></div></div>"""
+<p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
+Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
+application&rsquo;s: only <b>Cases</b> and <b>Rulebook</b> are global, because everything else
+has to know which case it is about. In this walkthrough only
+<b>{e(open_case)}</b> carries real output, so that is the row that opens.</p></div></div>"""
 
 
 # ------------------------------------------------------------------ the three tabs
@@ -341,6 +354,54 @@ the Word and printable versions too.</p>
 {sections}</div></div>{letter}"""
 
 
+# -------------------------------------------------- the auditor's instructions for a case
+
+def instructions(d: dict) -> str:
+    """One steer, written once, reaching every module of this case.
+
+    It sits under the module tabs rather than on a page because it applies to all three — a
+    steer that lived on one of them would be one the auditor believes is in force everywhere
+    and is not, which is worse than not having it. Collapsed here, and expandable, exactly as
+    in the application.
+    """
+    applies = "".join(f"<li>{e(a['label'])}</li>" for a in d.get("applies_to", []))
+    excluded = "".join(f"<li>{e(x['label'])} — <i>{e(x['why'])}</i></li>"
+                       for x in d.get("excluded", []))
+    text = d.get("text", "")
+    return f"""
+<button class="instrbar{' set' if text else ''}" id="instr-open">
+<span class="ai-chip">AI</span><b>Instructions for this case</b>
+{f'<span class="instrbar-text">{e(text)}</span><span class="pill pri-low">in force</span>'
+ if text else
+ '<span class="instrbar-empty">Tell the AI what it cannot see in the documents — context, '
+ 'house style, what not to raise. It applies to every module of this case.</span>'}
+<span class="instrbar-open">{'Edit' if text else 'Add'}</span></button>
+
+<section class="instr" id="instr">
+<div class="instr-head"><span class="ai-chip">AI</span><b>Instructions for this case</b>
+<span class="sub">Applied to every module</span>
+<button class="asst-x" id="instr-close" aria-label="Close">×</button></div>
+<div class="instr-body">
+<textarea class="instr-input" rows="5" readonly>{e(text)}</textarea>
+<div class="instr-meta"><span class="sub">{len(text):,} / {d.get('max_length', 4000):,}</span>
+<div class="instr-examples"><button class="qchip">+ Plainer language</button>
+<button class="qchip">+ Context the file lacks</button>
+<button class="qchip">+ Already settled</button>
+<button class="qchip">+ House style</button></div></div>
+<div class="row-actions"><span class="btn">Save instructions</span>
+<span class="linklike">pause without deleting</span>
+<span class="linklike danger">clear</span></div>
+<div class="instr-scope">
+<div><h4>Applies to</h4><ul>{applies}</ul></div>
+<div><h4>Deliberately not</h4><ul>{excluded}</ul></div></div>
+<p class="detail-note" style="margin-bottom:0">This steers <b>wording and emphasis</b>. It
+cannot make the AI state a figure, change a verdict, or alter a test: every number is computed
+in Python before any sentence is written, and the existing checks still run over the draft
+afterwards. An instruction that asked for something they forbid produces a rejected draft, not
+a wrong number.</p>
+</div></section>"""
+
+
 # ------------------------------------------------------------------ the case assistant
 
 def assistant(a: dict) -> str:
@@ -386,6 +447,29 @@ it answers with no API key at all.</p>
 # ------------------------------------------------------------------ the page
 
 def build() -> str:
+    # The walkthrough sets up the state it is meant to show, rather than depending on whoever
+    # last clicked around the running app. Accepting two hypotheses and writing one report field
+    # is what makes the report, the traceability panel and the verdict letter say anything at
+    # all — and it keeps the three of them agreeing, which is the property worth demonstrating.
+    try:
+        state = _get(f"/cases/{CASE}/investigation")
+        # Idempotent: regenerating twice must not accept two more each time. It did, and the
+        # banner went from "2 findings confirmed by you" to 4 with no case data changing.
+        supported = ([] if state["counts"]["accepted"] else
+                     [h for h in state["hypotheses"]
+                      if h["status"] == "supported" and h.get("outcome_code")][:2])
+        for h in supported:
+            _post(f"/cases/{CASE}/hypotheses/{h['hypothesis_id']}/decision",
+                  {"decision": "accepted", "comment": "Accepted on review."})
+        rulings = next(f for sec in _get(f"/cases/{CASE}/audit-report")["sections"]
+                       for f in sec["fields"] if f["label"] == "Rulings")
+        _put(f"/cases/{CASE}/audit-report/fields", {
+            "key": rulings["key"], "original": rulings["value"],
+            "value": "No ruling has been issued. The taxpayer accepted the adjustment at the "
+                     "closing meeting of 12 August."})
+    except Exception:                                    # noqa: BLE001
+        pass
+
     loop = _get(f"/cases/{CASE}/requests")
     threads = _get(f"/cases/{CASE}/threads")
     inv = _get(f"/cases/{CASE}/investigation")
@@ -393,6 +477,13 @@ def build() -> str:
     rep = _get(f"/cases/{CASE}/audit-report")
     mails = _get(f"/cases/{CASE}/emails").get("emails") or []
     verdict = next((m for m in mails if m["kind"] == "verdict"), {})
+    _put(f"/cases/{CASE}/instructions", {
+        "text": "The group restructured on 1 February; the second half of the period trades "
+                "under a different entity. Say where that could explain a difference rather "
+                "than treating it as unexplained.\n\n"
+                "Keep letters to one page, and lead with what we need from them.",
+        "enabled": True})
+    instr = _get(f"/cases/{CASE}/instructions")
     cov = _get("/regulatory/coverage")
     cases = _get("/cases")
     try:
@@ -417,8 +508,12 @@ def build() -> str:
         asst = _get(f"/cases/{CASE}/assistant")
 
     theme = THEME.read_text(encoding="utf-8") if THEME.exists() else ""
-    tabs = {
-        "cases": ("Cases", "Every case you hold", case_list(cases, CASE)),
+
+    # The sidebar is what is global; the tabs are what is inside a case. Mirrored here because
+    # a walkthrough that put all four side by side would be showing a different product: an
+    # auditor lands on the queue and opens a case, and the three modules are what is *in* the
+    # case rather than peers of the list that contains it.
+    modules = {
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
         "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
@@ -426,9 +521,10 @@ def build() -> str:
     }
     nav = "".join(
         f'<button class="ctab" data-tab="{k}"><b>{e(t)}</b><span>{e(s)}</span></button>'
-        for k, (t, s, _) in tabs.items())
+        for k, (t, s, _) in modules.items())
     panes = "".join(f'<div class="pane" id="pane-{k}">{body}</div>'
-                    for k, (_, _, body) in tabs.items())
+                    for k, (_, _, body) in modules.items())
+    taxpayer = next((c["taxpayer"] for c in cases if c["case_id"] == CASE), CASE)
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -436,7 +532,9 @@ def build() -> str:
 <title>E-AUDIT — walkthrough</title>
 <style>{theme}
 body{{margin:0;padding:0 0 60px}}
-.wrap{{max-width:1180px;margin:0 auto;padding:22px}}
+.wrap{{max-width:1180px;margin:0 auto;padding:26px 30px 60px}}
+.navlink{{cursor:pointer}}
+.side{{position:sticky;top:0;height:100vh}}
 .demo-note{{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}}
 .ctabs{{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}}
@@ -470,40 +568,95 @@ details summary{{cursor:pointer;font-size:12px;color:var(--brand);font-weight:60
 .tabhint{{font-size:12px;color:var(--muted);margin:0 0 6px}}
 .caserow.on{{background:var(--surface-2)}}
 .caserow.on td{{font-weight:600}}
+/* The row that opens. Only the seeded case carries real output, so it is the only one that
+   goes anywhere — and it says so rather than looking broken when the others do not. */
+tr[data-open]{{cursor:pointer}}
+tr[data-open]:hover{{background:color-mix(in srgb,var(--brand) 8%,var(--surface))}}
 details[open] summary{{margin-bottom:6px}}
+/* Two views, not four tabs: the queue, and one case opened out of it. */
+.view{{display:none}} .view.on{{display:block}}
+.casebar{{display:flex;align-items:center;gap:14px;margin-bottom:6px}}
+.backlink{{border:none;background:none;font:inherit;font-size:13px;font-weight:600;
+  color:var(--brand);cursor:pointer;padding:0}}
+.backlink:hover{{text-decoration:underline}}
 /* The assistant is conditionally rendered in React; here it is toggled, and the page is
    narrowed while it is docked so it covers nothing. */
 .asst{{display:none}}
 body.asst-on .asst{{display:flex}}
 body.asst-on .asst-fab{{display:none}}
-body.asst-on{{padding-right:430px}}
+.app.asst-on,body.asst-on{{padding-right:430px}}
 @media (max-width:1000px){{body.asst-on{{padding-right:0}}}}
-</style></head><body><div class="wrap">
-<header class="page-head" style="border:none">
-<div><p class="eyebrow">ZATCA · VAT Audit Agent</p><h1>E-AUDIT walkthrough</h1></div></header>
+</style></head><body><div class="app">
+<aside class="side">
+<div class="brand"><span class="mark">ZC</span>
+<span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
+<nav>
+<a class="navlink active" data-view="cases"><span class="ic">&#9635;</span>Cases</a>
+<a class="navlink"><span class="ic">&#9636;</span>Rulebook</a>
+<div class="navgroup">Coming next</div>
+<span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
+</nav>
+<div class="side-foot">ZATCA VAT Audit Agent</div>
+</aside>
+<main class="main"><div class="wrap">
 
 <div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
 citation and gap on this page is the real output of the engine for the seeded demo case
-{e(CASE)}, captured when this file was generated — nothing here recomputes, and the controls do
-not act. The regulations corpus behind the citations holds {cov.get('article_count', 0)}
-articles, {len(cov.get('amended_since_english_edition', []))} of which have been amended since
-the English edition they are shown in.</div>
+{e(CASE)}, captured when this file was generated — nothing here recomputes, and most controls
+do not act. Opening the case and moving between its modules does work, so the shape of the
+product is real. The regulations corpus behind the citations holds
+{cov.get('article_count', 0)} articles, {len(cov.get('amended_since_english_edition', []))} of
+which have been amended since the English edition they are shown in.</div>
 
-<p class="tabhint">The first tab is the application&rsquo;s own screen. The three after it are the modules of one case &mdash; you reach them by opening a case from the list. The <b>case assistant</b> is docked on the right of all three.</p>
-<div class="ctabs">{nav}</div>{panes}
-</div>{assistant(asst)}<script>
+<div class="view on" id="view-cases">{case_list(cases, CASE)}</div>
+
+<div class="view" id="view-case">
+<div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
+<span class="mono muted">{e(CASE)}</span>
+<b>{e(taxpayer)}</b></div>
+<p class="tabhint">The three modules of this case. Only <b>Cases</b> and <b>Rulebook</b> are
+application-wide &mdash; everything else needs to know which case it is about, so it lives
+here. The <b>case assistant</b> and the <b>case instructions</b> are docked on all three.</p>
+<div class="ctabs">{nav}</div>
+{instructions(instr)}
+{panes}
+</div>
+
+</div></div>{assistant(asst)}<script>
 const tabs = document.querySelectorAll('.ctab');
 function show(k) {{
   tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
-show('cases');
+
+function view(name) {{
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + name));
+  // The assistant is a *case* assistant, so it is docked inside a case and nowhere else. Left
+  // over the queue it squeezed the table for a panel that had nothing to say about it.
+  dock(name === 'case');
+  document.querySelectorAll('.navlink[data-view]').forEach(
+    n => n.classList.toggle('active', n.dataset.view === (name === 'case' ? 'cases' : name)));
+  window.scrollTo(0, 0);
+}}
+document.querySelectorAll('tr[data-open]').forEach(
+  r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
+document.getElementById('back').addEventListener('click', () => view('cases'));
+document.querySelectorAll('.navlink[data-view="cases"]').forEach(
+  n => n.addEventListener('click', () => view('cases')));
+
+const instr = document.getElementById('instr');
+const instrBar = document.getElementById('instr-open');
+const showInstr = on => {{ instr.style.display = on ? 'block' : 'none';
+                           instrBar.style.display = on ? 'none' : 'flex'; }};
+instrBar.addEventListener('click', () => showInstr(true));
+document.getElementById('instr-close').addEventListener('click', () => showInstr(false));
+showInstr(false);
 
 const dock = on => document.body.classList.toggle('asst-on', on);
 document.getElementById('asst-open').addEventListener('click', () => dock(true));
 document.getElementById('asst-close').addEventListener('click', () => dock(false));
-dock(true);
+view('cases');
 </script></body></html>"""
 
 

@@ -208,6 +208,7 @@ backend/app/
   api/routes.py        # FastAPI endpoints
   models/              # core.py, dossier.py, casework.py, config_tables.py, recon.py
   llm/                 # the ONLY model boundary: service, provider, prompts, verify, schemas
+                       #   guidance.py     the auditor's standing instructions for a case
   seed/                # scenarios.py + dossier_seed.py + corpus.py + casework_seed.py
 frontend/src/
   pages/               # Overview, Intake, Dossier, Casework, Reconciliation, Rules
@@ -457,6 +458,39 @@ rows, derived fresh every time, so a fixed gap changes the word with no state to
 distinction that earns its place is **incomplete** against **needs auditor review**: the first is
 a defect the taxpayer must fix, the second is the checker admitting it cannot decide. A chase
 letter written from the second asks for something that was already sent.
+
+## The auditor's standing instructions for a case
+
+`models/instructions.py` + `llm/guidance.py`. Every case carries something the tool cannot know:
+the group restructured mid-period, the credit-note treatment was already agreed last year, this
+taxpayer has no adviser so the letters need plainer language. Without a place to say it, the
+auditor says it again into every panel and loses it when the tab closes.
+
+**It is a property of the case, so it reaches every module.** One row keyed on `case_id`, and one
+middleware in `main.py` that loads it for any request whose path names a case. Threading it
+through seven service methods would have put the same argument in thirty signatures and still
+left the next feature to remember it — and an instruction the auditor believes is in force
+everywhere but is not is worse than no instruction at all. The UI matches: the panel lives under
+`CaseTabs`, so it is on all three modules rather than on one page pretending to speak for them.
+
+**It steers language and cannot touch a figure.** The text goes into the **user turn**, below the
+case data and above the ask, never into the system block — so `FROZEN_PREAMBLE`'s hard rules sit
+above it and out of its reach, and it is fenced so a pasted fragment cannot close the block
+early. Every existing verifier still runs: an instruction demanding a number produces a rejected
+draft and a deterministic fallback, not a wrong figure wearing the engine's authority. That is
+the whole safety argument, and it rests on guards that already existed.
+
+**Two surfaces are deliberately excluded.** `read_letter` extracts the figure a taxpayer's own
+letter states; `parse_calculation` translates a stated method into a query. Those are
+*translators*, and an extractor told what to expect is a reader that finds it — "the group
+restructured, so treat the second half as intra-group" has no business steering how the
+taxpayer's own words are read. Both results are checked against their source and confirmed by
+the auditor anyway, so the steer would add a way to be wrong and nothing else. `applies_to` and
+`excluded` are published by the API and shown in the panel, reasons included: an auditor is
+entitled to know where their steer does *not* reach.
+
+Pausing is kept separate from clearing, because an auditor who wants to see the output without
+their steer should not have to delete what they wrote to find out.
 
 ## The report is a draft a person signs
 

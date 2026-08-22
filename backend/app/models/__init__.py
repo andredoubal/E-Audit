@@ -45,3 +45,4 @@ from .reporting import (  # noqa: F401
     ReportFieldEdit,
     LetterDraft,
 )
+from .instructions import CaseInstruction  # noqa: F401

@@ -28,6 +28,29 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
+/* ------------------------------------------------- the auditor's standing AI instructions
+   One per case, reaching every module. Steers wording and emphasis; it cannot reach a figure,
+   a verdict or a test — those are computed in Python before any sentence is written. */
+
+export interface CaseInstructions {
+  case_id: string;
+  text: string;
+  /** Paused instructions are kept, not deleted — a different act from clearing them. */
+  enabled: boolean;
+  updated_at: string;
+  updated_by: string;
+  max_length: number;
+  applies_to: { key: string; label: string }[];
+  /** Where the steer deliberately does not reach, and why. */
+  excluded: { key: string; label: string; why: string }[];
+}
+
+export const getInstructions = (id: string) =>
+  getJSON<CaseInstructions>(`/cases/${id}/instructions`);
+
+export const saveInstructions = (id: string, text: string, enabled = true) =>
+  putJSON<CaseInstructions>(`/cases/${id}/instructions`, { text, enabled });
+
 export interface PriorityScore {
   score: number;
   band: string;
