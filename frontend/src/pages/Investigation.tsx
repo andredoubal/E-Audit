@@ -8,6 +8,8 @@ import ZatcaPanel from "../components/ZatcaPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
+import SourceData from "../components/SourceData";
+import Collapsible from "../components/Collapsible";
 import CaseAssistant from "../components/CaseAssistant";
 import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
@@ -430,9 +432,18 @@ export default function Investigation() {
 
       <CaseTabs id={id!} />
 
-      <CaseContextPanel id={id!} />
-      <TaxpayerBrief id={id} />
+      {/* 1 · what the investigation runs on. */}
+      <SourceData id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
 
+      {/* 2 · what it found, and 3 · how each one was reached. */}
+      <InvestigationPanel id={id} rev={rev} />
+      <FindingsPanel id={id} rev={rev} />
+
+      {/* 4 · the whole working-out, behind one heading. */}
+      <Collapsible
+        title="The working-out"
+        note="the figures, the funnel, the comparison and the evidence behind every finding above"
+      >
       <div className="tiles">
         <div className="tile">
           <div className="tn">{d.counted_lines}</div>
@@ -535,8 +546,6 @@ export default function Investigation() {
       )}
 
       <ZatcaPanel id={id!} onChanged={() => setRev((r) => r + 1)} />
-      <InvestigationPanel id={id} rev={rev} />
-      <FindingsPanel id={id} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
       <NextBestAction id={id} rev={rev} />
       <TaxpayerResponsePanel
@@ -545,6 +554,11 @@ export default function Investigation() {
         priorPeriodDeclared={d.prior_period_correction_declared}
         onChanged={() => setRev((r) => r + 1)}
       />
+      <CaseContextPanel id={id!} />
+      <TaxpayerBrief id={id} />
+      </Collapsible>
+
+      <CaseAssistant id={id!} />
 
       {modal && (
         <Modal title={modal.title} onClose={() => setModal(null)}>
@@ -552,8 +566,7 @@ export default function Investigation() {
             <>
               <p className="detail-note">{modal.detail.note}</p>
               <InvoiceTable invoices={modal.detail.invoices} />
-            <CaseAssistant id={id!} />
-    </>
+            </>
           ) : (
             <DetailBody detail={modal.detail} amount={modal.amount} />
           )}

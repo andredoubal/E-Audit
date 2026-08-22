@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { onAsk } from "../ai/ask";
+import { onAsk, onOpenAssistant } from "../ai/ask";
 import {
   askAssistant, clearAssistant, getAssistant, type AssistantState,
 } from "../api";
@@ -23,6 +23,8 @@ export default function CaseAssistant({ id }: { id: string }) {
   // A challenge elsewhere on the case opens this panel with the question already written. The
   // auditor is looking at the row they dispute; making them retype it — and leaving the
   // assistant to guess which of forty rows is meant — is the version of this that helps nobody.
+  useEffect(() => onOpenAssistant(() => setOpen(true)), []);
+
   useEffect(() => onAsk((question) => {
     setOpen(true);
     setQ(question);

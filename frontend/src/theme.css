@@ -78,6 +78,29 @@ h2{font-size:17px;margin:0}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .navlink.active{color:var(--brand)}}
 .navlink.disabled{color:var(--faint);cursor:default}
 .navgroup{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:16px 12px 6px}
+
+/* The case you have open: a group that expands to its own places. */
+.navgroup-open{margin-top:10px;border-radius:11px;border:1px solid var(--line);
+  background:var(--surface-2);overflow:hidden}
+.navgroup-open.on{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}
+.navgroup-head{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:10px 12px;color:var(--ink)}
+.navgroup-head:hover{background:var(--brand-tint)}
+.navgroup-head .ic{width:18px;display:flex;align-items:center;justify-content:center;
+  color:var(--brand)}
+.navgroup-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.navgroup-name b{font-size:12.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.navgroup-name small{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.navgroup-mark{color:var(--faint);font-size:11px}
+.navgroup-items{display:flex;flex-direction:column;padding:2px 6px 7px}
+.navsub{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;
+  font-size:12.5px;padding:7px 10px;border-radius:8px;border:none;background:none;
+  color:var(--muted);text-decoration:none;cursor:pointer}
+.navsub:hover{background:var(--surface);color:var(--ink)}
+.navsub.active{background:var(--surface);color:var(--brand);font-weight:650}
+.navsub .ic{display:flex;align-items:center;color:var(--ai)}
+.navsub.ai{color:var(--ai)}
 /* The theme toggle lives with the footer, out of the way of the work. */
 .side-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--faint);
   font-size:11.5px;display:flex;align-items:center;gap:10px}
@@ -202,7 +225,9 @@ td .sub{font-size:11.5px;color:var(--faint);margin-top:2px}
 /* Holds the sparkle mark rather than the letters "AI". */
 .ai-chip{display:inline-flex;align-items:center;justify-content:center;
   background:color-mix(in srgb,var(--ai) 15%, transparent);color:var(--ai);
-  width:24px;height:24px;flex:none;border-radius:8px;font-size:11px;font-weight:800}
+  min-width:24px;height:24px;flex:none;border-radius:8px;padding:0 6px;
+  font-size:10px;font-weight:800;letter-spacing:.6px;white-space:nowrap}
+.ai-chip:has(svg){padding:0}
 .ai-body{padding:16px 18px;font-size:14px;line-height:1.6}
 .brief-head{font-weight:600;margin:0 0 8px}
 .brief-points{margin:0 0 6px;padding-left:18px}
@@ -287,14 +312,56 @@ input.letter-input,select.letter-input{min-height:0}
 .inv-conc{font-size:14px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border-radius:10px;
   border:1px solid var(--line);border-left:3px solid var(--ai);background:var(--surface-2)}
 .inv-round{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);margin:14px 0 8px}
-.hyp{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:start;padding:10px 12px;
-  border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:13px;line-height:1.5}
+/* A finding: one summary line, with the derivation behind a click. */
+.hyp{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;font-size:13px;
+  line-height:1.5;background:var(--surface);overflow:hidden}
+.hyp.open{border-color:var(--brand)}
+.hyp-summary{display:grid;grid-template-columns:16px minmax(96px,auto) 1fr auto;gap:12px;
+  align-items:center;width:100%;text-align:left;font:inherit;font-size:13px;cursor:pointer;
+  background:none;border:none;padding:11px 14px;color:var(--ink)}
+.hyp-summary:hover{background:var(--surface-2)}
+.hyp-mark{color:var(--faint);font-size:11px}
+.hyp-ids{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hyp-ids code{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand)}
+.hyp-claim{min-width:0;line-height:1.45}
+.hyp-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.hyp-detail{padding:2px 14px 14px 42px;border-top:1px solid var(--line)}
+.hyp.stale{opacity:.72}
+@media(max-width:820px){
+  .hyp-summary{grid-template-columns:16px 1fr;row-gap:7px}
+  .hyp-right{grid-column:1/-1;justify-content:flex-start}
+  .hyp-detail{padding-left:14px}
+}
 .hyp.lead{border-color:var(--low);background:var(--low-bg)}
 .hyp .hid{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand)}
-.hyp .agent{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.hyp .agent,.hyp-ids .agent{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 .hyp .verdict{font-size:12px;color:var(--muted);margin-top:5px}
 .hyp .amt2{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:650;font-size:13px}
-@media(max-width:640px){.hyp{grid-template-columns:1fr}}
+/* ---- a section that starts closed ----------------------------------------------- */
+.collapse{border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  box-shadow:var(--shadow);overflow:hidden}
+.collapse-head{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:15px 20px;color:var(--ink)}
+.collapse-head:hover{background:var(--surface-2)}
+.collapse-head b{font-size:14.5px}
+.collapse-head .sub{flex:1;min-width:0;font-size:12px}
+.collapse-mark{color:var(--faint);font-size:12px}
+.collapse-action{font-size:12px;font-weight:650;color:var(--brand);white-space:nowrap}
+.collapse.on .collapse-head{border-bottom:1px solid var(--line)}
+.collapse-body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:18px}
+.collapse-body>.panel{box-shadow:none}
+
+/* ---- the spreadsheets the investigation runs on --------------------------------- */
+.sourcegrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.sourcegrid{grid-template-columns:1fr}}
+.srcslot-head{display:flex;flex-direction:column;gap:2px;margin-bottom:9px}
+.srcslot-head b{font-size:13.5px}
+.srcslot-head .sub{font-size:12px}
+.srcslot .dropzone{min-height:96px}
+.srcslot .doclist{margin-top:11px}
+.srcslot .docrow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcslot .docrow .linklike{align-self:flex-start;font-size:11.5px}
+
 /* scope card */
 .scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin:14px 0 16px}
 .scope-col h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:0 0 10px}

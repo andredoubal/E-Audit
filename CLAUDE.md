@@ -211,26 +211,69 @@ backend/app/
                        #   guidance.py     the auditor's standing instructions for a case
   seed/                # scenarios.py + dossier_seed.py + corpus.py + casework_seed.py
 frontend/src/
-  pages/               # Overview, Intake, Dossier, Casework, Reconciliation, Rules
-  components/          # lifecycle rail, case tabs, AI panels, funnel, findings,
-                       # calculations, step emails
-  api.ts, ai/          # typed API + SSE streaming helpers
+  pages/               # Cases, Correspondence, Investigation, Report, Dossier, Rules
+  components/          # sidebar + open-case group, source uploads, hypothesis summary
+                       # and its derivation, findings, approve/challenge, funnel,
+                       # calculations, step emails, editable report fields
+  api.ts, ai/          # typed API + SSE streaming helpers + the assistant event bus
 docs/                  # VAT Mistakes Rulebook (66 rules) + rendered page
 portal.html            # standalone no-backend build of the workbench (see below)
 ```
 
-**The sidebar is Cases; the tabs are what is inside a case.** An auditor lands on
-**Cases** — the queue, with the priority score and the *Add case* button — and opening one
-shows its three modules: **Taxpayer Correspondence** (what we asked, what arrived),
-**Investigation** (what the evidence shows), **Audit Report** (what you concluded).
+**The sidebar is Cases, and the case you opened.** An auditor lands on **Cases** — the queue,
+with the priority score and the *Add case* button — and opening one adds a group beneath it,
+named for the taxpayer and carrying the case id. Under that group are its three modules —
+**Taxpayer Correspondence** (what we asked, what arrived), **Investigation** (what the evidence
+shows), **Audit Report** (what you concluded) — plus the two things that are on all three:
+the **AI assistant** and the **custom instructions**. The group collapses and the case id is on
+its header, so which case those links go to is never in doubt.
 
-That split is load-bearing rather than cosmetic. The three modules were briefly in the sidebar
-pointing at a hard-coded case id, so "Correspondence" opened the demo case whichever case you
-were actually working — a link that lied about where it went. `Cases` is the whole sidebar;
-everything else needs to know which case it is about, so it lives on `CaseTabs`. Opening a case
-goes to its first module. `Dossier` and `Rulebook` stay routable at their own paths but are off
-the navigation: the first is a dormant planning-era screen, the second is reference material an
-auditor reads rather than a place the work happens.
+That nesting is load-bearing rather than cosmetic. The three modules were briefly in the sidebar
+on their own, pointing at a hard-coded case id, so "Correspondence" opened the demo case
+whichever case you were actually working — a link that lied about where it went. Nested under
+the case that is open they are what they always were: a case's own places, reached by opening
+it. `Cases` is the only application-wide entry; the group appears when a case is open and goes
+when you leave it, because a module link with no case behind it points at nothing.
+
+There is no horizontal tab bar: the sidebar carries the navigation, and a second row of the same
+three names one line lower is a second place for the active module to be shown — and to be shown
+wrongly. `CaseTabs` survives as the mount point for the standing instructions, which every module
+shares. `Dossier` and `Rulebook` stay routable at their own paths but are off the navigation: the
+first is a dormant planning-era screen, the second is reference material an auditor reads rather
+than a place the work happens.
+
+### Investigation reads in the order the work happens
+
+`pages/Investigation.tsx`. The page opens with **Source data** (`SourceData.tsx`) — the two
+uploads the whole module is computed from: the taxpayer's invoice listing, and, optionally,
+ZATCA's own invoice records. It used to be several screens down, under panels that were empty
+until it had been done, which read as a broken page rather than an unstarted one.
+
+Then the **summary**: every hypothesis as one line — id, claim, verdict, confidence band, amount
+at stake, and the auditor's decision if there is one. Clicking a line opens **how it was
+derived**: the observation that triggered it, the adjudicator's explanation, the confidence
+signals that fired and did not, the article it rests on, what a re-run changed, and the decision
+controls. The derivation is the argument an auditor has to defend, so it is one click from the
+claim rather than the thing you scroll past to reach the claim.
+
+Everything else — the funnel, the three-way comparison, the evidence panels, the ZATCA
+reconciliation, the auditor's own arithmetic, the taxpayer response and the case context — sits
+under one **collapsible** (`Collapsible.tsx`), closed by default. None of it is removed; it is
+the working-out behind the summary, and it is available exactly when it is wanted.
+
+### Approve and Challenge, on what the app concluded
+
+`models/reviews.py` + `ReviewControls.tsx`. A completeness gap or a ZATCA mismatch is a *claim
+about the taxpayer's file*, and it can be wrong — the column was on another sheet, the reference
+was normalised past a real difference. So each reviewable row carries **Approve** and
+**Challenge**, always visible rather than on hover: they are the point of the row.
+
+A challenge **requires a reason and changes behaviour**. `ItemReview` records it, the row is
+marked, and — this is the part that matters — `completeness.assessment()` drops challenged gaps
+from what is outstanding, so the chase letter stops asking for something the auditor has already
+said was received. A challenge that only opened a chat would be a note nobody reads. The
+assistant is then offered, pre-loaded with the item, what the check said, and the auditor's own
+reason, rather than opening blank and asking what they wanted to challenge.
 
 ## The agents (and what they may not do)
 

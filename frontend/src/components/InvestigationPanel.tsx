@@ -10,7 +10,7 @@ import {
   type InvestigationState,
   type StoredHypothesis,
 } from "../api";
-import ConfidenceBadge from "./ConfidenceBadge";
+import ConfidenceBadge, { BAND_CLASS } from "./ConfidenceBadge";
 import CitationNote from "./CitationNote";
 import DecisionControls from "./DecisionControls";
 
@@ -94,54 +94,57 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
   const stale = (d?.hypotheses ?? []).filter((h) => h.stale);
   const latest = d?.runs?.[d.runs.length - 1];
 
+  /** One finding: a summary line, and the derivation behind a click.
+   *
+   *  It was all open at once — claim, why, verdict, citation, test, decision, ask-the-taxpayer
+   *  — so twelve of them ran to nine screens and the list stopped being a summary. What is
+   *  worth seeing at a glance is what was found, how strongly, and for how much. */
   const row = (h: StoredHypothesis) => {
     const isOpen = open === h.hypothesis_id;
+    const decided = h.decision?.decision;
     return (
-      <div className={"hyp" + (h.stale ? " stale" : "")} key={h.hypothesis_id}>
-        <div>
-          <div className="hid">{h.hypothesis_id}</div>
-          {h.reason_code && <span className="rc">{h.reason_code}</span>}
-        </div>
-        <div>
-          <div className="agent">
-            {h.agent}
-            {h.stale && " · no longer proposed"}
-          </div>
-          {h.claim}
+      <div className={"hyp" + (h.stale ? " stale" : "") + (isOpen ? " open" : "")}
+           key={h.hypothesis_id}>
+        <button className="hyp-summary"
+                onClick={() => setOpen(isOpen ? null : h.hypothesis_id)}
+                aria-expanded={isOpen}>
+          <span className="hyp-mark">{isOpen ? "▾" : "▸"}</span>
+          <span className="hyp-ids">
+            <code>{h.hypothesis_id}</code>
+            <span className="agent">{h.agent}{h.stale && " · no longer proposed"}</span>
+          </span>
+          <span className="hyp-claim">{h.claim}</span>
+          <span className="hyp-right">
+            <span className={"pill " + STATUS_PILL[h.status]}>{STATUS_WORD[h.status]}</span>
+            {h.confidence?.band && (
+              <span className={"pill " + (BAND_CLASS[h.confidence.band] || "status")}>
+                {h.confidence.band} confidence
+              </span>
+            )}
+            {!!h.amount && <span className="amt2">{sar(h.amount)}</span>}
+            {decided && (
+              <span className="pill status" title="You have already ruled on this">
+                {decided.replace(/-/g, " ")}
+              </span>
+            )}
+          </span>
+        </button>
 
-          {h.why && (
-            <div className="hyp-why">
-              <b>Why raised</b> {h.why}
+        {isOpen && (
+          <div className="hyp-detail">
+            {h.why && (
+              <div className="hyp-why">
+                <b>Why raised</b> {h.why}
+              </div>
+            )}
+
+            <div className={"verdict verdict-" + h.status}>
+              <b>{STATUS_WORD[h.status]}</b>
+              {h.explanation ? " — " + h.explanation : ""}
             </div>
-          )}
 
-          <div className={"verdict verdict-" + h.status}>
-            <b>{STATUS_WORD[h.status]}</b>
-            {h.explanation ? " — " + h.explanation : ""}
-          </div>
+            <ConfidenceBadge confidence={h.confidence} />
 
-          <CitationNote c={h.regulatory} />
-
-          {h.superseded_status && (
-            <div className="callout warn" style={{ margin: "8px 0 0" }}>
-              Previously <b>{h.superseded_status.replace(/-/g, " ")}</b>; re-adjudicated in run{" "}
-              {h.superseded_at_run} against the evidence then on file.
-            </div>
-          )}
-
-          {h.contradictions.map((c) => (
-            <div className="callout warn" style={{ margin: "8px 0 0" }} key={c}>
-              {c}
-            </div>
-          ))}
-
-          <button
-            className="linklike hyp-more"
-            onClick={() => setOpen(isOpen ? null : h.hypothesis_id)}
-          >
-            {isOpen ? "hide the test" : "how it was tested"}
-          </button>
-          {isOpen && (
             <div className="hyp-test">
               <div>
                 <span className="k">Test run</span>
@@ -169,51 +172,59 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
                 </div>
               )}
             </div>
-          )}
 
-          <DecisionControls
-            decision={h.decision}
-            busy={busy === h.hypothesis_id}
-            claim={h.claim}
-            onDecide={(dec, comment) => decide(h.hypothesis_id, dec, comment)}
-          />
+            <CitationNote c={h.regulatory} />
 
-          {h.status === "pending-info" ? (
-            <div className="callout warn" style={{ margin: "8px 0 0" }}>
-              <b>Waiting on the taxpayer.</b>{" "}
-              {h.needs_info_note || "Information has been requested to settle this."} Re-run the
-              investigation once it arrives.
-            </div>
-          ) : asking === h.hypothesis_id ? (
-            <div className="decision open">
-              <input
-                className="decision-comment"
-                placeholder="What do you need from the taxpayer, and why?"
-                value={askNote}
-                onChange={(e) => setAskNote(e.target.value)}
-              />
-              <div className="resp-actions">
-                <button className="btn" onClick={() => askTaxpayer(h.hypothesis_id)}
-                        disabled={busy === h.hypothesis_id}>
-                  {busy === h.hypothesis_id ? "Opening…" : "Draft the request"}
-                </button>
-                <button className="linklike" onClick={() => setAsking(null)}>cancel</button>
+            {h.superseded_status && (
+              <div className="callout warn" style={{ margin: "8px 0 0" }}>
+                Previously <b>{h.superseded_status.replace(/-/g, " ")}</b>; re-adjudicated in run{" "}
+                {h.superseded_at_run} against the evidence then on file.
               </div>
-            </div>
-          ) : (
-            <button className="linklike" style={{ marginTop: 7 }}
-                    onClick={() => { setAsking(h.hypothesis_id); setAskNote(""); }}>
-              ✉ Request information from the taxpayer
-            </button>
-          )}
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <span className={"pill " + STATUS_PILL[h.status]}>
-            {h.status.replace(/-/g, " ")}
-          </span>
-          <ConfidenceBadge confidence={h.confidence} />
-          {!!h.amount && <div className="amt2">{sar(h.amount)}</div>}
-        </div>
+            )}
+
+            {h.contradictions.map((c) => (
+              <div className="callout warn" style={{ margin: "8px 0 0" }} key={c}>
+                {c}
+              </div>
+            ))}
+
+            <DecisionControls
+              decision={h.decision}
+              busy={busy === h.hypothesis_id}
+              claim={h.claim}
+              onDecide={(dec, comment) => decide(h.hypothesis_id, dec, comment)}
+            />
+
+            {h.status === "pending-info" ? (
+              <div className="callout warn" style={{ margin: "8px 0 0" }}>
+                <b>Waiting on the taxpayer.</b>{" "}
+                {h.needs_info_note || "Information has been requested to settle this."} Re-run the
+                investigation once it arrives.
+              </div>
+            ) : asking === h.hypothesis_id ? (
+              <div className="decision open">
+                <input
+                  className="decision-comment"
+                  placeholder="What do you need from the taxpayer, and why?"
+                  value={askNote}
+                  onChange={(e) => setAskNote(e.target.value)}
+                />
+                <div className="resp-actions">
+                  <button className="btn" onClick={() => askTaxpayer(h.hypothesis_id)}
+                          disabled={busy === h.hypothesis_id}>
+                    {busy === h.hypothesis_id ? "Opening…" : "Draft the request"}
+                  </button>
+                  <button className="linklike" onClick={() => setAsking(null)}>cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button className="linklike" style={{ marginTop: 7 }}
+                      onClick={() => { setAsking(h.hypothesis_id); setAskNote(""); }}>
+                ask the taxpayer about this
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   };

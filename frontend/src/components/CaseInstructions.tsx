@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getInstructions, saveInstructions, type CaseInstructions as Data } from "../api";
+import { onOpenInstructions } from "../ai/ask";
 import { Sparkles } from "./Icon";
 
 /** What the auditor wants the AI to keep in mind on this case. */
@@ -18,6 +19,10 @@ export default function CaseInstructions({ id }: { id: string }) {
   }, [id]);
   useEffect(load, [load]);
   useEffect(() => { if (open) box.current?.focus(); }, [open]);
+  useEffect(() => onOpenInstructions(() => {
+    setOpen(true);
+    setTimeout(() => box.current?.scrollIntoView({ block: "center" }), 40);
+  }), []);
 
   if (!d) return null;
 

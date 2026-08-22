@@ -20,3 +20,27 @@ export function onAsk(handler: (question: string) => void): () => void {
   window.addEventListener(EVENT, listener);
   return () => window.removeEventListener(EVENT, listener);
 }
+
+/** Open the docked case assistant, from anywhere. */
+const OPEN_ASSISTANT = "eaudit:open-assistant";
+
+export function openAssistant(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_ASSISTANT));
+}
+
+export function onOpenAssistant(handler: () => void): () => void {
+  window.addEventListener(OPEN_ASSISTANT, handler);
+  return () => window.removeEventListener(OPEN_ASSISTANT, handler);
+}
+
+/** Open the case's standing instructions, from the sidebar. */
+const OPEN_INSTRUCTIONS = "eaudit:open-instructions";
+
+export function openInstructions(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_INSTRUCTIONS));
+}
+
+export function onOpenInstructions(handler: () => void): () => void {
+  window.addEventListener(OPEN_INSTRUCTIONS, handler);
+  return () => window.removeEventListener(OPEN_INSTRUCTIONS, handler);
+}

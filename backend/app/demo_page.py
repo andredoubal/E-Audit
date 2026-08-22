@@ -26,6 +26,11 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "demo.html"
 THEME = ROOT / "frontend" / "src" / "theme.css"
 
+SPARK = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
+         ' stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+         '<path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/>'
+         '<path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg>')
+
 
 def _get(path: str) -> dict:
     with urllib.request.urlopen(f"{API}{path}", timeout=30) as r:
@@ -512,11 +517,10 @@ def build() -> str:
         "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
-    nav = "".join(
-        f'<button class="ctab" data-tab="{k}"><b>{e(t)}</b><span>{e(s)}</span></button>'
-        for k, (t, s, _) in modules.items())
-    panes = "".join(f'<div class="pane" id="pane-{k}">{body}</div>'
-                    for k, (_, _, body) in modules.items())
+    panes = "".join(
+        f'<div class="pane" id="pane-{k}"><div class="panehead"><h1>{e(t)}</h1>'
+        f'<p>{e(s)}</p></div>{body}</div>'
+        for k, (t, s, body) in modules.items())
     taxpayer = next((c["taxpayer"] for c in cases if c["case_id"] == CASE), CASE)
     case_json = json.dumps(CASE)
 
@@ -531,14 +535,12 @@ body{{margin:0;padding:0 0 60px}}
 .side{{position:sticky;top:0;height:100vh}}
 .demo-note{{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}}
-.ctabs{{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}}
-.ctab{{background:none;border:none;border-bottom:2px solid transparent;padding:11px 18px 13px;
-  font:inherit;text-align:left;cursor:pointer;color:var(--muted);display:flex;
-  flex-direction:column;gap:2px}}
-.ctab b{{font-size:14px;color:var(--muted)}}
-.ctab span{{font-size:11.5px}}
-.ctab.on{{border-bottom-color:var(--brand)}}
-.ctab.on b{{color:var(--brand)}}
+/* The group's items are conditionally rendered in React; here they are toggled, and
+   `.navgroup-items` sets `display:flex`, which beats the `hidden` attribute on its own. */
+.navgroup-open:not(.on) .navgroup-items{{display:none}}
+.panehead{{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}}
+.panehead h1{{margin:0;font-size:20px}}
+.panehead p{{margin:3px 0 0;font-size:12.5px;color:var(--muted)}}
 .pane{{display:none}} .pane.on{{display:block}}
 .hyp{{display:flex;gap:14px;border:1px solid var(--line);border-radius:11px;padding:13px;
   margin-bottom:11px;background:var(--surface)}}
@@ -593,6 +595,21 @@ body.asst-on .asst-fab{{display:none}}
 <span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
 <nav>
 <a class="navlink active" data-view="cases"><span class="ic"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></span>Cases</a>
+<div class="navgroup-open on" id="navcase" hidden>
+<button class="navgroup-head" id="navcase-head" aria-expanded="true"><span class="ic">
+<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><line x1="8" y1="8" x2="15" y2="8"/>
+<line x1="8" y1="12" x2="15" y2="12"/></svg></span>
+<span class="navgroup-name"><b>{e(taxpayer)}</b><small>{e(CASE)}</small></span>
+<span class="navgroup-mark" id="navcase-mark">&#9662;</span></button>
+<div class="navgroup-items" id="navcase-items">
+<a class="navsub active" data-tab="correspondence">Taxpayer Correspondence</a>
+<a class="navsub" data-tab="investigation">Investigation</a>
+<a class="navsub" data-tab="report">Audit Report</a>
+<button class="navsub ai" id="nav-ai"><span class="ic">{SPARK}</span>AI assistant</button>
+<button class="navsub" id="nav-instr">Custom instructions</button>
+</div></div>
 <div class="navgroup">Coming next</div>
 <span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
 </nav>
@@ -617,31 +634,45 @@ which have been amended since the English edition they are shown in.</div>
 <div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
 <span class="mono muted">{e(CASE)}</span>
 <b>{e(taxpayer)}</b></div>
-<p class="tabhint">The three modules of this case. Only <b>Cases</b> is application-wide
-&mdash; everything else needs to know which case it is about, so it lives here. The
-<b>case assistant</b> and the <b>case instructions</b> are on all three.</p>
-<div class="ctabs">{nav}</div>
+<p class="tabhint">The case is open in the sidebar. Its three modules, the
+<b>case assistant</b> and the <b>case instructions</b> are underneath it &mdash; only
+<b>Cases</b> is application-wide, everything else needs to know which case it is about.</p>
 {instructions(instr)}
 {panes}
 </div>
 
 </div></div>{assistant(asst)}<script>
-const tabs = document.querySelectorAll('.ctab');
+/* The modules are reached from the sidebar, under the case they belong to — so the click
+   target and the active marker are the same element, rather than a second row of tabs
+   saying the same thing one line lower. */
+const tabs = document.querySelectorAll('.navsub[data-tab]');
 function show(k) {{
-  tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === k));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
+  window.scrollTo(0, 0);
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
 
+const navcase = document.getElementById('navcase');
 function view(name) {{
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + name));
   // The assistant is a *case* assistant, so it is docked inside a case and nowhere else. Left
   // over the queue it squeezed the table for a panel that had nothing to say about it.
   dock(name === 'case');
+  // The group appears when a case is open and goes when you leave it — a module link with no
+  // case behind it would be pointing at nothing.
+  navcase.hidden = name !== 'case';
   document.querySelectorAll('.navlink[data-view]').forEach(
     n => n.classList.toggle('active', n.dataset.view === (name === 'case' ? 'cases' : name)));
   window.scrollTo(0, 0);
 }}
+
+const navhead = document.getElementById('navcase-head');
+navhead.addEventListener('click', () => {{
+  const open = navcase.classList.toggle('on');
+  document.getElementById('navcase-mark').innerHTML = open ? '&#9662;' : '&#9656;';
+  navhead.setAttribute('aria-expanded', String(open));
+}});
 document.querySelectorAll('tr[data-open]').forEach(
   r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
 document.getElementById('back').addEventListener('click', () => view('cases'));
@@ -679,6 +710,15 @@ document.getElementById('instr-clear').addEventListener('click', () => {{
 }});
 showInstr(false);
 paintInstr();
+
+/* The two sidebar entries that are not modules: both reach something that is on all three,
+   so they open it wherever you are rather than navigating away from the module you were in. */
+document.getElementById('nav-ai').addEventListener('click', () => dock(true));
+document.getElementById('nav-instr').addEventListener('click', () => {{
+  showInstr(true);
+  instrText.focus();
+  instr.scrollIntoView({{block: 'center'}});
+}});
 
 /* ------------------------------------------------------------ editing, for real
    The report's fields and the outbound letter are edited in place here exactly as in the

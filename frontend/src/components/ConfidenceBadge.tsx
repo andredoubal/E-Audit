@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Confidence } from "../api";
 
 /** How much weight a hypothesis can bear — shown as a band, never as a bare percentage. */
-const BAND_CLASS: Record<string, string> = {
+export const BAND_CLASS: Record<string, string> = {
   Strong: "pri-low",
   Moderate: "pri-medium",
   Limited: "pri-high",

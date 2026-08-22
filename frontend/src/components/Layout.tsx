@@ -1,9 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
-import { Cases, Moon, Sun } from "./Icon";
+import { NavLink, useMatch } from "react-router-dom";
+import { openAssistant, openInstructions } from "../ai/ask";
+import { listCases, type CaseRow } from "../api";
+import { Book, Cases, Moon, Sparkles, Sun } from "./Icon";
 
-/** Cases is the whole sidebar. */
-const NAV = [{ to: "/", label: "Cases", end: true, icon: <Cases /> }];
+const MODULES = [
+  { to: "/correspondence", label: "Taxpayer Correspondence" },
+  { to: "/investigation", label: "Investigation" },
+  { to: "/report", label: "Audit Report" },
+];
 
 type Theme = "light" | "dark";
 
@@ -20,8 +25,57 @@ function useTheme(): [Theme, () => void] {
   return [theme, () => setTheme((t) => (t === "dark" ? "light" : "dark"))];
 }
 
+/** The case you have open, as a group in the sidebar.
+ *
+ *  The modules were briefly here on their own, pointing at a hard-coded case id — a link that
+ *  lied about where it went. Nested under the case that is actually open they are what they
+ *  always were: a case's own places, reached by opening it. */
+function OpenCase({ id }: { id: string }) {
+  const [name, setName] = useState("");
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    listCases()
+      .then((rows: CaseRow[]) => setName(rows.find((c) => c.case_id === id)?.taxpayer ?? ""))
+      .catch(() => {});
+  }, [id]);
+
+  return (
+    <div className={"navgroup-open" + (open ? " on" : "")}>
+      <button className="navgroup-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="ic"><Book /></span>
+        <span className="navgroup-name">
+          <b>{name || "Open case"}</b>
+          <small>{id}</small>
+        </span>
+        <span className="navgroup-mark">{open ? "▾" : "▸"}</span>
+      </button>
+
+      {open && (
+        <div className="navgroup-items">
+          {MODULES.map((m) => (
+            <NavLink key={m.to} to={`/cases/${id}${m.to}`}
+                     className={({ isActive }) => "navsub" + (isActive ? " active" : "")}>
+              {m.label}
+            </NavLink>
+          ))}
+          <button className="navsub ai" onClick={openAssistant}>
+            <span className="ic"><Sparkles size={14} /></span>
+            AI assistant
+          </button>
+          <button className="navsub" onClick={openInstructions}>
+            Custom instructions
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   const [theme, toggle] = useTheme();
+  const match = useMatch("/cases/:id/*");
+  const caseId = match?.params.id;
 
   return (
     <div className="app">
@@ -34,17 +88,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           </span>
         </div>
         <nav>
-          {NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) => "navlink" + (isActive ? " active" : "")}
-            >
-              <span className="ic">{n.icon}</span>
-              {n.label}
-            </NavLink>
-          ))}
+          <NavLink to="/" end
+                   className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
+            <span className="ic"><Cases /></span>
+            Cases
+          </NavLink>
+          {caseId && <OpenCase id={caseId} />}
         </nav>
         <div className="side-foot">
           <button className="iconbtn" onClick={toggle}

@@ -82,6 +82,29 @@ h2{font-size:17px;margin:0}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .navlink.active{color:var(--brand)}}
 .navlink.disabled{color:var(--faint);cursor:default}
 .navgroup{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:16px 12px 6px}
+
+/* The case you have open: a group that expands to its own places. */
+.navgroup-open{margin-top:10px;border-radius:11px;border:1px solid var(--line);
+  background:var(--surface-2);overflow:hidden}
+.navgroup-open.on{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}
+.navgroup-head{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:10px 12px;color:var(--ink)}
+.navgroup-head:hover{background:var(--brand-tint)}
+.navgroup-head .ic{width:18px;display:flex;align-items:center;justify-content:center;
+  color:var(--brand)}
+.navgroup-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.navgroup-name b{font-size:12.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.navgroup-name small{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.navgroup-mark{color:var(--faint);font-size:11px}
+.navgroup-items{display:flex;flex-direction:column;padding:2px 6px 7px}
+.navsub{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;
+  font-size:12.5px;padding:7px 10px;border-radius:8px;border:none;background:none;
+  color:var(--muted);text-decoration:none;cursor:pointer}
+.navsub:hover{background:var(--surface);color:var(--ink)}
+.navsub.active{background:var(--surface);color:var(--brand);font-weight:650}
+.navsub .ic{display:flex;align-items:center;color:var(--ai)}
+.navsub.ai{color:var(--ai)}
 /* The theme toggle lives with the footer, out of the way of the work. */
 .side-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--faint);
   font-size:11.5px;display:flex;align-items:center;gap:10px}
@@ -206,7 +229,9 @@ td .sub{font-size:11.5px;color:var(--faint);margin-top:2px}
 /* Holds the sparkle mark rather than the letters "AI". */
 .ai-chip{display:inline-flex;align-items:center;justify-content:center;
   background:color-mix(in srgb,var(--ai) 15%, transparent);color:var(--ai);
-  width:24px;height:24px;flex:none;border-radius:8px;font-size:11px;font-weight:800}
+  min-width:24px;height:24px;flex:none;border-radius:8px;padding:0 6px;
+  font-size:10px;font-weight:800;letter-spacing:.6px;white-space:nowrap}
+.ai-chip:has(svg){padding:0}
 .ai-body{padding:16px 18px;font-size:14px;line-height:1.6}
 .brief-head{font-weight:600;margin:0 0 8px}
 .brief-points{margin:0 0 6px;padding-left:18px}
@@ -291,14 +316,56 @@ input.letter-input,select.letter-input{min-height:0}
 .inv-conc{font-size:14px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border-radius:10px;
   border:1px solid var(--line);border-left:3px solid var(--ai);background:var(--surface-2)}
 .inv-round{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);margin:14px 0 8px}
-.hyp{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:start;padding:10px 12px;
-  border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:13px;line-height:1.5}
+/* A finding: one summary line, with the derivation behind a click. */
+.hyp{border:1px solid var(--line);border-radius:11px;margin-bottom:9px;font-size:13px;
+  line-height:1.5;background:var(--surface);overflow:hidden}
+.hyp.open{border-color:var(--brand)}
+.hyp-summary{display:grid;grid-template-columns:16px minmax(96px,auto) 1fr auto;gap:12px;
+  align-items:center;width:100%;text-align:left;font:inherit;font-size:13px;cursor:pointer;
+  background:none;border:none;padding:11px 14px;color:var(--ink)}
+.hyp-summary:hover{background:var(--surface-2)}
+.hyp-mark{color:var(--faint);font-size:11px}
+.hyp-ids{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hyp-ids code{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand)}
+.hyp-claim{min-width:0;line-height:1.45}
+.hyp-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.hyp-detail{padding:2px 14px 14px 42px;border-top:1px solid var(--line)}
+.hyp.stale{opacity:.72}
+@media(max-width:820px){
+  .hyp-summary{grid-template-columns:16px 1fr;row-gap:7px}
+  .hyp-right{grid-column:1/-1;justify-content:flex-start}
+  .hyp-detail{padding-left:14px}
+}
 .hyp.lead{border-color:var(--low);background:var(--low-bg)}
 .hyp .hid{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand)}
-.hyp .agent{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.hyp .agent,.hyp-ids .agent{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 .hyp .verdict{font-size:12px;color:var(--muted);margin-top:5px}
 .hyp .amt2{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:650;font-size:13px}
-@media(max-width:640px){.hyp{grid-template-columns:1fr}}
+/* ---- a section that starts closed ----------------------------------------------- */
+.collapse{border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  box-shadow:var(--shadow);overflow:hidden}
+.collapse-head{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:15px 20px;color:var(--ink)}
+.collapse-head:hover{background:var(--surface-2)}
+.collapse-head b{font-size:14.5px}
+.collapse-head .sub{flex:1;min-width:0;font-size:12px}
+.collapse-mark{color:var(--faint);font-size:12px}
+.collapse-action{font-size:12px;font-weight:650;color:var(--brand);white-space:nowrap}
+.collapse.on .collapse-head{border-bottom:1px solid var(--line)}
+.collapse-body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:18px}
+.collapse-body>.panel{box-shadow:none}
+
+/* ---- the spreadsheets the investigation runs on --------------------------------- */
+.sourcegrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.sourcegrid{grid-template-columns:1fr}}
+.srcslot-head{display:flex;flex-direction:column;gap:2px;margin-bottom:9px}
+.srcslot-head b{font-size:13.5px}
+.srcslot-head .sub{font-size:12px}
+.srcslot .dropzone{min-height:96px}
+.srcslot .doclist{margin-top:11px}
+.srcslot .docrow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcslot .docrow .linklike{align-self:flex-start;font-size:11.5px}
+
 /* scope card */
 .scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin:14px 0 16px}
 .scope-col h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:0 0 10px}
@@ -912,14 +979,12 @@ body{margin:0;padding:0 0 60px}
 .side{position:sticky;top:0;height:100vh}
 .demo-note{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}
-.ctabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:20px}
-.ctab{background:none;border:none;border-bottom:2px solid transparent;padding:11px 18px 13px;
-  font:inherit;text-align:left;cursor:pointer;color:var(--muted);display:flex;
-  flex-direction:column;gap:2px}
-.ctab b{font-size:14px;color:var(--muted)}
-.ctab span{font-size:11.5px}
-.ctab.on{border-bottom-color:var(--brand)}
-.ctab.on b{color:var(--brand)}
+/* The group's items are conditionally rendered in React; here they are toggled, and
+   `.navgroup-items` sets `display:flex`, which beats the `hidden` attribute on its own. */
+.navgroup-open:not(.on) .navgroup-items{display:none}
+.panehead{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.panehead h1{margin:0;font-size:20px}
+.panehead p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
 .pane{display:none} .pane.on{display:block}
 .hyp{display:flex;gap:14px;border:1px solid var(--line);border-radius:11px;padding:13px;
   margin-bottom:11px;background:var(--surface)}
@@ -974,6 +1039,21 @@ body.asst-on .asst-fab{display:none}
 <span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
 <nav>
 <a class="navlink active" data-view="cases"><span class="ic"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></span>Cases</a>
+<div class="navgroup-open on" id="navcase" hidden>
+<button class="navgroup-head" id="navcase-head" aria-expanded="true"><span class="ic">
+<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><line x1="8" y1="8" x2="15" y2="8"/>
+<line x1="8" y1="12" x2="15" y2="12"/></svg></span>
+<span class="navgroup-name"><b>Al-Faisaliah Trading Co.</b><small>CASE-2025-0481</small></span>
+<span class="navgroup-mark" id="navcase-mark">&#9662;</span></button>
+<div class="navgroup-items" id="navcase-items">
+<a class="navsub active" data-tab="correspondence">Taxpayer Correspondence</a>
+<a class="navsub" data-tab="investigation">Investigation</a>
+<a class="navsub" data-tab="report">Audit Report</a>
+<button class="navsub ai" id="nav-ai"><span class="ic"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span>AI assistant</button>
+<button class="navsub" id="nav-instr">Custom instructions</button>
+</div></div>
 <div class="navgroup">Coming next</div>
 <span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
 </nav>
@@ -1003,7 +1083,7 @@ which have been amended since the English edition they are shown in.</div>
 <div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
 <th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
 <th>Period</th><th>Status</th><th></th></tr></thead>
-<tbody><tr class="caserow on" data-open="1"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
+<tbody><tr class="caserow on" data-open="1"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
 <p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
 Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
 application&rsquo;s: <b>Cases</b> is the whole sidebar, because everything else has to know
@@ -1014,10 +1094,9 @@ that is the row that opens.</p></div></div></div>
 <div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
 <span class="mono muted">CASE-2025-0481</span>
 <b>Al-Faisaliah Trading Co.</b></div>
-<p class="tabhint">The three modules of this case. Only <b>Cases</b> is application-wide
-&mdash; everything else needs to know which case it is about, so it lives here. The
-<b>case assistant</b> and the <b>case instructions</b> are on all three.</p>
-<div class="ctabs"><button class="ctab" data-tab="correspondence"><b>Taxpayer Correspondence</b><span>What we asked, what arrived</span></button><button class="ctab" data-tab="investigation"><b>Investigation</b><span>What the evidence shows</span></button><button class="ctab" data-tab="report"><b>Audit Report</b><span>What you concluded</span></button></div>
+<p class="tabhint">The case is open in the sidebar. Its three modules, the
+<b>case assistant</b> and the <b>case instructions</b> are underneath it &mdash; only
+<b>Cases</b> is application-wide, everything else needs to know which case it is about.</p>
 
 <button class="instrbar set" id="instr-open">
 <span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Instructions for this case</b>
@@ -1044,7 +1123,7 @@ Keep letters to one page, and lead with what we need from them.</textarea>
 all three modules. It cannot make the AI state a figure, change a verdict, or alter a test —
 every number is computed in Python before any sentence is written.</p>
 </div></section>
-<div class="pane" id="pane-correspondence">
+<div class="pane" id="pane-correspondence"><div class="panehead"><h1>Taxpayer Correspondence</h1><p>What we asked, what arrived</p></div>
 <header class="page-head"><div><h1>Taxpayer correspondence</h1>
 <p class="sub">CASE-2025-0481 · what we asked for, and what arrived</p></div>
 <div class="chips"><span class="pill pri-high">Round 1</span>
@@ -1116,7 +1195,7 @@ on the evidence held, requesting information from the taxpayer starts the next r
 </span><span class="pill status">coming soon</span></div>
 <div class="rstep"><p class="detail-note" style="margin:0">The same four steps, against
 whatever the next question turns out to be.</p></div></div>
-</div><div class="pane" id="pane-investigation">
+</div><div class="pane" id="pane-investigation"><div class="panehead"><h1>Investigation</h1><p>What the evidence shows</p></div>
 <header class="page-head"><div><h1>Investigation</h1>
 <p class="sub">CASE-2025-0481 · what the evidence shows</p></div>
 <div class="chips"><span class="pill">12 hypotheses</span>
@@ -1367,7 +1446,7 @@ supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 618,000</b></div></div>
 <p class="detail-note">Every verdict above was settled by the engine against the case's own
 figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
-</div></div></div><div class="pane" id="pane-report">
+</div></div></div><div class="pane" id="pane-report"><div class="panehead"><h1>Audit Report</h1><p>What you concluded</p></div>
 <header class="page-head"><div><p class="eyebrow">Audit report</p>
 <h1>Al-Faisaliah Trading Co.</h1></div>
 <div class="chips"><span class="pill">Download Word</span>
@@ -1459,22 +1538,37 @@ it answers with no API key at all.</p>
 <div class="asst-input"><input placeholder="Ask about this case…" disabled>
 <button class="btn" disabled>Ask</button></div></div>
 </aside><script>
-const tabs = document.querySelectorAll('.ctab');
+/* The modules are reached from the sidebar, under the case they belong to — so the click
+   target and the active marker are the same element, rather than a second row of tabs
+   saying the same thing one line lower. */
+const tabs = document.querySelectorAll('.navsub[data-tab]');
 function show(k) {
-  tabs.forEach(t => t.classList.toggle('on', t.dataset.tab === k));
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === k));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
+  window.scrollTo(0, 0);
 }
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
 
+const navcase = document.getElementById('navcase');
 function view(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'view-' + name));
   // The assistant is a *case* assistant, so it is docked inside a case and nowhere else. Left
   // over the queue it squeezed the table for a panel that had nothing to say about it.
   dock(name === 'case');
+  // The group appears when a case is open and goes when you leave it — a module link with no
+  // case behind it would be pointing at nothing.
+  navcase.hidden = name !== 'case';
   document.querySelectorAll('.navlink[data-view]').forEach(
     n => n.classList.toggle('active', n.dataset.view === (name === 'case' ? 'cases' : name)));
   window.scrollTo(0, 0);
 }
+
+const navhead = document.getElementById('navcase-head');
+navhead.addEventListener('click', () => {
+  const open = navcase.classList.toggle('on');
+  document.getElementById('navcase-mark').innerHTML = open ? '&#9662;' : '&#9656;';
+  navhead.setAttribute('aria-expanded', String(open));
+});
 document.querySelectorAll('tr[data-open]').forEach(
   r => r.addEventListener('click', () => { view('case'); show('correspondence'); }));
 document.getElementById('back').addEventListener('click', () => view('cases'));
@@ -1512,6 +1606,15 @@ document.getElementById('instr-clear').addEventListener('click', () => {
 });
 showInstr(false);
 paintInstr();
+
+/* The two sidebar entries that are not modules: both reach something that is on all three,
+   so they open it wherever you are rather than navigating away from the module you were in. */
+document.getElementById('nav-ai').addEventListener('click', () => dock(true));
+document.getElementById('nav-instr').addEventListener('click', () => {
+  showInstr(true);
+  instrText.focus();
+  instr.scrollIntoView({block: 'center'});
+});
 
 /* ------------------------------------------------------------ editing, for real
    The report's fields and the outbound letter are edited in place here exactly as in the
