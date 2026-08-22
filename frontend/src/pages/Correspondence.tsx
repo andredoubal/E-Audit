@@ -5,19 +5,7 @@ import RoundCard from "../components/RoundCard";
 import CaseAssistant from "../components/CaseAssistant";
 import { getLoop, getThreads, type LoopState, type ThreadState } from "../api";
 
-/** Everything said to the taxpayer, and everything they sent back.
- *
- *  One round, four steps, in the order they happen: the email chain goes out, documents come
- *  back, the two are compared, and whatever is still missing becomes the next email. The page
- *  is deliberately nothing else — earlier versions carried seven panels, two of which asked for
- *  the same thing in different words, and an auditor had to work out which one they were
- *  supposed to be filling in.
- *
- *  **Round 1 is the only round that exists by default.** A second round means the investigation
- *  could not settle something on the evidence held and went back to the taxpayer for more, so it
- *  is opened from the Investigation tab and never from here. That keeps the loop legible: a
- *  round on this page is always a question somebody actually needed answered.
- */
+/** Everything said to the taxpayer, and everything they sent back. */
 export default function Correspondence() {
   const { id = "" } = useParams();
   const [loop, setLoop] = useState<LoopState | null>(null);
@@ -59,8 +47,6 @@ export default function Correspondence() {
       <CaseTabs id={id} />
       {err && <p className="error">{err}</p>}
 
-      {/* A reply that claims an attachment with nothing behind it reads, in the trail, exactly
-          like an answered request — so both sides wait. */}
       {threads?.missing_attachments?.map((m) => (
         <div className="callout warn" key={`${m.thread_id}-${m.message_seq}`}>
           <b>Round {m.thread_seq}: a reply mentions an attachment, and none is filed.</b>{" "}
@@ -68,7 +54,6 @@ export default function Correspondence() {
         </div>
       ))}
 
-      {/* The loop, surfaced where the answer lands. */}
       {!!threads?.retestable.length && (
         <div className="callout ok">
           <b>New evidence has arrived.</b>{" "}
@@ -94,13 +79,8 @@ export default function Correspondence() {
         />
       ))}
 
-      {/* The next round, shown as the placeholder it is. An auditor should be able to see that
-          the loop exists and where it comes from without having to discover it by accident on
-          another tab — and a round with no question behind it is not a round. */}
       <div className="roundcard soon">
         <div className="round-head">
-          {/* `shown`, not `rounds`: a case with no thread yet still shows a Round 1 card, and
-              counting the threads made the placeholder underneath it "Round 1" as well. */}
           <span className="round-n">Round {shown.length + 1}</span>
           <span className="round-origin">
             Opens from the investigation — when a hypothesis cannot be settled on the evidence

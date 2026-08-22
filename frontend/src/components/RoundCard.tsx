@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReviewControls from "./ReviewControls";
 import {
   getFollowup,
+  saveReview,
   parseRequestChain,
   uploadDocument,
   uploadEmails,
@@ -33,11 +35,7 @@ const STATE_PILL: Record<ItemState, string> = {
   received: "pri-low",
 };
 
-/** A sample chain, as two real `.eml` files rather than as text.
- *
- *  It goes in through exactly the path a forwarded email takes — headers, direction, sent order
- *  and all — so what the sample demonstrates is what the feature does. A sample that took a
- *  shortcut past the parser would be demonstrating something else. */
+/** A sample chain, as two real `.eml` files rather than as text. */
 const SAMPLE_CHAIN: { name: string; from: string; to: string; date: string;
                       subject: string; body: string; attachment?: [string, string] }[] = [
   {
@@ -141,16 +139,7 @@ function Step({ n, title, note, children }: {
   );
 }
 
-/** One round of correspondence, in the order it actually happens.
- *
- *  The email chain goes out, documents come back, the two are compared, and whatever is still
- *  missing becomes the next email. Anything that does not sit at one of those four points does
- *  not belong on this page — an auditor working a round should never have to ask which panel
- *  they are supposed to be looking at.
- *
- *  Later rounds exist only because the investigation asked for one. That is the whole loop:
- *  round 1 is the opening request, and a round 2 means the evidence could not settle something,
- *  so the case went back to the taxpayer. */
+/** One round of correspondence, in the order it actually happens. */
 export default function RoundCard({
   id,
   thread,
@@ -187,7 +176,10 @@ export default function RoundCard({
   // A round is not one pass. The chase goes out, they reply with more files, and
   // steps 3 and 4 recompute against everything on the round.
   const exchanges = messages.length;
-  const outstanding = rows.filter((r) => r.state !== "received").length;
+  // Challenged rows are not chased, so they must not be counted as outstanding either —
+  // a badge saying 3 above a letter asking for 2 is the sort of disagreement this whole
+  // pass exists to remove.
+  const outstanding = rows.filter((r) => r.chased ?? r.state !== "received").length;
 
   const loadFollowup = useCallback(() => {
     if (!outstanding) { setFollowup(null); setNoDraft(""); return; }
@@ -229,6 +221,19 @@ export default function RoundCard({
     } finally { setBusy(""); }
   };
 
+  /** The auditor's verdict on one row of the analysis. */
+  const review = async (key: string, verdict: "approved" | "challenged" | "", note: string) => {
+    setBusy("review");
+    setErr("");
+    try {
+      await saveReview(id, "completeness-item", key, verdict, note);
+      onChanged();
+      loadFollowup();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not record that.");
+    } finally { setBusy(""); }
+  };
+
   const send = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy("upload");
@@ -266,7 +271,6 @@ export default function RoundCard({
 
       {err && <div className="callout warn">{err}</div>}
 
-      {/* ------------------------------------------------------- 1 · the email chain */}
       <Step n={1} title="The email chain"
             note={messages.length ? `${messages.length} message${messages.length === 1 ? "" : "s"}` : "nothing sent yet"}>
         {messages.map((m) => (
@@ -275,9 +279,6 @@ export default function RoundCard({
               <b>{m.sender}</b>
               <span className="sub">
                 → {m.recipient} · {WHO[m.drafted_by] || m.drafted_by}
-                {/* When it was sent, which is not when it was filed. A chain forwarded today
-                    carries messages sent months ago, and stamping them all with today would
-                    put the request and the chase on the same date. */}
                 {m.sent_at
                   ? ` · sent ${m.sent_at}`
                   : m.created_at && ` · filed ${m.created_at.slice(0, 10)}`}
@@ -430,7 +431,6 @@ export default function RoundCard({
         )}
       </Step>
 
-      {/* ------------------------------------------------------- 2 · what came back */}
       <Step n={2} title="Documents received"
             note={docs.length ? `${docs.length} on file` : "nothing yet"}>
         <div
@@ -457,8 +457,7 @@ export default function RoundCard({
         )}
       </Step>
 
-      {/* ------------------------------------------------------- 3 · the comparison */}
-      <Step n={3} title="Requested versus received"
+      <Step n={3} title="Documents received analysis"
             note={rows.length ? `${outstanding} outstanding of ${rows.length}` : ""}>
         {!docs.length ? (
           <p className="detail-note" style={{ margin: 0 }}>
@@ -491,7 +490,9 @@ export default function RoundCard({
             </div>
             <div className="assesslist">
               {shown.map((i) => (
-                <div className={"assessrow " + i.state} key={`${i.request_item_id}-${i.label}`}>
+                <div className={"assessrow " + i.state
+                       + (i.review?.verdict === "challenged" ? " challenged" : "")}
+                     key={i.key || `${i.request_item_id}-${i.label}`}>
                   <span className={"pill " + STATE_PILL[i.state]}>{i.state_label}</span>
                   <div>
                     <b>{i.label}</b>
@@ -499,19 +500,26 @@ export default function RoundCard({
                     {!!i.documents.length && i.documents.join(", ") !== i.label && (
                       <small className="mono">{i.documents.join(", ")}</small>
                     )}
+                    <ReviewControls
+                      review={i.review}
+                      label={i.label}
+                      context={i.reason}
+                      busy={!!busy}
+                      onReview={(v, note) => review(i.key, v, note)}
+                    />
                   </div>
                 </div>
               ))}
             </div>
             <p className="detail-note">
               <b>Incomplete</b> is the taxpayer's to fix; <b>needs review</b> is yours to settle.
-              A chase written from the second asks for something that was already sent.
+              A chase written from the second asks for something that was already sent. Anything
+              you <b>challenge</b> stays on the file with your reason and stops being chased.
             </p>
           </>
         )}
       </Step>
 
-      {/* ------------------------------------------------------- 4 · what goes back */}
       <Step n={4} title="The email to send next"
             note={followup?.source ? `drafted ${followup.source}` : ""}>
         {!outstanding ? (

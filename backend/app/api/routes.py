@@ -14,6 +14,7 @@ from ..models import (
 )
 from ..models.reporting import LETTER_KINDS
 from ..models.instructions import MAX_INSTRUCTIONS
+from ..models.reviews import KINDS as REVIEW_KINDS, KIND_COMPLETENESS
 from ..requests import service as req_service
 from ..requests import from_email
 from ..agents import calc_service
@@ -471,6 +472,59 @@ def regulatory_article(number: int):
     if a is None:
         raise HTTPException(404, "article not in the corpus")
     return a
+
+
+# --------------------------------------------------- approve or challenge what we concluded
+
+class ReviewIn(BaseModel):
+    item_kind: str
+    item_key: str
+    verdict: str = ""          # approved | challenged | "" to withdraw
+    note: str = ""
+
+
+@router.put("/cases/{case_id}/reviews")
+def record_review(case_id: str, body: ReviewIn, db: Session = Depends(get_db)):
+    """The auditor's verdict on one thing the application worked out.
+
+    Every check here is defensible and every one of them can be wrong. An auditor who knows the
+    "missing" column is present under a different header needs somewhere to say so — and saying
+    it has to *do* something, or the chase letter goes out asking for a document the Authority's
+    own auditor has said was already supplied.
+
+    A challenge must carry a reason. "The auditor disagreed" with nothing after it is not
+    something anyone can act on later, least of all the auditor coming back to it in a month.
+    """
+    from ..requests import reviews as review_service
+
+    _case_or_404(db, case_id)
+    if body.item_kind not in REVIEW_KINDS:
+        raise HTTPException(422, f"unknown item kind: {body.item_kind}")
+    if body.verdict == "challenged" and not body.note.strip():
+        raise HTTPException(422, "a challenge needs a reason")
+
+    try:
+        review_service.record(db, case_id, kind=body.item_kind, key=body.item_key,
+                              verdict=body.verdict, note=body.note)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action="item-reviewed",
+                    payload={"kind": body.item_kind, "key": body.item_key,
+                             "verdict": body.verdict or "withdrawn"}))
+    db.commit()
+    return {"case_id": case_id,
+            "reviews": review_service.reviews_for(db, case_id, body.item_kind)}
+
+
+@router.get("/cases/{case_id}/reviews/{kind}")
+def list_reviews(case_id: str, kind: str, db: Session = Depends(get_db)):
+    from ..requests import reviews as review_service
+
+    _case_or_404(db, case_id)
+    if kind not in REVIEW_KINDS:
+        raise HTTPException(422, f"unknown item kind: {kind}")
+    return {"case_id": case_id, "reviews": review_service.reviews_for(db, case_id, kind)}
 
 
 # ------------------------------------------------- the auditor's standing AI instructions
@@ -1057,7 +1111,16 @@ def recheck(case_id: str, db: Session = Depends(get_db)):
 
 @router.get("/cases/{case_id}/followup")
 def followup(case_id: str, db: Session = Depends(get_db)):
-    """Draft the chase letter from the outstanding gaps only."""
+    """Draft the chase letter from the outstanding gaps only — minus what the auditor challenged.
+
+    A challenge has to change something or it is decoration. An auditor who has recorded that
+    the "missing" column is present under a different header must not then watch the Authority
+    write to the taxpayer asking for it: that is the letter this feature exists to stop. The gap
+    stays on the case file with the challenge beside it; it just stops being chased.
+    """
+    from ..requests import reviews as review_service
+    from ..requests.completeness import item_key
+
     case = _case_or_404(db, case_id)
     req = req_service.current_request(db, case_id)
     if req is None:
@@ -1066,6 +1129,20 @@ def followup(case_id: str, db: Session = Depends(get_db)):
         select(GapFinding).where(GapFinding.case_id == case_id, GapFinding.round == req.seq,
                                  GapFinding.severity == "blocking")
         .order_by(GapFinding.id)).all()
+
+    reviews = review_service.reviews_for(db, case_id, KIND_COMPLETENESS)
+    challenged = {k for k, r in reviews.items() if r["verdict"] == "challenged"}
+    if challenged:
+        by_item = {i.id: i for i in req.items}
+        def kept(g) -> bool:
+            item = by_item.get(getattr(g, "request_item_id", None))
+            if item is None:
+                return True
+            return item_key({"kind": item.kind, "label": item.label}) not in challenged
+        gaps = [g for g in gaps if kept(g)]
+
+    if not gaps:
+        raise HTTPException(409, "nothing is outstanding that has not been challenged")
     return draft_followup(case, case.taxpayer, req, list(gaps))
 
 

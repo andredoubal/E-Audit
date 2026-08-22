@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useReport } from "../ai/useStream";
 import VerifyBadge from "./VerifyBadge";
+import { Sparkles } from "./Icon";
 
 const bold = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 
@@ -42,12 +43,7 @@ export default function AuditReport({ id, rev }: { id?: string; rev?: number }) 
     <div className="panel ai-panel">
       <div className="panel-head">
         <div className="ai-h">
-          <span className="ai-chip">AI</span>
-          {/* Not "Draft audit report". It sat under the real report calling itself by almost
-              the same name, so it read as a competing version of the document of record — and
-              it would say "SAR 618,000 is a potential finding" directly beneath a report
-              stating that no finding had been established. It is neither a draft of that
-              report nor a conclusion: it is the reconciliation, described. */}
+          <span className="ai-chip"><Sparkles size={13} /></span>
           <h2>The reconciliation, in words</h2>
         </div>
         <VerifyBadge source={source} />

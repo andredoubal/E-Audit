@@ -1,32 +1,4 @@
-"""Recover the request spec from a whole chain, not from one pasted message.
-
-`from_email.parse_email` reads *one* email. A real enquiry is rarely one email: the opening
-request goes out, the taxpayer answers half of it, the auditor writes back naming the two things
-still outstanding and adds a column they forgot. Read only the first message and the spec is
-missing what was added later; read only the last and it is missing everything already sent. So
-the chain is read message by message and the results are merged.
-
-**Only what ZATCA sent is a request.** A taxpayer reply saying "please find the sales analysis
-attached" matches the same cue as the auditor asking for it — and turning that into a request
-item would have the taxpayer asking themselves for something, then be reported as an outstanding
-gap against them. So inbound messages are read for the record and never for the spec. This is a
-check the pasted-textarea version could not make at all: pasted text has no sender, so there was
-nothing to decide direction from. Filing the messages as files is what makes it possible.
-
-Three merge rules, each chosen because the obvious alternative is wrong:
-
-* **Items union, earliest cue wins.** An item asked for twice is one item; the phrase shown to
-  the auditor is the one from the message that first asked, because that is the ask they will
-  be looking for when they check the reading.
-* **Columns union.** A column named in the follow-up was still asked for, and taking only the
-  last message's list would silently drop the seven columns in the opening request.
-* **The period is the first one stated, and a later disagreement is reported rather than
-  resolved.** Two messages naming different periods is either a typo or a widened scope, and
-  the difference between those is not something a parser can know.
-
-The deadline is the opposite: the *last* one stated wins, because a chase that grants ten more
-working days replaces the original date rather than adding to it.
-"""
+"""Recover the request spec from a whole chain, not from one pasted message."""
 from __future__ import annotations
 
 from dataclasses import replace

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getZatca, removeZatca, uploadZatca, type ZatcaState } from "../api";
+import ReviewControls from "./ReviewControls";
+import { getZatca, removeZatca, saveReview, uploadZatca,
+         type ItemReview, type ZatcaState } from "../api";
 
 const CATEGORY: Record<string, string> = {
   omission: "On one side only",
@@ -14,15 +16,7 @@ const CATEGORY: Record<string, string> = {
 const sar = (n: number) =>
   n ? `SAR ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "";
 
-/** The Authority's own invoice records, matched against the listing the taxpayer sent.
- *
- *  Every disagreement here comes from a named deterministic rule — no model is involved in the
- *  matching or in any figure. That is not a limitation: joining two invoice populations is
- *  closed arithmetic, and doing it in Python is what makes the same two files produce the same
- *  answer every time it is run.
- *
- *  With only one side loaded the panel says it cannot compare, rather than showing every record
- *  as unmatched. */
+/** The Authority's own invoice records, matched against the listing the taxpayer sent. */
 export default function ZatcaPanel({ id, onChanged }: { id: string; onChanged?: () => void }) {
   const [d, setD] = useState<ZatcaState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,9 +24,25 @@ export default function ZatcaPanel({ id, onChanged }: { id: string; onChanged?: 
   const [drag, setDrag] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [reviews, setReviews] = useState<Record<string, ItemReview>>({});
 
-  const load = useCallback(() => { getZatca(id).then(setD).catch(() => {}); }, [id]);
+  const load = useCallback(() => {
+    getZatca(id).then(setD).catch(() => {});
+    fetch(`/api/cases/${id}/reviews/zatca-mismatch`)
+      .then((r) => (r.ok ? r.json() : { reviews: {} }))
+      .then((r) => setReviews(r.reviews ?? {}))
+      .catch(() => {});
+  }, [id]);
   useEffect(load, [load]);
+
+  const review = async (key: string, verdict: "approved" | "challenged" | "", note: string) => {
+    try {
+      const r = await saveReview(id, "zatca-mismatch", key, verdict, note);
+      setReviews(r.reviews);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not record that.");
+    }
+  };
 
   const send = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -141,6 +151,13 @@ export default function ZatcaPanel({ id, onChanged }: { id: string; onChanged?: 
                     {m.vat_at_stake ? <span className="sub"> · {sar(m.vat_at_stake)}</span> : null}
                     <p>{m.detail}</p>
                     {m.citation && <small className="mono">{m.citation}</small>}
+                    <ReviewControls
+                      review={reviews[`${m.code}::${m.ref}`] ?? null}
+                      label={`${CATEGORY[m.category] || m.category} — ${m.ref}`}
+                      context={m.detail}
+                      busy={busy}
+                      onReview={(v, note) => review(`${m.code}::${m.ref}`, v, note)}
+                    />
                   </div>
                 </div>
               ))}

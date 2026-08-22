@@ -1,19 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReportField } from "../api";
 
-/** One field of the audit report, which the auditor can write themselves.
- *
- *  The template asks for rulings, for penalties, for a meeting date — judgements the tool has no
- *  business making. It marked them `[for the auditor to complete]` and then offered no way to
- *  complete them, which is a form you cannot fill in.
- *
- *  Two rules the interaction follows:
- *
- *  **What was replaced stays visible.** Overriding an engine-written value shows an "edited"
- *  mark and a way back to what the tool said. An override nobody can detect is not an override.
- *
- *  **Clearing the box reverts.** An empty save deletes the edit and the engine's own value comes
- *  back, which is what an auditor expects from emptying a field — not a blank report line. */
+/** One field of the audit report, which the auditor can write themselves. */
 export default function EditableField({ field, onSave }: {
   field: ReportField;
   onSave: (key: string, value: string, original: string) => Promise<void>;

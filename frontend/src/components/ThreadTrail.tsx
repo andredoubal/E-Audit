@@ -14,16 +14,7 @@ const ORIGIN: Record<string, string> = {
   clarification: "Clarification",
 };
 
-/** Everything said to the taxpayer and back, oldest first.
- *
- *  One enquiry accepts documents at a time and closed ones are kept. Arbitrary parallel threads
- *  would make "which conversation does this upload answer" ambiguous, and a document filed
- *  against the wrong request is a completeness check answering the wrong question — worse than
- *  having no check at all. Unlimited closed threads still give the full history.
- *
- *  Each message says who wrote it. A letter the auditor wrote, one they approved from a draft,
- *  and the taxpayer's own reply are three different kinds of evidence about this case, and the
- *  trail would be misleading if it flattened them. */
+/** Everything said to the taxpayer and back, oldest first. */
 export default function ThreadTrail({ id, rev, onChanged }: {
   id: string;
   rev?: number;
@@ -80,7 +71,6 @@ export default function ThreadTrail({ id, rev, onChanged }: {
           </p>
         )}
 
-        {/* The loop, surfaced where the answer lands: something was asked for, and it arrived. */}
         {d.retestable.length > 0 && (
           <div className="callout ok">
             <b>New evidence has arrived.</b>{" "}
@@ -100,9 +90,6 @@ export default function ThreadTrail({ id, rev, onChanged }: {
           </div>
         )}
 
-        {/* Words and files disagreeing. Which of the two is wrong is not for us to say — but
-            an attachment that never arrived otherwise reads exactly like an answered request,
-            and both sides then wait. */}
         {d.missing_attachments?.map((m) => (
           <div className="callout warn" key={`${m.thread_id}-${m.message_seq}`}>
             <b>Enquiry {m.thread_seq}: a reply mentions an attachment, and none is filed.</b>{" "}

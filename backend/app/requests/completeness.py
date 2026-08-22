@@ -432,7 +432,14 @@ def _state_for(gaps: list) -> tuple[str, str]:
     return state, reason
 
 
-def assessment(items: list, documents: list, gaps: list) -> dict:
+def item_key(row: dict) -> str:
+    """What a review is stored against. Stable across recomputation, which a row id is not:
+    the assessment is derived fresh on every request, so an id would point at nothing by the
+    time the auditor came back to their challenge."""
+    return f"{row.get('kind') or 'item'}::{row.get('label', '')}"
+
+
+def assessment(items: list, documents: list, gaps: list, reviews: dict | None = None) -> dict:
     """Every requested item under one of four words, for the auditor rather than for the engine.
 
     The engine works in gaps because a gap is what a check produces. An auditor works in "what
@@ -479,6 +486,23 @@ def assessment(items: list, documents: list, gaps: list) -> dict:
             "kinds": ["unrequested-document"],
         })
 
+    # The auditor's own verdict on each row, and what it changes.
+    #
+    # A challenged row stops being chased — anything less would have the Authority writing to a
+    # taxpayer for a document its own auditor has said was already supplied. The row is *not*
+    # removed and its state is *not* rewritten: the file has to show both what the checker found
+    # and why a person overrode it, so the finding stays and the challenge sits beside it.
+    seen = reviews or {}
+    for row in rows:
+        review = seen.get(item_key(row))
+        row["key"] = item_key(row)
+        row["review"] = review
+        row["chased"] = bool(row["state"] != RECEIVED
+                             and not (review and review["verdict"] == "challenged"))
+
     summary = {s: sum(1 for r in rows if r["state"] == s)
                for s in (RECEIVED, MISSING, INCOMPLETE, NEEDS_REVIEW)}
-    return {"items": rows, "summary": summary}
+    summary["challenged"] = sum(1 for r in rows if (r["review"] or {}).get("verdict") == "challenged")
+    summary["approved"] = sum(1 for r in rows if (r["review"] or {}).get("verdict") == "approved")
+    return {"items": rows, "summary": summary,
+            "outstanding": sum(1 for r in rows if r["chased"])}

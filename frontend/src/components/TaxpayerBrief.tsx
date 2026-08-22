@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSummary, type Summary } from "../ai/ai";
 import VerifyBadge from "./VerifyBadge";
+import { Sparkles } from "./Icon";
 
 export default function TaxpayerBrief({ id }: { id?: string }) {
   const [d, setD] = useState<Summary | null>(null);
@@ -13,7 +14,7 @@ export default function TaxpayerBrief({ id }: { id?: string }) {
     <div className="panel ai-panel">
       <div className="panel-head">
         <div className="ai-h">
-          <span className="ai-chip">AI</span>
+          <span className="ai-chip"><Sparkles size={13} /></span>
           <h2>Taxpayer brief</h2>
         </div>
         <VerifyBadge source={d ? d.source : null} violations={d?.violations} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { readLetter, type LetterExtraction } from "../api";
+import { Sparkles } from "./Icon";
 
 interface Resp {
   seq: number;
@@ -145,7 +146,7 @@ export default function TaxpayerResponsePanel({
       <div className="ai-body">
         <div className="letter">
           <div className="letter-head">
-            <span className="ai-chip">AI</span>
+            <span className="ai-chip"><Sparkles size={13} /></span>
             <span className="muted">Paste a taxpayer letter or case note — AI drafts a response for you to confirm</span>
           </div>
           <textarea

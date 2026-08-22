@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import VerifyBadge from "./VerifyBadge";
 import { getVerdict, type Draft } from "../api";
+import { Sparkles } from "./Icon";
 
-/** The letter telling the taxpayer the outcome — §8's second named administrative burden.
- *
- *  Drafted from the engine's conclusion and nothing else. The guard is the same one the
- *  request letters use: every numeric literal in the draft must appear in the facts block,
- *  so the model may repeat a figure the engine established and may not introduce one.
- *  Nothing is sent from here; the auditor edits and approves.
- */
+/** The letter telling the taxpayer the outcome — §8's second named administrative burden. */
 export default function VerdictLetter({ id }: { id: string }) {
   const [d, setD] = useState<Draft | null>(null);
   const [copied, setCopied] = useState(false);
@@ -25,7 +20,7 @@ export default function VerdictLetter({ id }: { id: string }) {
     <div className="panel ai-panel">
       <div className="panel-head">
         <div className="ai-h">
-          <span className="ai-chip">AI</span>
+          <span className="ai-chip"><Sparkles size={13} /></span>
           <h2>Draft letter to the taxpayer</h2>
         </div>
         <div className="chips">

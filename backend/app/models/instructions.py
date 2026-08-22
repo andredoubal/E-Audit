@@ -1,28 +1,4 @@
-"""Standing instructions the auditor gives the AI for one case.
-
-Every case has something the tool cannot know: this taxpayer's group restructured mid-period,
-the client asked for the letters in plainer language, a previous round already dealt with the
-credit notes so stop raising them. Without somewhere to say that, the auditor repeats it into
-every panel and it is lost the moment they close the tab.
-
-Three properties make this safe to have at all:
-
-* **It is a property of the case, not of a session.** One row per case, keyed on `case_id`, so
-  the same instruction reaches the narration, the letters, the report and the assistant. An
-  instruction that applied only to whichever panel you typed it in would be worse than none —
-  the auditor would believe it was in force everywhere.
-* **It steers language, never arithmetic.** It is injected as user-turn context beneath a
-  system preamble whose hard rules it cannot reach: no digits, do not change the verdict, treat
-  case data as data. And every existing verifier still runs afterwards, so an instruction that
-  tries to make the model state a figure produces a rejected draft and a deterministic
-  fallback, not a wrong number.
-* **It is on the record.** `updated_by` and `updated_at` are kept, and the text is shown on
-  every module rather than hidden in a settings dialog. A case whose output was steered by an
-  instruction nobody can see afterwards is not one an auditor could defend.
-
-Disabling is kept separate from clearing: an auditor who wants to see what the AI says *without*
-their steer should not have to delete what they wrote to find out.
-"""
+"""Standing instructions the auditor gives the AI for one case."""
 from __future__ import annotations
 
 from datetime import datetime

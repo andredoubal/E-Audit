@@ -1,23 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getInstructions, saveInstructions, type CaseInstructions as Data } from "../api";
+import { Sparkles } from "./Icon";
 
-/** What the auditor wants the AI to keep in mind on this case.
- *
- *  Every case has something the tool cannot know: this group restructured mid-period, the
- *  letters should be plainer because the taxpayer is a sole trader, a previous round already
- *  dealt with the credit notes so stop raising them. Without somewhere to say it, the auditor
- *  says it again in every panel and loses it when they close the tab.
- *
- *  **It sits under the tabs, on all three modules, because it applies to all three.** A steer
- *  that lived on one page would be one the auditor believes is in force everywhere and is not,
- *  which is worse than not having it. Collapsed it is a single line, so a case with no
- *  instructions costs no attention; open, it says exactly which surfaces it reaches and which
- *  it deliberately does not.
- *
- *  **It steers wording, never arithmetic.** The panel says so, and it is true of the
- *  implementation rather than a promise: the text goes into the user turn beneath a system
- *  preamble it cannot reach, and every verifier still runs afterwards, so an instruction that
- *  tries to make the model state a figure produces a rejected draft, not a wrong number. */
+/** What the auditor wants the AI to keep in mind on this case. */
 
 export default function CaseInstructions({ id }: { id: string }) {
   const [d, setD] = useState<Data | null>(null);
@@ -60,7 +45,7 @@ export default function CaseInstructions({ id }: { id: string }) {
     return (
       <button className={"instrbar" + (has ? " set" : "")}
               onClick={() => setOpen(true)}>
-        <span className="ai-chip">AI</span>
+        <span className="ai-chip"><Sparkles size={13} /></span>
         <b>Instructions for this case</b>
         {has ? (
           <>
@@ -82,7 +67,7 @@ export default function CaseInstructions({ id }: { id: string }) {
   return (
     <section className="instr">
       <div className="instr-head">
-        <span className="ai-chip">AI</span>
+        <span className="ai-chip"><Sparkles size={13} /></span>
         <b>Instructions for this case</b>
         <span className="sub">
           Applied to every module — {d.updated_at

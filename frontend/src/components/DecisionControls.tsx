@@ -1,11 +1,8 @@
 import { useState } from "react";
+import { askAbout } from "../ai/ask";
 import type { AuditorDecisionView, DecisionKind } from "../api";
 
-/** The auditor's ruling on one hypothesis. The AI proposed it; this is where a person decides.
- *
- *  Only `accepted` reaches the report. The rest are recorded rather than discarded, because
- *  what was ruled out and why is as much a part of the audit file as what was upheld — and
- *  because an auditor reopening the case in a month needs to see the question was answered. */
+/** The auditor's ruling on one hypothesis. */
 const OPTIONS: { key: DecisionKind; label: string; hint: string }[] = [
   { key: "accepted", label: "Accept", hint: "Confirm as a finding — this reaches the report" },
   { key: "rejected", label: "Reject", hint: "Not supported; kept on file with your reason" },
@@ -26,10 +23,13 @@ export default function DecisionControls({
   decision,
   busy,
   onDecide,
+  /** What this hypothesis claims, so a challenge reaches the assistant with the case rather than with a blank "what do you want to challenge?". */
+  claim,
 }: {
   decision: AuditorDecisionView | null;
   busy: boolean;
   onDecide: (d: DecisionKind, comment: string) => void;
+  claim?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<DecisionKind | null>(null);
@@ -58,6 +58,14 @@ export default function DecisionControls({
         <button className="linklike" onClick={() => setOpen(true)} disabled={busy}>
           change
         </button>
+        {claim && (
+          <button className="linklike" onClick={() => askAbout(
+            `I am challenging this conclusion: “${claim}”.`
+            + (decision.comment ? ` My reason: ${decision.comment}` : "")
+            + " Help me work out whether it is right.")}>
+            ask the assistant about it
+          </button>
+        )}
       </div>
     );
   }
@@ -68,6 +76,13 @@ export default function DecisionControls({
         <button className="btn-ghost" onClick={() => setOpen(true)} disabled={busy}>
           Record your decision
         </button>
+        {claim && (
+          <button className="linklike" onClick={() => askAbout(
+            `I am not sure about this conclusion: “${claim}”. Help me work out whether it is `
+            + "right before I rule on it.")} disabled={busy}>
+            ask the assistant first
+          </button>
+        )}
       </div>
     );
   }

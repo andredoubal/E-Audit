@@ -1,29 +1,39 @@
 /* ZATCA VAT Audit Agent — design system (shared with the Rulebook page)
    Palette: navy/teal with a warm orange accent, cream light theme / deep-navy dark theme. */
 :root{
-  --brand:#1F7A7E; --brand-deep:#123F41; --brand-tint:#E4F2F1; --gold:#FF7F51;
-  --bg:#FAF5EB; --surface:#FFFFFF; --surface-2:#F2ECDC;
-  --ink:#12253F; --muted:#5A7A9A; --faint:#9BB4C9; --line:#E1D9C5;
-  --high:#C4453A; --high-bg:#F7E3E0; --med:#D9812E; --med-bg:#FBEADA; --low:#4C7A2C; --low-bg:#E8F0DD;
-  --shadow:0 1px 2px rgba(18,37,63,.06), 0 10px 26px -16px rgba(18,37,63,.22);
-  --sans:'Cairo',ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --brand:#34A0A4; --brand-deep:#0E2547; --brand-tint:rgba(52,160,164,.14); --gold:#FF7F51;
+  --bg:#FAF5EB; --surface:#FFFFFF; --surface-2:rgba(14,37,71,.045);
+  --ink:#0E2547; --muted:#2A4A70; --faint:#9ABACC; --line:rgba(14,37,71,.14);
+  --high:#C4453A; --high-bg:rgba(196,69,58,.10); --med:#FF7F51; --med-bg:rgba(255,127,81,.14);
+  --low:#00A878; --low-bg:rgba(0,168,120,.14);
+  --ai:#00828E;
+  --shadow:0 1px 2px rgba(14,37,71,.05), 0 12px 30px -20px rgba(14,37,71,.25);
+  --r:14px;
+  /* Somar first. It is a licensed face rather than a Google one, so it is not fetched here —
+     drop the webfont into the app and it is picked up; until then the stack falls through. */
+  --sans:'Somar','Somar Light','Cairo',ui-sans-serif,system-ui,"Segoe UI",Roboto,
+         "Helvetica Neue",Arial,sans-serif;
   --mono:'Fira Code',ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
   /* a faint audit/inspection motif used only in the body atmosphere, never behind content */
   --atmosphere:url('data:image/jpeg;base64,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');
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
-  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
-  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
-  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
-  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
+  --brand:#10CFC9; --brand-deep:#009ADE; --brand-tint:rgba(16,207,201,.16); --gold:#FF7F51;
+  --bg:#07152E; --surface:#0A1830; --surface-2:rgba(0,48,135,.28);
+  --ink:#FFFFFF; --muted:#C5D8EE; --faint:#3A5A80; --line:rgba(0,154,222,.22);
+  --high:#F0847C; --high-bg:rgba(240,132,124,.14); --med:#FF7F51; --med-bg:rgba(255,127,81,.18);
+  --low:#00A878; --low-bg:rgba(0,168,120,.18);
+  --ai:#3DC8EF;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 36px -22px rgba(0,0,0,.7);
 }}
 :root[data-theme="dark"]{
-  --brand:#2FD9CF; --brand-deep:#12746E; --brand-tint:#123A3A; --gold:#FF9166;
-  --bg:#07152E; --surface:#0F213F; --surface-2:#0A1930;
-  --ink:#F3F7FB; --muted:#93B2CF; --faint:#4F6E90; --line:#1D3358;
-  --high:#F0847C; --high-bg:#331B1D; --med:#F0A85E; --med-bg:#2E2412; --low:#4FC98B; --low-bg:#123726;
-  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px -18px rgba(0,0,0,.65);
+  --brand:#10CFC9; --brand-deep:#009ADE; --brand-tint:rgba(16,207,201,.16); --gold:#FF7F51;
+  --bg:#07152E; --surface:#0A1830; --surface-2:rgba(0,48,135,.28);
+  --ink:#FFFFFF; --muted:#C5D8EE; --faint:#3A5A80; --line:rgba(0,154,222,.22);
+  --high:#F0847C; --high-bg:rgba(240,132,124,.14); --med:#FF7F51; --med-bg:rgba(255,127,81,.18);
+  --low:#00A878; --low-bg:rgba(0,168,120,.18);
+  --ai:#3DC8EF;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 14px 36px -22px rgba(0,0,0,.7);
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
@@ -59,18 +69,32 @@ h2{font-size:17px;margin:0}
 .mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(145deg,var(--brand),var(--brand-deep));display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
 .side nav{padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1}
 .navlink{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px}
-.navlink .ic{width:18px;text-align:center;color:var(--faint)}
+.navlink .ic{width:18px;display:flex;align-items:center;justify-content:center;
+  color:var(--faint)}
+.navlink.active .ic{color:inherit}
 .navlink:hover{background:var(--surface-2);color:var(--ink)}
 .navlink.active{background:var(--brand-tint);color:var(--brand-deep)}
 :root[data-theme="dark"] .navlink.active{color:var(--brand)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .navlink.active{color:var(--brand)}}
 .navlink.disabled{color:var(--faint);cursor:default}
 .navgroup{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:16px 12px 6px}
-.side-foot{padding:14px 18px;border-top:1px solid var(--line);color:var(--faint);font-size:11.5px}
+/* The theme toggle lives with the footer, out of the way of the work. */
+.side-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--faint);
+  font-size:11.5px;display:flex;align-items:center;gap:10px}
+.side-foot span{flex:1;min-width:0}
+.iconbtn{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;
+  border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;
+  transition:color .15s,border-color .15s}
+.iconbtn:hover{color:var(--brand);border-color:var(--brand)}
 
 .main{min-width:0}
-.page{max-width:1120px;margin:0 auto;padding:30px 30px 60px}
-.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+.page{max-width:1120px;margin:0 auto;padding:30px 32px 72px;
+  display:flex;flex-direction:column;gap:20px}
+/* The page is a stack with air in it: panels no longer carry their own bottom
+   margin, so one gap rule spaces every screen the same way. */
+.page>.panel,.page>.callout,.page>.roundcard{margin-bottom:0}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;
+  gap:20px;margin-bottom:0}
 
 /* tiles */
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px}
@@ -81,7 +105,8 @@ h2{font-size:17px;margin:0}
 
 /* panel + table */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
-.panel-head{display:flex;align-items:baseline;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:16px 20px;border-bottom:1px solid var(--line)}
 .tablescroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th,td{text-align:left;padding:11px 18px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -174,7 +199,10 @@ td .sub{font-size:11.5px;color:var(--faint);margin-top:2px}
 .page-head{margin-bottom:0}
 .tiles{margin-bottom:0}
 .ai-h{display:flex;align-items:center;gap:10px}
-.ai-chip{background:color-mix(in srgb,var(--ai) 15%, transparent);color:var(--ai);font-size:10px;font-weight:800;letter-spacing:.7px;padding:3px 7px;border-radius:6px}
+/* Holds the sparkle mark rather than the letters "AI". */
+.ai-chip{display:inline-flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--ai) 15%, transparent);color:var(--ai);
+  width:24px;height:24px;flex:none;border-radius:8px;font-size:11px;font-weight:800}
 .ai-body{padding:16px 18px;font-size:14px;line-height:1.6}
 .brief-head{font-weight:600;margin:0 0 8px}
 .brief-points{margin:0 0 6px;padding-left:18px}
@@ -325,7 +353,7 @@ input.letter-input,select.letter-input{min-height:0}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:1100px){.grid-2{grid-template-columns:1fr}}
-.panel-body{padding:14px 16px 16px}
+.panel-body{padding:18px 20px 20px}
 .panel-body h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--brand-deep);margin:18px 0 8px}
 .panel-body h4:first-child{margin-top:0}
 :root[data-theme="dark"] .panel-body h4{color:var(--brand)}
@@ -769,6 +797,27 @@ input.letter-input,select.letter-input{min-height:0}
 .assessrow b{font-size:13.5px;font-weight:650}
 .assessrow p{margin:3px 0 0;font-size:13px;color:var(--muted)}
 .assessrow small{display:block;color:var(--faint);font-size:11px;margin-top:3px}
+.assessrow>div{flex:1;min-width:0}
+/* A challenged row is dimmed, not hidden. The check still found what it found; a person has
+   said it is wrong, and the file has to show both. */
+.assessrow.challenged{border-left-color:var(--med);background:var(--surface)}
+.assessrow.challenged>div>b{text-decoration:line-through;text-decoration-color:var(--faint)}
+
+/* ---- approve or challenge one thing the application worked out ------------------- */
+.review{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:7px}
+/* Always visible. They were revealed on hover, which hid the one control on the row that an
+   auditor is being asked to use. */
+.review.done{align-items:baseline}
+.review-why{font-size:12.5px;color:var(--muted);font-style:italic;flex:1;min-width:0}
+.review-row{display:flex;flex-wrap:wrap;align-items:center;gap:11px;width:100%}
+.review-row .sub{font-size:11.5px}
+.review-note{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;line-height:1.5;resize:vertical}
+.review-note:focus{outline:2px solid var(--med);outline-offset:1px;border-color:transparent}
+.btn.small.ghost{background:var(--surface);color:var(--brand);border:1px solid var(--line)}
+.btn.small.ghost:hover:not(:disabled){border-color:var(--brand)}
+.btn.small.warn{background:var(--surface);color:var(--med);border:1px solid var(--line)}
+.btn.small.warn:hover:not(:disabled){border-color:var(--med)}
 
 /* ---- a round of correspondence: four steps, in the order they happen.
    Numbered because the order is the point — the chain goes out, documents come back, the two

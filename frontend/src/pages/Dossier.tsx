@@ -16,14 +16,7 @@ function Fact({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
-/** Stage 1 — everything ZATCA already holds.
- *
- *  The auditors described starting a case by investigating internal data: returns,
- *  e-invoicing, imports and exports, taxpayer history, previous audits, financials, and the
- *  risk analysis itself. Doing that today means opening several systems, which is pain point
- *  three. This page is that step, assembled — and the "held" markers are not decoration:
- *  they are what the planner uses to drop a request the Authority can already answer.
- */
+/** Stage 1 — everything ZATCA already holds. */
 export default function Dossier() {
   const { id = "" } = useParams();
   const [d, setD] = useState<D | null>(null);
@@ -67,7 +60,6 @@ export default function Dossier() {
 
       <CaseTabs id={id} />
 
-      {/* ---------------------------------------------- why this case exists */}
       <div className="panel">
         <div className="panel-head">
           <h2>Why this case was raised</h2>
@@ -118,7 +110,6 @@ export default function Dossier() {
         </div>
       </div>
 
-      {/* ---------------------------------------------- what we hold */}
       <div className="panel">
         <div className="panel-head">
           <h2>What ZATCA already holds</h2>
@@ -152,7 +143,6 @@ export default function Dossier() {
         </div>
       </div>
 
-      {/* ---------------------------------------------- who am I dealing with */}
       <div className="grid-2">
         <div className="panel">
           <div className="panel-head">
@@ -302,7 +292,6 @@ export default function Dossier() {
         </div>
       </div>
 
-      {/* ---------------------------------------------- customs + e-invoices */}
       <div className="grid-2">
         <div className="panel">
           <div className="panel-head">

@@ -1,21 +1,4 @@
-"""Overlay what the auditor wrote onto what the engine built.
-
-One function does the work, and it is applied in `_audit_report` — the single place the JSON
-view, the Word download and the printable page all pass through. That placement is the whole
-design: an edit that showed on screen but not in the downloaded document would be worse than no
-editing at all, because the auditor would send the version they had already corrected.
-
-Three rules:
-
-* **An edit is a value, never a number the engine computed.** Nothing here recomputes anything.
-  The completeness tally is recounted afterwards, because a field the auditor filled in *is*
-  answered and the header would otherwise keep reporting it as outstanding.
-* **What was replaced is kept and shown.** `original` travels with the field, so the auditor can
-  see what the tool said and put it back. An override nobody can detect is not an override, it
-  is a forgery.
-* **An empty edit is a revert, not an empty field.** Saving "" deletes the row and the engine's
-  own value comes back, which is the behaviour an auditor expects from clearing a box.
-"""
+"""Overlay what the auditor wrote onto what the engine built."""
 from __future__ import annotations
 
 from sqlalchemy import select

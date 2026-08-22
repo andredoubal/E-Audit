@@ -9,14 +9,7 @@ const MARK: Record<string, string> = {
   skipped: "—",
 };
 
-/** Where the case is in the five-stage run, and whose move it is.
- *
- *  Derived from the case's own data on every load rather than stored, so it cannot drift
- *  from reality. Two states earn their place: `waiting` distinguishes blocked-on-the-taxpayer
- *  from blocked-on-us — the difference between a case that is stuck and one that is simply
- *  slow — and `skipped` marks a stage the case never needed, which is how a clean case shows
- *  that the taxpayer was never contacted at all.
- */
+/** Where the case is in the five-stage run, and whose move it is. */
 export default function LifecycleRail({ id }: { id: string }) {
   const [d, setD] = useState<Lifecycle | null>(null);
   useEffect(() => {
@@ -39,9 +32,6 @@ export default function LifecycleRail({ id }: { id: string }) {
         {d.no_contact_needed && (
           <span className="pill pri-low">Cleared without contacting the taxpayer</span>
         )}
-        {/* Two stages open at once is the normal shape of this work, not a regression. Said
-            as what it is — the derivation cannot tell whether the case was sent back, so it
-            does not claim that. */}
         {d.open_with_taxpayer_during_review && (
           <span className="rail-revisit">
             ⇄ Review under way with items still outstanding with the taxpayer

@@ -165,6 +165,8 @@ def correspondence(loop: dict, threads: dict) -> str:
         + (f'<p>{e(i["reason"])}</p>' if i["reason"] else "")
         + (f'<small class="mono">{e(", ".join(i["documents"]))}</small>'
            if i["documents"] and ", ".join(i["documents"]) != i["label"] else "")
+        + ('<div class="review"><button class="btn small ghost">Approve</button>'
+           '<button class="btn small warn">Challenge</button></div>')
         + "</div></div>" for i in rows) + (
         '</div><p class="detail-note"><b>Incomplete</b> is the taxpayer\'s to fix; '
         '<b>needs review</b> is yours to settle. A chase written from the second asks for '
@@ -186,7 +188,7 @@ def correspondence(loop: dict, threads: dict) -> str:
   <span class="pill pri-low">open</span></div>
   {step(1, "The email chain", f"{len(msgs)} message", chain)}
   {step(2, "Documents received", f"{len(docs)} on file", received)}
-  {step(3, "Requested versus received", f"{len(outstanding)} outstanding of {len(rows)}", compare)}
+  {step(3, "Documents received analysis", f"{len(outstanding)} outstanding of {len(rows)}", compare)}
   {step(4, "The email to send next", "drafted deterministically", chase)}
 </div>
 
@@ -327,7 +329,7 @@ def report(rep: dict, inv: dict, verdict: dict) -> str:
     if verdict:
         letter = f"""
 <div class="panel ai-panel"><div class="panel-head">
-<div class="ai-h"><span class="ai-chip">AI</span><h2>{e(verdict["title"])}</h2></div>
+<div class="ai-h"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><h2>{e(verdict["title"])}</h2></div>
 <div class="chips"><span class="pill status">{e(verdict["trigger"])}</span>
 <span class="pill">Edit</span><span class="pill">Copy</span></div></div>
 <div class="panel-body"><pre class="letterpre">{e(verdict["text"])}</pre>
@@ -369,7 +371,7 @@ def instructions(d: dict) -> str:
     text = d.get("text", "")
     return f"""
 <button class="instrbar{' set' if text else ''}" id="instr-open">
-<span class="ai-chip">AI</span><b>Instructions for this case</b>
+<span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Instructions for this case</b>
 <span class="instrbar-text"{'' if text else ' hidden'}></span>
 <span class="pill pri-low" id="instr-force"{'' if text else ' hidden'}>in force</span>
 <span class="instrbar-empty"{' hidden' if text else ''}>Tell the AI what it cannot see in the
@@ -378,7 +380,7 @@ case.</span>
 <span class="instrbar-open">{'Edit' if text else 'Add'}</span></button>
 
 <section class="instr" id="instr">
-<div class="instr-head"><span class="ai-chip">AI</span><b>Instructions for this case</b>
+<div class="instr-head"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Instructions for this case</b>
 <span class="sub">Applied to every module</span>
 <button class="asst-x" id="instr-close" aria-label="Close">×</button></div>
 <div class="instr-body">
@@ -417,10 +419,10 @@ def assistant(a: dict) -> str:
     chips = "".join(f'<button class="qchip" title="{e(x["hint"])}">{e(x["label"])}</button>'
                     for x in a.get("actions", []) if x["key"] != "explain")
     return f"""
-<button class="asst-fab" id="asst-open"><span class="ai-chip">AI</span>
+<button class="asst-fab" id="asst-open"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span>
 Ask about this case</button>
 <aside class="asst" id="asst">
-<div class="asst-head"><span class="ai-chip">AI</span><b>Case assistant</b>
+<div class="asst-head"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Case assistant</b>
 <span class="sub">{e(CASE)}</span>
 <button class="asst-x" id="asst-close" aria-label="Close">×</button></div>
 <div class="asst-body">
@@ -590,11 +592,11 @@ body.asst-on .asst-fab{{display:none}}
 <div class="brand"><span class="mark">ZC</span>
 <span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
 <nav>
-<a class="navlink active" data-view="cases"><span class="ic">&#9635;</span>Cases</a>
+<a class="navlink active" data-view="cases"><span class="ic"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></span>Cases</a>
 <div class="navgroup">Coming next</div>
 <span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
 </nav>
-<div class="side-foot">ZATCA VAT Audit Agent</div>
+<div class="side-foot"><button class="iconbtn" id="theme-btn" title="Toggle theme"></button><span>ZATCA VAT Audit Agent</span></div>
 </aside>
 <main class="main"><div class="wrap">
 
@@ -786,6 +788,23 @@ document.querySelectorAll('tr.caserow:not([data-open])').forEach(
           r.addEventListener('click', () => toast(
             'Only ' + {case_json} + ' was captured into this file — the other rows are the real '
             + 'queue, with no output behind them here.')); }});
+
+/* The theme toggle, as in the application. */
+const SUN = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+const themeBtn = document.getElementById('theme-btn');
+function paintTheme() {{
+  const dark = document.documentElement.dataset.theme === 'dark';
+  themeBtn.innerHTML = dark ? SUN : MOON;
+}}
+themeBtn.addEventListener('click', () => {{
+  const dark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  paintTheme();
+}});
+document.documentElement.dataset.theme =
+  matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+paintTheme();
 
 const dock = on => document.body.classList.toggle('asst-on', on);
 document.getElementById('asst-open').addEventListener('click', () => dock(true));

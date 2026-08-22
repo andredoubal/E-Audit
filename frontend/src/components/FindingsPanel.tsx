@@ -14,12 +14,7 @@ const EFFECT_PILL: Record<Finding["effect"], string> = {
   documentation: "pri-medium",
 };
 
-/** Group findings by the evidence they rest on.
- *
- *  Several of the Authority's statements can be true of one document at once — a listing above
- *  the return is simultaneously "higher than declared", "not disclosed" and "does not
- *  correspond". Listed flat they read as three separate problems and the case looks three times
- *  worse than it is, so the amount is shown once per basis with the other readings under it. */
+/** Group findings by the evidence they rest on. */
 function group(findings: Finding[]) {
   const by = new Map<string, { basis: string; amount: number; items: Finding[] }>();
   for (const f of findings) {

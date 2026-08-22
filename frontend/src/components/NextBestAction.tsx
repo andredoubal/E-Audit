@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getNba, type Nba } from "../ai/ai";
 import VerifyBadge from "./VerifyBadge";
+import { Sparkles } from "./Icon";
 
 export default function NextBestAction({ id, rev }: { id?: string; rev?: number }) {
   const [d, setD] = useState<Nba | null>(null);
@@ -13,7 +14,7 @@ export default function NextBestAction({ id, rev }: { id?: string; rev?: number 
     <div className="panel ai-panel">
       <div className="panel-head">
         <div className="ai-h">
-          <span className="ai-chip">AI</span>
+          <span className="ai-chip"><Sparkles size={13} /></span>
           <h2>Next best action</h2>
         </div>
         <VerifyBadge source={d ? d.source : null} violations={d?.violations} />

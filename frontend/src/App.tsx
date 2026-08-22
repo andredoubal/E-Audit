@@ -8,8 +8,7 @@ import Correspondence from "./pages/Correspondence";
 import Report from "./pages/Report";
 import NewCase from "./pages/NewCase";
 
-/** The old four-tab URLs still work — a link in someone's notes should not rot because the
- *  app was reorganised. Each lands on whichever of the three modules now does that job. */
+/** The old four-tab URLs still work — a link in someone's notes should not rot because the app was reorganised. */
 function Moved({ to }: { to: string }) {
   const { id } = useParams();
   return <Navigate to={`/cases/${id}${to}`} replace />;
@@ -20,20 +19,13 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Overview />} />
-        {/* declared before /cases/:id so "new" is never read as a case id */}
         <Route path="/cases/new" element={<NewCase />} />
 
-        {/* A case is worked in three modules, and not necessarily in this order: an
-            investigation that needs another document sends the auditor back to
-            correspondence and then resumes. */}
         <Route path="/cases/:id/correspondence" element={<Correspondence />} />
         <Route path="/cases/:id/investigation" element={<Investigation />} />
         <Route path="/cases/:id/report" element={<Report />} />
 
-        {/* what ZATCA already holds — dormant under the current scope, still reachable */}
         <Route path="/cases/:id/dossier" element={<Dossier />} />
-        {/* Opening a case means starting the work, not landing on the dormant
-            planning-era screen. The dossier stays routable at its own path. */}
         <Route path="/cases/:id" element={<Moved to="/correspondence" />} />
 
         <Route path="/cases/:id/intake" element={<Moved to="/correspondence" />} />

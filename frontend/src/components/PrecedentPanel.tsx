@@ -4,13 +4,7 @@ import { getPrecedent, type PrecedentBriefing } from "../api";
 const pct = (n: number) => `${n.toFixed(n % 1 ? 1 : 0)}%`;
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-/** What comparable closed cases turned out to be, and what actually closed them.
- *
- *  This is the panel for the pain point the auditors put last and meant most: sector
- *  knowledge and lessons learned live in whichever auditor has seen enough cases. Every
- *  figure here is a count or a median taken in Python over labelled closed cases — no model
- *  is involved, which is why it renders with no API key and why the ranking is reproducible.
- */
+/** What comparable closed cases turned out to be, and what actually closed them. */
 export default function PrecedentPanel({ id }: { id: string }) {
   const [d, setD] = useState<PrecedentBriefing | null>(null);
   const [err, setErr] = useState(false);

@@ -42,6 +42,29 @@ export interface CaseInstructions {
   max_length: number;
 }
 
+/* ---------------------------------------------- approve or challenge what we concluded
+   Every check here is defensible and every one of them can be wrong. A challenge is recorded
+   against the item with a reason, and it changes something: a challenged gap stops being
+   chased. */
+
+export type ReviewVerdict = "approved" | "challenged";
+
+export interface ItemReview {
+  verdict: ReviewVerdict;
+  /** Required on a challenge — "the auditor disagreed" alone is not actionable. */
+  note: string;
+  by: string;
+  at: string;
+}
+
+export type ReviewKind = "completeness-item" | "zatca-mismatch";
+
+export const saveReview = (
+  id: string, item_kind: ReviewKind, item_key: string,
+  verdict: ReviewVerdict | "", note = "",
+) => putJSON<{ case_id: string; reviews: Record<string, ItemReview> }>(
+  `/cases/${id}/reviews`, { item_kind, item_key, verdict, note });
+
 export const getInstructions = (id: string) =>
   getJSON<CaseInstructions>(`/cases/${id}/instructions`);
 
@@ -516,11 +539,19 @@ export interface ItemAssessment {
   blocking: number;
   advisory: number;
   kinds: string[];
+  /** What a review is stored against — stable across recomputation, unlike the row id. */
+  key: string;
+  /** The auditor's own verdict on this row, if they have given one. */
+  review: ItemReview | null;
+  /** Still chased. A challenged row is not: the gap stays on file, the letter stops asking. */
+  chased: boolean;
 }
 
 export interface Assessment {
   items: ItemAssessment[];
-  summary: Record<ItemState, number>;
+  summary: Record<ItemState, number> & { challenged?: number; approved?: number };
+  /** Rows still being chased — challenges excluded. */
+  outstanding?: number;
 }
 
 export interface LoopState {

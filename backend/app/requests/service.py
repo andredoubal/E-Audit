@@ -24,7 +24,9 @@ from ..models import (
     AuditCase, GapFinding, InformationRequest, ReceivedDocument, RequestItem,
 )
 from . import extract as extractor
+from ..models.reviews import KIND_COMPLETENESS
 from .completeness import BLOCKING, Report, assessment, check, superseded_ids
+from .reviews import reviews_for
 from .planner import RequestPlan, plan as build_plan
 
 RESPONSE_WINDOW_DAYS = 20
@@ -264,5 +266,6 @@ def state(db: Session, case: AuditCase) -> dict:
         # The same rows, said the way an auditor asks the question: what is still outstanding?
         "assessment": assessment(list(req.items) if req else [],
                                  [d for d in docs if d.id not in stale],
-                                 by_round.get(req.seq, []) if req else []),
+                                 by_round.get(req.seq, []) if req else [],
+                                 reviews=reviews_for(db, case.case_id, KIND_COMPLETENESS)),
     }

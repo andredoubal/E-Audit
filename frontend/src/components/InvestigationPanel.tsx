@@ -31,19 +31,7 @@ const STATUS_WORD: Record<HypothesisStatus, string> = {
   "pending-info": "waiting on the taxpayer",
 };
 
-/** What the agents proposed, what the engine settled, and what the auditor decided.
- *
- *  Agents propose typed tests; a deterministic adjudicator settles them against the engine's
- *  own figures. No model states a figure here, so the panel renders with or without an API key.
- *
- *  Three things are kept deliberately distinct on every row, because collapsing them is how a
- *  tool like this starts making decisions it has no business making:
- *
- *    what the AI proposed  ->  what the evidence showed  ->  what the auditor decided
- *
- *  The whole chain is shown — what was seen, what was therefore proposed, which test settled it
- *  — because an auditor has to defend a finding to a taxpayer, and "an agent suggested it" is
- *  not something anyone can defend. */
+/** What the agents proposed, what the engine settled, and what the auditor decided. */
 export default function InvestigationPanel({ id, rev }: { id?: string; rev?: number }) {
   const [d, setD] = useState<InvestigationState | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -121,8 +109,6 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
           </div>
           {h.claim}
 
-          {/* the trigger: what the agent actually saw. Without it the claim is an assertion;
-              with it, it is an inference the auditor can check. */}
           {h.why && (
             <div className="hyp-why">
               <b>Why raised</b> {h.why}
@@ -134,10 +120,8 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
             {h.explanation ? " — " + h.explanation : ""}
           </div>
 
-          {/* Why this is a finding in law and not merely a disagreement in a spreadsheet. */}
           <CitationNote c={h.regulatory} />
 
-          {/* a verdict that moved says so, rather than quietly showing only the latest answer */}
           {h.superseded_status && (
             <div className="callout warn" style={{ margin: "8px 0 0" }}>
               Previously <b>{h.superseded_status.replace(/-/g, " ")}</b>; re-adjudicated in run{" "}
@@ -190,6 +174,7 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
           <DecisionControls
             decision={h.decision}
             busy={busy === h.hypothesis_id}
+            claim={h.claim}
             onDecide={(dec, comment) => decide(h.hypothesis_id, dec, comment)}
           />
 
@@ -226,7 +211,6 @@ export default function InvestigationPanel({ id, rev }: { id?: string; rev?: num
           <span className={"pill " + STATUS_PILL[h.status]}>
             {h.status.replace(/-/g, " ")}
           </span>
-          {/* confidence and money answer different questions and are never merged into one */}
           <ConfidenceBadge confidence={h.confidence} />
           {!!h.amount && <div className="amt2">{sar(h.amount)}</div>}
         </div>

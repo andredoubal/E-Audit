@@ -19,12 +19,7 @@ const MEANS: Record<ItemState, string> = {
   received: "It arrived and passes every check that can be run on it.",
 };
 
-/** Requested versus received, in four words rather than nine gap kinds across two severities.
- *
- *  The gap list below this panel is still the detail — this is the same rows answering the
- *  question an auditor actually asks, which is "what is still outstanding". Nothing here is
- *  stored: the states are derived from the current gaps every time, so a fixed gap changes the
- *  word with no state to reconcile. */
+/** Requested versus received, in four words rather than nine gap kinds across two severities. */
 export default function CompletenessPanel({ loop }: { loop: LoopState | null }) {
   const [open, setOpen] = useState<ItemState | null>(null);
 

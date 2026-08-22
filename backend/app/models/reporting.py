@@ -1,26 +1,4 @@
-"""What the auditor wrote themselves: report fields they filled in, and letters they edited.
-
-The report and the verdict letter are **drafts a person signs**, not machine output that
-happens to be displayed. Two consequences the rest of the application does not have to handle:
-
-* **`[for the auditor to complete]` is an instruction.** The template asks for rulings, for
-  penalties, for a meeting date — judgements the tool has no business making and, until this
-  existed, no way for anyone to supply. A report that names the gap and then offers no way to
-  close it is a form you cannot fill in.
-* **Nothing here is a computed number.** These rows hold the auditor's own words, so the core
-  invariant is untouched: the engine still computes every figure, and Claude still writes only
-  language it is checked on. What is new is a third author, and the file records which one
-  wrote each line.
-
-**An edit never destroys what it replaced.** `original` keeps the value the engine or the
-template produced, so an auditor can see what the tool said before they overrode it and can put
-it back. A report where "no finding was established" had been quietly replaced, with no way to
-tell it had been, would be worse than one with no editing at all.
-
-Both tables are keyed naturally — `(case_id, field_key)` and `(case_id, kind)` — so saving twice
-updates one row rather than accumulating a history nobody reads. They live in `core` because
-they are case facts: acts of a person, not derived state a re-run may legitimately change.
-"""
+"""What the auditor wrote themselves: report fields they filled in, and letters they edited."""
 from __future__ import annotations
 
 from datetime import datetime

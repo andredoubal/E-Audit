@@ -1,17 +1,7 @@
 import { useState } from "react";
 import type { Citation } from "../api";
 
-/** The provision a finding rests on — and, when it matters, a warning about the wording.
- *
- *  A finding is a finding because an obligation exists, not because a spreadsheet disagreed
- *  with a box. This is the middle of that sentence: what the article establishes, and what
- *  follows from the evidence being as found.
- *
- *  Two states earn their own treatment. **needs-validation** means the English edition — ZATCA's
- *  unofficial translation of November 2021 — predates the current Arabic, so the wording shown
- *  is superseded; Article 14 is in this state and founds half the vocabulary, so this is the
- *  normal case rather than an edge one. **not-found** is shown rather than hidden: an absent
- *  citation and one nobody looked for read identically, and only one of them is honest. */
+/** The provision a finding rests on — and, when it matters, a warning about the wording. */
 export default function CitationNote({ c }: { c?: Citation | null }) {
   const [open, setOpen] = useState(false);
   if (!c) return null;

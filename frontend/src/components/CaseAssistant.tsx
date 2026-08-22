@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { onAsk } from "../ai/ask";
 import {
   askAssistant, clearAssistant, getAssistant, type AssistantState,
 } from "../api";
+import { Sparkles } from "./Icon";
 
-/** One conversation per case, reachable from every tab.
- *
- *  Not one chat per module. A question about a case — "why is this listing over the return?" —
- *  spans what arrived, what the tests said, and what will be written; three transcripts would
- *  make an auditor pick a tab before they could ask, and then remember which panel they asked
- *  in.
- *
- *  **What it can do is a fixed list, shown on the buttons.** It does not run open-ended
- *  analysis: it selects one of the things this application already does and a deterministic
- *  executor runs it, so an answer can be checked afterwards against what was actually run. A
- *  turn that changed something on the case says so. Every figure in a reply was computed by the
- *  engine before the sentence was written, which is also why it works with no API key. */
+/** One conversation per case, reachable from every tab. */
 export default function CaseAssistant({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
   const [d, setD] = useState<AssistantState | null>(null);
@@ -22,11 +13,21 @@ export default function CaseAssistant({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     getAssistant(id).then(setD).catch(() => {});
   }, [id]);
   useEffect(() => { if (open) load(); }, [open, load]);
+
+  // A challenge elsewhere on the case opens this panel with the question already written. The
+  // auditor is looking at the row they dispute; making them retype it — and leaving the
+  // assistant to guess which of forty rows is meant — is the version of this that helps nobody.
+  useEffect(() => onAsk((question) => {
+    setOpen(true);
+    setQ(question);
+    setTimeout(() => inputRef.current?.focus(), 60);
+  }), []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [d?.messages.length]);
 
   const send = async (question: string, action = "") => {
@@ -45,7 +46,7 @@ export default function CaseAssistant({ id }: { id: string }) {
     return (
       <button className="asst-fab" onClick={() => setOpen(true)}
               title="Ask about this case">
-        <span className="ai-chip">AI</span> Ask about this case
+        <span className="ai-chip"><Sparkles size={13} /></span> Ask about this case
       </button>
     );
   }
@@ -56,7 +57,7 @@ export default function CaseAssistant({ id }: { id: string }) {
   return (
     <aside className="asst">
       <div className="asst-head">
-        <span className="ai-chip">AI</span>
+        <span className="ai-chip"><Sparkles size={13} /></span>
         <b>Case assistant</b>
         <span className="sub">{id}</span>
         <button className="linklike" onClick={() => clearAssistant(id).then(setD)}>clear</button>
@@ -98,6 +99,7 @@ export default function CaseAssistant({ id }: { id: string }) {
         </div>
         <div className="asst-input">
           <input
+            ref={inputRef}
             value={q}
             placeholder="Ask about this case…"
             disabled={busy}

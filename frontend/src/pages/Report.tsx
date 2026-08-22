@@ -11,19 +11,7 @@ import {
   saveReportField, type AuditReportDoc, type InvestigationState,
 } from "../api";
 
-/** What the auditor concluded — assembled from the findings they accepted, and nothing else.
- *
- *  The engine confirms hypotheses; that is not the same as an audit conclusion. So a case
- *  where nothing has been accepted reports no finding, and says why rather than looking
- *  broken. The alternative — quietly reporting every hypothesis the adjudicator confirmed —
- *  would put a machine's proposals under the Authority's letterhead as though a person had
- *  signed them.
- *
- *  **And it is a draft, so it is editable.** Every field can be written in the auditor's own
- *  words; the ones the template marks `[for the auditor to complete]` have to be. What an edit
- *  replaced is kept beside it, and the same values reach the Word download and the printable
- *  page — an edit visible only on screen would mean sending the version already corrected.
- */
+/** What the auditor concluded — assembled from the findings they accepted, and nothing else. */
 export default function Report() {
   const { id = "" } = useParams();
   const [doc, setDoc] = useState<AuditReportDoc | null>(null);
@@ -75,8 +63,6 @@ export default function Report() {
 
       {doc && (
         <>
-          {/* Said before the report rather than after it: a report with nothing in it is a
-              statement about where the audit has got to, not a failure to produce one. */}
           {accepted === 0 ? (
             <div className="callout warn">
               <b>No finding has been confirmed yet.</b> This report — and the letter at the
@@ -144,13 +130,8 @@ export default function Report() {
             </div>
           )}
 
-          {/* The engine's own narrative of the reconciliation. Kept clearly apart from the
-              report above, which is the document of record and the only thing that is signed. */}
           <AuditReport id={id} />
 
-          {/* The letter that closes the case. It belongs here rather than in correspondence:
-              a verdict is what you send once there is a position to report, and the round
-              cards are for the exchange that gets you there. Editable, like the report. */}
           <StepEmails id={id} only={["verdict"]} />
         </>
       )}

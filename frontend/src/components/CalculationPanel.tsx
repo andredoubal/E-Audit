@@ -13,12 +13,7 @@ const STATUS_PILL: Record<string, string> = {
   ok: "pri-low",
 };
 
-/** The auditor's arithmetic: ask for a figure, or have one you worked out checked.
- *
- *  The model reads the described method into a query; Python computes the number. That split is
- *  the whole point — a verification agent that could hallucinate a total would be worse than no
- *  agent at all. Without a key the auditor picks the operation and column themselves and the
- *  same executor runs, which is why this works with no credentials. */
+/** The auditor's arithmetic: ask for a figure, or have one you worked out checked. */
 export default function CalculationPanel({ id, onChanged }: { id?: string; onChanged?: () => void }) {
   const [d, setD] = useState<CalcListing | null>(null);
   const [tab, setTab] = useState<"check" | "ask">("check");

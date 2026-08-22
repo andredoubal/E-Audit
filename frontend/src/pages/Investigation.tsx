@@ -12,10 +12,7 @@ import CaseAssistant from "../components/CaseAssistant";
 import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
 
-/** One step in the narrowing from the population to the qualifying set.
- *  `population` and `qualified` are the two ends; every step between them is a rule that
- *  removed documents. Nothing here is a movement of money — `amount` is the tax the
- *  documents carry, reported so the auditor can see the size of what was set aside. */
+/** One step in the narrowing from the population to the qualifying set. */
 interface FunnelStep {
   seq: number;
   kind: "population" | "exclude" | "defer" | "qualified";
@@ -63,9 +60,7 @@ interface BoxResult {
   counted_lines: number;
   evidence_invoices: Detail[];
 }
-/** Where the figures came from. The same case reads very differently depending on whether
- *  "expected" was built from the Authority's e-invoice feed or from the taxpayer's own
- *  spreadsheet, so the provenance is stated rather than assumed. */
+/** Where the figures came from. */
 interface Provenance {
   population_source?: "document" | "e-invoice";
   population_document?: string;
@@ -256,19 +251,7 @@ function DetailBody({ detail, amount }: { detail?: Detail; amount?: number }) {
   );
 }
 
-/** How the population narrowed to the qualifying set.
- *
- *  This replaces a waterfall, and the difference is the whole point. A waterfall starts
- *  from a total and walks deductions to another total — which forced the page to invent a
- *  "before" figure that included documents the rules put in another period and excluded
- *  documents the rules admit. It corresponded to nothing, and it taught the auditor that
- *  clearance lag is money being subtracted rather than invoices that were never in the
- *  period.
- *
- *  A funnel says what actually happened: this many documents, these rules removed these
- *  ones for these reasons, this many are left, and they total this. The bars measure
- *  documents, not money.
- */
+/** How the population narrowed to the qualifying set. */
 function Funnel({ d, open }: { d: BoxResult; open: (title: string, detail?: Detail, amount?: number) => void }) {
   const start = d.funnel.find((f) => f.kind === "population");
   const endStep = d.funnel.find((f) => f.kind === "qualified");
@@ -330,7 +313,7 @@ function Funnel({ d, open }: { d: BoxResult; open: (title: string, detail?: Deta
   );
 }
 
-/** Expected vs declared, and what is left. Three figures and a subtraction. */
+/** Expected vs declared, and what is left. */
 function Compare({ d, open }: { d: BoxResult; open: (title: string, detail?: Detail, amount?: number) => void }) {
   const risky = d.state === "potential-finding";
   return (
@@ -447,9 +430,6 @@ export default function Investigation() {
 
       <CaseTabs id={id!} />
 
-      {/* The registration's activities and the audit history — the two facts the roster
-          cannot work without: undisclosed secondary-activity revenue is undetectable without
-          the activity list, and a repeat of a prior root cause is the first thing to check. */}
       <CaseContextPanel id={id!} />
       <TaxpayerBrief id={id} />
 
@@ -554,17 +534,11 @@ export default function Investigation() {
         </div>
       )}
 
-      {/* Loaded before the hypotheses, because it is evidence the agents then reason over:
-          a dataset added here changes what the investigation says on the next run. */}
       <ZatcaPanel id={id!} onChanged={() => setRev((r) => r + 1)} />
       <InvestigationPanel id={id} rev={rev} />
       <FindingsPanel id={id} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
       <NextBestAction id={id} rev={rev} />
-      {/* What the taxpayer offered as an explanation, and how much of the difference the
-          auditor accepts it accounts for. It lives here rather than with the correspondence
-          because it is measured against the difference — without that figure beside it the
-          amount means nothing. */}
       <TaxpayerResponsePanel
         id={id}
         difference={d.unexplained}

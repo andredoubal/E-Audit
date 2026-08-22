@@ -4,17 +4,7 @@ import type { ReportTrace } from "../api";
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-/** Where a sentence in the report came from.
- *
- *  A report that states a conclusion nobody can follow back to its source is not something an
- *  auditor can defend in front of a taxpayer. So every finding line can be opened out into the
- *  chain that produced it:
- *
- *    report statement → the auditor's decision → the hypothesis → the evidence tested
- *                                                              → the regulatory basis
- *
- *  The regulatory leg is shown as explicitly missing rather than omitted. "No article was
- *  identified" and "nobody looked" must not look the same on the page. */
+/** Where a sentence in the report came from. */
 export default function TraceInspector({ trace }: { trace: ReportTrace[] }) {
   const [open, setOpen] = useState<string | null>(null);
   if (!trace.length) return null;

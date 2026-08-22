@@ -1,17 +1,7 @@
 import { useState } from "react";
 import type { Confidence } from "../api";
 
-/** How much weight a hypothesis can bear — shown as a band, never as a bare percentage.
- *
- *  "65% confident" reads as a calibrated probability: as though 65 of 100 comparable cases
- *  turn out this way. Nothing in the engine can support that claim — the number comes from
- *  weights somebody chose — and in a dispute it would be quoted back as if it had been
- *  measured. So the band is the headline and the signals are one click away, because what an
- *  auditor can actually argue with is "you say limited confidence because there is no trial
- *  balance", not "you say 65".
- *
- *  Deliberately separate from the amount beside it: a hypothesis can be strongly supported and
- *  worth very little, or weakly supported and worth a great deal. */
+/** How much weight a hypothesis can bear — shown as a band, never as a bare percentage. */
 const BAND_CLASS: Record<string, string> = {
   Strong: "pri-low",
   Moderate: "pri-medium",

@@ -2,11 +2,7 @@ import { useEffect, useState } from "react";
 import { getDossier, type Dossier } from "../api";
 
 /* ---------------------------------------------------------------- who we are dealing with */
-/** The registration and the audit record, and nothing else.
- *
- *  The wider taxpayer 360 is out of scope now that planning is: these two blocks stay because
- *  the work needs them. Undisclosed secondary-activity revenue is undetectable without the
- *  registered activity list, and a repeat of a prior root cause is the first thing to check. */
+/** The registration and the audit record, and nothing else. */
 function CaseContext({ d }: { d: Dossier }) {
   const tp = d.taxpayer;
   const h = tp.audit_history;
@@ -80,9 +76,7 @@ function CaseContext({ d }: { d: Dossier }) {
 
 /* ------------------------------------------------------- what we asked for, from the email */
 
-
-/** The two facts about the taxpayer the investigation cannot work without, fetched where they
- *  are used rather than threaded down from a page. */
+/** The two facts about the taxpayer the investigation cannot work without, fetched where they are used rather than threaded down from a page. */
 export default function CaseContextPanel({ id }: { id: string }) {
   const [d, setD] = useState<Dossier | null>(null);
   useEffect(() => {

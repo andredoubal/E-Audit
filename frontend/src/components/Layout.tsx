@@ -1,23 +1,28 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
+import { Cases, Moon, Sun } from "./Icon";
 
-/** What is genuinely global, and nothing else.
- *
- *  Correspondence, Investigation and the Audit Report are the three modules of **one case**;
- *  they were in this sidebar pointing at a hard-coded case id, so "Correspondence" opened the
- *  demo case whichever case you were actually working — a link that lies about where it goes.
- *  They belong on `CaseTabs`, which knows which case you are in, and you reach them by opening
- *  a case from the list. */
-/** Cases is the whole sidebar. The Rulebook page is still built and still routable at `/rules`
- *  — it is reference material, not a place the work happens, and an auditor lands here to pick
- *  up a case rather than to read the rule library. Same treatment as Dossier: dormant, not
- *  deleted. */
-const NAV = [
-  { to: "/", label: "Cases", end: true, icon: "▣" },
-];
-const SOON = ["Legal retrieval"];
+/** Cases is the whole sidebar. */
+const NAV = [{ to: "/", label: "Cases", end: true, icon: <Cases /> }];
+
+type Theme = "light" | "dark";
+
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem("eaudit-theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("eaudit-theme", theme);
+  }, [theme]);
+  return [theme, () => setTheme((t) => (t === "dark" ? "light" : "dark"))];
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
+  const [theme, toggle] = useTheme();
+
   return (
     <div className="app">
       <aside className="side">
@@ -40,15 +45,14 @@ export default function Layout({ children }: { children: ReactNode }) {
               {n.label}
             </NavLink>
           ))}
-          <div className="navgroup">Coming next</div>
-          {SOON.map((s) => (
-            <span key={s} className="navlink disabled">
-              <span className="ic">◦</span>
-              {s}
-            </span>
-          ))}
         </nav>
-        <div className="side-foot">ZATCA VAT Audit Agent</div>
+        <div className="side-foot">
+          <button className="iconbtn" onClick={toggle}
+                  title={theme === "dark" ? "Switch to light" : "Switch to dark"}>
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </button>
+          <span>ZATCA VAT Audit Agent</span>
+        </div>
       </aside>
       <main className="main">{children}</main>
     </div>

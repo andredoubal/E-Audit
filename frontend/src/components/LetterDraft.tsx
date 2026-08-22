@@ -1,21 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { saveLetter, type StepEmail } from "../api";
 import VerifyBadge from "./VerifyBadge";
+import { Sparkles } from "./Icon";
 
-/** An outbound letter, as a draft the auditor actually edits.
- *
- *  Every draft in this application has said "a draft for you to edit and send" while offering no
- *  way to edit it. A letter is the one artefact here that leaves the building in the Authority's
- *  name, so it is the last thing that should be read-only.
- *
- *  Two things the panel is careful about:
- *
- *  **The verified badge stops applying the moment you rewrite the text.** It describes what the
- *  checker saw, and the checker never saw your words. It is replaced by "your wording", which is
- *  a different and equally honest claim.
- *
- *  **The generated draft is kept.** Restoring it is one click, so editing is not a one-way door
- *  and nobody has to work out what the engine originally said. */
+/** An outbound letter, as a draft the auditor actually edits. */
 export default function LetterDraft({ id, email, onSaved }: {
   id: string;
   email: StepEmail;
@@ -47,7 +35,7 @@ export default function LetterDraft({ id, email, onSaved }: {
     <div className="panel ai-panel">
       <div className="panel-head">
         <div className="ai-h">
-          <span className="ai-chip">{email.edited ? "✎" : "AI"}</span>
+          <span className="ai-chip">{email.edited ? "✎" : <Sparkles size={13} />}</span>
           <h2>{email.title}</h2>
         </div>
         <div className="chips">
