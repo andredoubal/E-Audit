@@ -10,6 +10,12 @@
   font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:'Somar';src:url('/fonts/Somar-Medium.woff2') format('woff2');
   font-weight:500;font-style:normal;font-display:swap}
+/* Self-hosted too. Linked from Google it failed on any machine without outbound access to
+   fonts.googleapis.com, and a figure column silently lost its tabular numerals. */
+@font-face{font-family:'JetBrains Mono';src:url('/fonts/JetBrainsMono-400.woff2') format('woff2');
+  font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'JetBrains Mono';src:url('/fonts/JetBrainsMono-500.woff2') format('woff2');
+  font-weight:500;font-style:normal;font-display:swap}
 
 :root{
   /* ground and surfaces */
@@ -178,7 +184,7 @@ h3.display{font-size:19px}
    entries are the same navigation shown twice, and they stay in step. */
 .casehead{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.casehead-in{max-width:1000px;padding:20px 48px 0}
+.casehead-in{max-width:1440px;padding:20px 48px 0}
 .casehead .back{border:none;background:none;font:inherit;font-size:12px;color:var(--soft);
   cursor:pointer;padding:0 0 6px;text-decoration:none;display:inline-block}
 .casehead .back:hover{color:var(--ink)}
@@ -212,10 +218,13 @@ h3.display{font-size:19px}
 .slideover-foot p{margin:0;font-size:11px;line-height:1.5;color:var(--faint)}
 
 .main{min-width:0}
-.page{max-width:1000px;padding:28px 48px 110px;display:flex;flex-direction:column;gap:22px}
+.page{max-width:1440px;padding:28px 48px 110px;display:flex;flex-direction:column;gap:22px}
 /* The list is its own screen and breathes more than a case does. */
 .page.list{padding:52px 48px 96px;gap:26px}
 @media(max-width:760px){.page{padding:22px 20px 90px}.page.list{padding:32px 20px 80px}}
+/* Prose does not want to be 1400px wide, so the reading blocks keep a measure of their own
+   while the grids (cards, tables, field rows) take the whole column. */
+.page>.detail-note,.page>p,.assess-doc,.rstep-body>.letterpre{max-width:78ch}
 /* The page is a stack with air in it: panels no longer carry their own bottom
    margin, so one gap rule spaces every screen the same way. */
 .page>.panel,.page>.callout,.page>.roundcard{margin-bottom:0}
@@ -1311,3 +1320,7 @@ input.letter-input,select.letter-input{min-height:0}
 .tile .tl{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.4}
 .tile .tnote{font-size:10px;color:var(--faint);margin-top:5px;text-transform:uppercase;
   letter-spacing:.08em}
+
+/* Room for a slide-over, rather than the panel sitting on top of the work. */
+.app.panelled .main{padding-right:392px}
+@media(max-width:1100px){.app.panelled .main{padding-right:0}}

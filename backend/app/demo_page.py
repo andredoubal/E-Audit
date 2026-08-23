@@ -32,6 +32,31 @@ SPARK = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="cu
          '<path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg>')
 
 
+FONTS = ROOT / "frontend" / "public" / "fonts"
+
+
+def inline_fonts(css: str) -> str:
+    """Carry the typefaces inside the file.
+
+    `theme.css` loads them from `/fonts/...`, which is right for the application and wrong for
+    a single HTML file somebody opens from their downloads folder: the requests 404 and every
+    screen silently falls back to a system face. Since the whole point of this file is to show
+    what the design looks like, the fonts are embedded rather than referenced.
+    """
+    import base64
+    import re
+
+    def swap(m: "re.Match[str]") -> str:
+        name = m.group(1)
+        f = FONTS / name
+        if not f.exists():
+            return m.group(0)
+        b64 = base64.b64encode(f.read_bytes()).decode()
+        return f"url('data:font/woff2;base64,{b64}') format('woff2')"
+
+    return re.sub(r"url\('/fonts/([^']+)'\) format\('woff2'\)", swap, css)
+
+
 def _get(path: str) -> dict:
     with urllib.request.urlopen(f"{API}{path}", timeout=30) as r:
         return json.loads(r.read().decode())
@@ -176,10 +201,8 @@ def correspondence(loop: dict, threads: dict) -> str:
              '<p class="detail-note">Drafted from the gaps in step 3 and nothing else.</p>')
 
     return f"""
-<header class="page-head"><div><h1>Taxpayer correspondence</h1>
-<p class="sub">{e(CASE)} · what we asked for, and what arrived</p></div>
-<div class="chips"><span class="pill pri-high">Round 1</span>
-<span class="pill pri-high">{len(outstanding)} outstanding</span></div></header>
+<div class="modulehead"><h2 class="display">Round 1 &mdash; opening request</h2>
+<span class="pill pri-high">{len(outstanding)} outstanding</span></div>
 
 <div class="roundcard live">
   <div class="round-head"><span class="round-n">Round 1</span>
@@ -467,10 +490,11 @@ editable in place, because a letter is the one thing here that leaves the buildi
 Authority&rsquo;s name.</p></div></div>"""
 
     return f"""
-<header class="page-head"><div><p class="eyebrow">Audit report</p>
-<h1>{e(rep.get("taxpayer", CASE))}</h1></div>
-<div class="chips"><span class="pill">Download Word</span>
-<span class="pill">Open printable / PDF</span></div></header>
+<div class="modulehead"><h2 class="display">Audit report</h2>
+<span class="sub"><span class="num">{rep["completeness"]["filled"]}</span> of
+<span class="num">{rep["completeness"]["fields"]}</span> fields answered</span>
+<div class="modulehead-act"><span class="btn-ghost">Download Word</span>
+<span class="btn-ghost">Printable</span></div></div>
 {banner}
 <div class="panel"><div class="panel-head"><h2>{e(rep["title"])}</h2>
 <div class="chips"><span class="pill status">{rep["completeness"]["filled"]} of
@@ -526,44 +550,71 @@ every number is computed in Python before any sentence is written.</p>
 
 # ------------------------------------------------------------------ the case assistant
 
-def assistant(a: dict) -> str:
+def assistant(a: dict, answers: dict) -> str:
     """One conversation per case, docked over whichever module you are in.
 
     It is rendered outside the tab panes for the same reason it sits outside the router in the
     application: a question about a case spans what arrived, what the tests said and what will
     be written, so making the auditor pick a tab before they can ask would be the wrong shape.
 
-    The exchange below is real — the three questions were put to the running assistant when this
-    file was generated, and the answers are the ones it gave, deterministically, with no API key
-    involved. What it *can* do is the row of buttons: a closed list of the application's own
-    checks, not open-ended analysis."""
+    **And it answers here.** Every reply below was put to the running assistant when this file
+    was generated and captured verbatim — deterministic engine output, no API key involved — so
+    the walkthrough can route a question to the same closed set of actions the application
+    routes it to, and give the same answer. It is not a model running in the page; it is the
+    engine's own answers, indexed by the action that produced them.
+    """
     msgs = []
     for m in a.get("messages", []):
         tag = ""
         if m["role"] == "assistant" and m.get("action") and m["action"] != "explain":
             tag = f'<span class="pill status">{e(m["action"].replace("_", " "))}</span>'
-        did = f'<span class="asst-did">✓ {e(m["did"])}</span>' if m.get("did") else ""
+        did = f'<span class="asst-did">&#10003; {e(m["did"])}</span>' if m.get("did") else ""
         msgs.append(f'<div class="asst-msg {e(m["role"])}">{tag}'
                     f'<pre>{e(m["content"])}</pre>{did}</div>')
-    chips = "".join(f'<button class="qchip" title="{e(x["hint"])}">{e(x["label"])}</button>'
-                    for x in a.get("actions", []) if x["key"] != "explain")
+    acts = [x for x in a.get("actions", []) if x["key"] != "explain"]
+    chips = "".join(
+        f'<button class="qchip" data-act="{e(x["key"])}" title="{e(x["hint"])}">'
+        f'{e(x["label"])}</button>' for x in acts)
     return f"""
-<button class="asst-fab" id="asst-open"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span>
-Ask about this case</button>
-<aside class="asst" id="asst">
-<div class="asst-head"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Case assistant</b>
-<span class="sub">{e(CASE)}</span>
-<button class="asst-x" id="asst-close" aria-label="Close">×</button></div>
-<div class="asst-body">
-<p class="detail-note" style="margin-top:0">Everything the assistant can do is on the list
-below — it runs the application&rsquo;s own checks rather than analysis of its own, and every
-figure in an answer was computed by the engine before the sentence was written. Which is why
-it answers with no API key at all.</p>
-{"".join(msgs)}</div>
-<div class="asst-foot"><div class="asst-quick">{chips}</div>
-<div class="asst-input"><input placeholder="Ask about this case…" disabled>
-<button class="btn" disabled>Ask</button></div></div>
-</aside>"""
+<button class="asst-fab" id="asst-open"><span class="asst-dot"></span>Ask about this case</button>
+<aside class="slideover asst" id="asst">
+<div class="slideover-head"><span class="ic">{SPARK}</span><b>Case assistant</b>
+<span class="mono">{e(CASE)}</span>
+<button class="slideover-x" id="asst-close" aria-label="Close">&times;</button></div>
+<div class="asst-body" id="asst-body">{"".join(msgs)}</div>
+<div class="slideover-foot"><div class="asst-quick">{chips}</div>
+<div class="asst-input"><input id="asst-q" placeholder="Ask about this case&hellip;">
+<button class="btn" id="asst-send">Ask</button></div>
+<p>The assistant runs the application&rsquo;s own checks. Every figure in an answer was
+computed before the sentence was written.</p></div>
+</aside>
+<script id="asst-data" type="application/json">{json.dumps(answers)}</script>"""
+
+
+def assistant_answers(acts: list) -> dict:
+    """Ask the running assistant one question per action, and keep what it said.
+
+    The routing table is the backend's own — `agents.assistant._CUES` — so a question typed in
+    the walkthrough reaches the same action it would reach in the application. Anything that
+    matches nothing becomes `explain`, exactly as it does there.
+    """
+    from app.agents.assistant import ACTIONS, _CUES
+
+    out = {"cues": [[k, list(c)] for k, c in _CUES], "answers": {}, "labels": {}}
+    for act in ACTIONS:
+        out["labels"][act.key] = act.label
+        try:
+            state = _post(f"/cases/{CASE}/assistant", {"question": act.label, "action": act.key})
+        except Exception:                                    # noqa: BLE001
+            continue
+        msgs = state.get("messages") or []
+        if msgs:
+            last = msgs[-1]
+            out["answers"][act.key] = {"text": last.get("content", ""),
+                                       "tag": last.get("action", ""),
+                                       "did": last.get("did", "")}
+    _delete(f"/cases/{CASE}/assistant")
+    return out
 
 
 # ------------------------------------------------------------------ the page
@@ -620,6 +671,10 @@ def build() -> str:
     # engine behind it changed, and the point of the panel is that it is not being written by
     # hand. Cleared first so regenerating twice does not stack the same exchange.
     _delete(f"/cases/{CASE}/assistant")
+    # Every action's answer, captured now so the walkthrough can reply the way the application
+    # replies. Collected before the seeded exchange, because collecting it clears the thread.
+    answers = assistant_answers([])
+
     asst: dict = {}
     for q in ("where are we on this case",
               "what is still missing?",
@@ -630,8 +685,10 @@ def build() -> str:
             pass
     if not asst:
         asst = _get(f"/cases/{CASE}/assistant")
+    answers["labels"] = {a["key"]: a["label"] for a in asst.get("actions", [])}
 
     theme = THEME.read_text(encoding="utf-8") if THEME.exists() else ""
+    theme = inline_fonts(theme)
 
     # The sidebar is what is global; the tabs are what is inside a case. Mirrored here because
     # a walkthrough that put all four side by side would be showing a different product: an
@@ -644,11 +701,18 @@ def build() -> str:
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     panes = "".join(
-        f'<div class="pane" id="pane-{k}"><div class="panehead"><h1>{e(t)}</h1>'
-        f'<p>{e(s)}</p></div>{body}</div>'
+        f'<div class="pane" id="pane-{k}">{body}</div>'
         for k, (t, s, body) in modules.items())
-    taxpayer = next((c["taxpayer"] for c in cases if c["case_id"] == CASE), CASE)
+    tabs = "".join(
+        f'<a class="casetab{" active" if k == "correspondence" else ""}" data-tab="{k}">'
+        f'{e(t)}</a>' for k, (t, _, _) in modules.items())
+    row = next((c for c in cases if c["case_id"] == CASE), {})
+    taxpayer = row.get("taxpayer", CASE)
+    vat_no = row.get("vat_no", "")
+    period = row.get("period", "")
     case_json = json.dumps(CASE)
+    instr_line = next((ln for ln in (instr.get("text") or "").split("\n") if ln.strip()),
+                      "None set — add what the documents don't say")
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -656,14 +720,14 @@ def build() -> str:
 <title>E-AUDIT — walkthrough</title>
 <style>{theme}
 body{{margin:0;padding:0 0 60px}}
-.wrap{{max-width:1180px;margin:0 auto;padding:26px 30px 60px}}
+.wrap{{max-width:1440px;padding:26px 48px 60px}}
 .navlink{{cursor:pointer}}
 .side{{position:sticky;top:0;height:100vh}}
 .demo-note{{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}}
-/* These are conditionally rendered in React; here they are toggled, and their `display:flex`
-   beats the `hidden` attribute on its own. */
-.navgroup-open:not(.on) .navgroup-items{{display:none}}
+/* `display:flex` beats the `hidden` attribute on its own, so the sections this file toggles
+   need it said explicitly. The case card itself no longer collapses — the app's does not
+   either — so the rule that used to gate its items on `.on` is gone with the handler. */
 [hidden]{{display:none!important}}
 .panehead{{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}}
 .panehead h1{{margin:0;font-size:20px}}
@@ -720,30 +784,33 @@ body.asst-on .asst-fab{{display:none}}
 <aside class="side">
 <div class="brand"><span class="mark">ZC</span>
 <span><b>ZATCA</b><small>VAT Audit Agent</small></span></div>
-<nav>
-<a class="navlink active" data-view="cases"><span class="ic"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></span>Cases</a>
-<div class="navgroup-open on" id="navcase" hidden>
-<button class="navgroup-head" id="navcase-head" aria-expanded="true"><span class="ic">
-<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
-stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><line x1="8" y1="8" x2="15" y2="8"/>
-<line x1="8" y1="12" x2="15" y2="12"/></svg></span>
-<span class="navgroup-name"><b>{e(taxpayer)}</b><small>{e(CASE)}</small></span>
-<span class="navgroup-mark" id="navcase-mark">&#9662;</span></button>
-<div class="navgroup-items" id="navcase-items">
+<a class="navlink active" data-view="cases"><span class="ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/></svg></span>
+<span>Cases</span><span class="count">{len(cases)}</span></a>
+
+<div class="navgroup-open" id="navcase" hidden>
+<div class="navgroup-head">
+<span class="navgroup-name"><b>{e(taxpayer)}</b><small>{e(CASE)}</small></span></div>
+<div class="navgroup-items">
 <span class="navsub out" aria-disabled="true"
-title="Outside the scope of this proof of concept">Initial Assessment &amp; Document Request
-<span class="navsub-scope">Out of PoC scope</span></span>
-<a class="navsub active" data-tab="correspondence">Taxpayer Correspondence</a>
+title="Outside the scope of this proof of concept">Initial assessment
+<span class="navsub-scope">Out of scope</span></span>
+<a class="navsub active" data-tab="correspondence">Correspondence</a>
 <a class="navsub" data-tab="investigation">Investigation</a>
-<a class="navsub" data-tab="report">Audit Report</a>
-<button class="navsub ai" id="nav-ai"><span class="ic">{SPARK}</span>AI assistant</button>
-<button class="navsub" id="nav-instr">Custom instructions</button>
+<a class="navsub" data-tab="report">Audit report</a>
 </div></div>
-<div class="navgroup">Coming next</div>
-<span class="navlink disabled"><span class="ic">&#9702;</span>Legal retrieval</span>
-</nav>
-<div class="side-foot"><button class="iconbtn" id="theme-btn" title="Toggle theme"></button><span>ZATCA VAT Audit Agent</span></div>
+
+<div class="sidecards" id="sidecards" hidden>
+<button class="sidecard set" id="nav-instr">
+<span class="ic"><svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="5" y1="7" x2="19"
+y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="13" y2="17"/></svg></span>
+<span class="sidecard-txt"><b>Case instructions</b><span>{e(instr_line)}</span></span></button>
+<button class="sidecard ask" id="nav-ai">
+<span class="ic">{SPARK}</span>
+<span class="sidecard-txt"><b>Ask about this case</b>
+<span>Status, gaps, ZATCA records</span></span></button>
+</div>
+<div class="side-foot"><button class="iconbtn" id="theme-btn" title="Toggle theme"></button><span>Static walkthrough. Figures are the engine\u2019s real output for the seeded case; nothing is saved.</span></div>
 </aside>
 <main class="main"><div class="wrap">
 
@@ -761,23 +828,23 @@ which have been amended since the English edition they are shown in.</div>
 <div class="view on" id="view-cases">{case_list(cases, CASE)}</div>
 
 <div class="view" id="view-case">
-<div class="casebar"><button class="backlink" id="back">&#8592; All cases</button>
-<span class="mono muted">{e(CASE)}</span>
-<b>{e(taxpayer)}</b></div>
-<p class="tabhint">The case is open in the sidebar. Its three modules, the
-<b>case assistant</b> and the <b>case instructions</b> are underneath it &mdash; only
-<b>Cases</b> is application-wide, everything else needs to know which case it is about.
-The greyed <b>Initial Assessment &amp; Document Request</b> above them is where the audit
-starts and this PoC does not: it is shown to place the work, and does nothing.</p>
+<div class="casehead"><div class="casehead-in">
+<button class="back" id="back">&#8592; All cases</button>
+<h1>{e(taxpayer)}</h1>
+<p class="meta"><span class="mono">{e(CASE)}</span> &middot;
+<span class="mono">{e(vat_no)}</span> &middot; {e(period)}</p>
+<nav class="casetabs">{tabs}</nav>
+</div></div>
+<div class="page">
 {instructions(instr)}
 {panes}
 </div>
+</div>
 
-</div></div>{assistant(asst)}<script>
-/* The modules are reached from the sidebar, under the case they belong to — so the click
-   target and the active marker are the same element, rather than a second row of tabs
-   saying the same thing one line lower. */
-const tabs = document.querySelectorAll('.navsub[data-tab]');
+</div></div>{assistant(asst, answers)}<script>
+/* The modules are reachable from the rail and from the header tabs. Both are the same
+   selector, so the two cannot get out of step. */
+const tabs = document.querySelectorAll('[data-tab]');
 function show(k) {{
   tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === k));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + k));
@@ -794,17 +861,12 @@ function view(name) {{
   // The group appears when a case is open and goes when you leave it — a module link with no
   // case behind it would be pointing at nothing.
   navcase.hidden = name !== 'case';
+  document.getElementById('sidecards').hidden = name !== 'case';
   document.querySelectorAll('.navlink[data-view]').forEach(
     n => n.classList.toggle('active', n.dataset.view === (name === 'case' ? 'cases' : name)));
   window.scrollTo(0, 0);
 }}
 
-const navhead = document.getElementById('navcase-head');
-navhead.addEventListener('click', () => {{
-  const open = navcase.classList.toggle('on');
-  document.getElementById('navcase-mark').innerHTML = open ? '&#9662;' : '&#9656;';
-  navhead.setAttribute('aria-expanded', String(open));
-}});
 document.querySelectorAll('[data-open]').forEach(
   r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
 document.getElementById('back').addEventListener('click', () => view('cases'));
@@ -1005,7 +1067,7 @@ function toast(msg) {{
 }}
 const NEEDS_ENGINE = 'That one needs the engine, so it is inert in this static walkthrough — '
   + 'it works in the application.';
-document.querySelectorAll('.dropzone, .qchip, .asst-input, .btn[disabled], .instr + * button[disabled]')
+document.querySelectorAll('.dropzone, .btn[disabled], .instr + * button[disabled]')
   .forEach(el => el.addEventListener('click', () => toast(NEEDS_ENGINE), true));
 document.querySelectorAll('tr.caserow:not([data-open])').forEach(
   r => {{ r.style.cursor = 'pointer';
@@ -1031,6 +1093,69 @@ document.documentElement.dataset.theme =
 paintTheme();
 
 const dock = on => document.body.classList.toggle('asst-on', on);
+/* ------------------------------------------------------ the assistant, answering
+   Not a model in the page: the engine's own answers, captured per action when this file was
+   generated, and routed by the backend's own cue table. A question that matches nothing falls
+   to `explain`, exactly as it does in the application. */
+const ASST = JSON.parse(document.getElementById('asst-data').textContent);
+
+function route(q) {{
+  const t = (q || '').toLowerCase();
+  for (const [key, cues] of ASST.cues) {{
+    if (cues.some(c => t.includes(c))) return key;
+  }}
+  return 'explain';
+}}
+
+function bubble(role, text, tag, did) {{
+  const el = document.createElement('div');
+  el.className = 'asst-msg ' + role;
+  if (tag && tag !== 'explain') {{
+    const t = document.createElement('span');
+    t.className = 'pill status';
+    t.textContent = tag.replace(/_/g, ' ');
+    el.append(t);
+  }}
+  const pre = document.createElement('pre');
+  pre.textContent = text;
+  el.append(pre);
+  if (did) {{
+    const d = document.createElement('span');
+    d.className = 'asst-did';
+    d.textContent = '\u2713 ' + did;
+    el.append(d);
+  }}
+  const body = document.getElementById('asst-body');
+  body.append(el);
+  body.scrollTop = body.scrollHeight;
+}}
+
+function askAssistant(q, forced) {{
+  const key = forced || route(q);
+  bubble('auditor', q);
+  const a = ASST.answers[key] || ASST.answers['explain'];
+  if (!a) {{
+    bubble('assistant', 'That needs the engine, which this walkthrough does not carry.');
+    return;
+  }}
+  bubble('assistant', a.text, a.tag || key, a.did);
+}}
+
+document.querySelectorAll('.qchip[data-act]').forEach(c => c.addEventListener('click', () => {{
+  dock(true);
+  askAssistant(ASST.labels[c.dataset.act] || c.textContent, c.dataset.act);
+}}));
+
+const asstQ = document.getElementById('asst-q');
+const send = () => {{
+  const v = asstQ.value.trim();
+  if (!v) return;
+  asstQ.value = '';
+  askAssistant(v);
+}};
+document.getElementById('asst-send').addEventListener('click', send);
+asstQ.addEventListener('keydown', ev => {{ if (ev.key === 'Enter') send(); }});
+
 document.getElementById('asst-open').addEventListener('click', () => dock(true));
 document.getElementById('asst-close').addEventListener('click', () => dock(false));
 view('cases');

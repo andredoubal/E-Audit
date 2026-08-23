@@ -104,6 +104,7 @@ function OpenCase({ id }: { id: string }) {
 export default function Layout({ children }: { children: ReactNode }) {
   const [theme, toggle] = useTheme();
   const [count, setCount] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const match = useMatch("/cases/:id/*");
   const caseId = match?.params.id;
 
@@ -111,8 +112,13 @@ export default function Layout({ children }: { children: ReactNode }) {
     listCases().then((rows) => setCount(rows.length)).catch(() => {});
   }, []);
 
+  // A 392px panel over a full-width column hides the third of the page the auditor is being
+  // helped with — the matter rows and their controls sit exactly where it lands. So the column
+  // makes room instead of being covered.
+  useEffect(() => onPanel((p) => setPanelOpen(p !== null)), []);
+
   return (
-    <div className="app">
+    <div className={"app" + (panelOpen ? " panelled" : "")}>
       <aside className="side">
         <div className="brand">
           <span className="mark">ZC</span>

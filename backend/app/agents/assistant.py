@@ -244,13 +244,17 @@ def _explain(db, case: AuditCase, question: str) -> Answer:
     recon = reconcile_case(db, case.case_id, persist=False)
     return Answer(
         "explain",
-        f"For {case.case_id}, the records on file support {_sar(recon.get('expected'))} of "
+        # `expected_vat` is the engine's key. Reading `expected` returned None, so the most-used
+        # fallback answer told the auditor the records supported SAR 0 — beside a difference
+        # that could not be derived from it.
+        f"For {case.case_id}, the records on file support {_sar(recon.get('expected_vat'))} of "
         f"output VAT against {_sar(recon.get('declared'))} declared — a difference of "
         f"{_sar(recon.get('difference'))}, of which {_sar(recon.get('unexplained'))} is not yet "
         f"accounted for.\n\nI can only do a fixed set of things on a case: "
         + ", ".join(a.label.lower() for a in ACTIONS if a.key != "explain")
         + ". Ask for one of those, or work the tabs directly.",
-        facts={k: recon.get(k) for k in ("declared", "expected", "difference", "unexplained")})
+        facts={k: recon.get(k)
+               for k in ("declared", "expected_vat", "difference", "unexplained")})
 
 
 _EXEC = {

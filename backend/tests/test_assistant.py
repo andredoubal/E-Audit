@@ -253,3 +253,21 @@ def test_an_outlook_msg_says_what_it_needs_rather_than_half_reading_it():
     parsed = email_file.parse("reply.msg", b"not really an OLE file")
     assert not parsed.ok
     assert parsed.note
+
+
+def test_the_fallback_answer_states_the_engines_own_expected_figure(api):
+    """The reply an auditor gets when nothing else matches must still be right.
+
+    It read `recon["expected"]`, which the engine does not publish — the key is `expected_vat`.
+    The answer therefore said the records supported SAR 0, next to a difference that could not
+    be derived from it. A wrong figure in the assistant's most-reachable answer is the exact
+    thing the core invariant exists to stop.
+    """
+    recon = api.get(f"/api/cases/{CASE}/reconcile").json()
+    expected = recon["expected_vat"]
+    assert expected, "the seeded case has a non-zero expected figure to state"
+
+    m = ask(api, CASE, "what is the weather in Riyadh")
+    assert m["action"] == "explain"
+    assert f"{expected:,.0f}" in m["content"], m["content"]
+    assert "SAR 0 of output VAT" not in m["content"]
