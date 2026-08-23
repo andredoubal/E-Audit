@@ -65,15 +65,18 @@ export default function Overview() {
     : [];
 
   return (
-    <div className="page">
+    <div className="page list">
       <div className="page-head">
         <div>
-          <p className="eyebrow">Command deck</p>
-          <h1>Overview</h1>
+          <h1>Cases</h1>
+          <p className="sub">
+            {cases.length} open, ranked by what is worth looking at first
+          </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" onClick={() => nav("/cases/new")} title="Create a case by hand — there is no live risk-engine feed">
-            + Add case
+        <div style={{ display: "flex", gap: 9 }}>
+          <button className="btn-ghost" onClick={() => nav("/cases/new")}
+                  title="Create a case by hand — there is no live risk-engine feed">
+            New case
           </button>
           <button
             className={"btn-ghost" + (resetState === "confirm" ? " confirm" : "")}
@@ -81,93 +84,76 @@ export default function Overview() {
             disabled={resetState === "busy"}
             title="Restore the demo to its seeded state"
           >
-            {resetState === "busy" ? "Resetting…" : resetState === "confirm" ? "Confirm reset?" : "↻ Reset demo"}
+            {resetState === "busy" ? "Resetting…"
+              : resetState === "confirm" ? "Confirm reset?" : "Reset demo"}
           </button>
         </div>
       </div>
 
-      <div className="tiles">
-        {tiles.map((t) => (
-          <div className="tile" key={t.l}>
-            <div className="tn">{t.n}</div>
-            <div className="tl">{t.l}</div>
-            <div className="tnote">{t.note}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Flagged cases</h2>
-          <span className="muted">Sorted by composite priority — exposure · deadline · history · quick-win</span>
+      {tiles.length > 0 && (
+        <div className="tiles">
+          {tiles.map((t) => (
+            <div className="tile" key={t.l}>
+              <div className="tn">{t.n}</div>
+              <div className="tl">{t.l}</div>
+              <div className="tnote">{t.note}</div>
+            </div>
+          ))}
         </div>
-        {err && (
-          <div className="notice err">
-            Backend not reachable — start the API (<code>uvicorn app.main:app</code>) and seed the demo data
-            (<code>python -m app.seed.seed</code>).
-          </div>
-        )}
-        {!err && cases.length === 0 && (
-          <div className="notice">
-            No cases yet. Seed the demo data with <code>python -m app.seed.seed</code>.
-          </div>
-        )}
-        {cases.length > 0 && (
-          <div className="tablescroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Priority</th>
-                  <th>Case</th>
-                  <th>Taxpayer</th>
-                  <th>Sector</th>
-                  <th>Referral reason</th>
-                  <th>Deadline</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cases.map((c) => (
-                  <tr key={c.case_id} className="rowlink" onClick={() => nav(`/cases/${c.case_id}/correspondence`)}>
-                    <td>
-                      <span
-                        className={"pscore pri-" + c.priority.band}
-                        title={`Exposure ${Math.round(c.priority.signals.exposure * 40)}/40 · Deadline ${Math.round(
-                          c.priority.signals.deadline * 30,
-                        )}/30 · History ${Math.round(c.priority.signals.history * 20)}/20 · Quick-win ${Math.round(
-                          c.priority.signals.quickwin * 10,
-                        )}/10`}
-                      >
-                        {c.priority.score}
-                      </span>
-                      <div className="sub">{c.priority.driver}</div>
-                    </td>
-                    <td className="mono">{c.case_id}</td>
-                    <td>
-                      {c.taxpayer}
-                      <div className="sub mono">{c.vat_no}</div>
-                    </td>
-                    <td>{c.sector}</td>
-                    <td>
-                      <code>{c.reason}</code>
-                    </td>
-                    <td className="mono">
-                      {c.priority.deadline_days == null
-                        ? "—"
-                        : c.priority.deadline_days < 0
-                          ? "past due"
-                          : `${c.priority.deadline_days}d`}
-                    </td>
-                    <td>
-                      <span className="pill status">{c.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
+
+      {err && (
+        <div className="notice err">
+          Backend not reachable — start the API (<code>uvicorn app.main:app</code>) and seed the
+          demo data (<code>python -m app.seed.seed</code>).
+        </div>
+      )}
+      {!err && cases.length === 0 && (
+        <div className="notice">
+          No cases yet. Seed the demo data with <code>python -m app.seed.seed</code>.
+        </div>
+      )}
+
+      {cases.length > 0 && (
+        <div className="caselist">
+          {cases.map((c) => (
+            <div key={c.case_id} className="caserow"
+                 onClick={() => nav(`/cases/${c.case_id}/correspondence`)}
+                 role="button" tabIndex={0}
+                 onKeyDown={(e) => {
+                   if (e.key === "Enter") nav(`/cases/${c.case_id}/correspondence`);
+                 }}>
+              {/* The priority bar carries no number: the score is a composite the auditor
+                  cannot check at a glance, and a bar they can rank by is what the column is
+                  actually for. The breakdown is on the title. */}
+              <span className={"pbar pri-" + c.priority.band}
+                    title={`${c.priority.score}/100 — ${c.priority.driver}. `
+                      + `Exposure ${Math.round(c.priority.signals.exposure * 40)}/40 · `
+                      + `Deadline ${Math.round(c.priority.signals.deadline * 30)}/30 · `
+                      + `History ${Math.round(c.priority.signals.history * 20)}/20 · `
+                      + `Quick-win ${Math.round(c.priority.signals.quickwin * 10)}/10`} />
+              <div className="caserow-who">
+                <div className="caserow-name">{c.taxpayer}</div>
+                <div className="caserow-sub">
+                  {c.sector} · <span className="mono">{c.vat_no}</span>
+                </div>
+              </div>
+              <div className="caserow-id mono">{c.case_id}</div>
+              <div className="caserow-reason">{c.reason}</div>
+              <div className="caserow-when mono">
+                {c.priority.deadline_days == null ? ""
+                  : c.priority.deadline_days < 0 ? "past due"
+                    : `${c.priority.deadline_days}d`}
+              </div>
+              <div className="caserow-state">
+                <span className={"pill" + (c.status === "reconciled" ? " pri-low" : " status")}>
+                  {c.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {scope && (
         <div className="panel">

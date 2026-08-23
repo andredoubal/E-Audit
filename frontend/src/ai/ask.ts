@@ -5,9 +5,9 @@
  *  assistant no idea which of forty rows is in dispute. So the item hands over its own context,
  *  and the assistant opens with the question already written.
  *
- *  A tiny event bus rather than a context provider: `CaseAssistant` is mounted once per case,
- *  far from the rows that want to talk to it, and threading a callback down through four panels
- *  to reach it would be more machinery than the one line this needs.
+ *  A tiny event bus rather than a context provider: the panels are mounted once per case, far
+ *  from the rows that want to talk to them, and threading a callback down through four panels
+ *  to reach one would be more machinery than the one line this needs.
  */
 const EVENT = "eaudit:ask-assistant";
 
@@ -21,26 +21,39 @@ export function onAsk(handler: (question: string) => void): () => void {
   return () => window.removeEventListener(EVENT, listener);
 }
 
-/** Open the docked case assistant, from anywhere. */
-const OPEN_ASSISTANT = "eaudit:open-assistant";
+/** Which slide-over is open, if either.
+ *
+ *  One at a time, and the state lives here rather than in each panel: two 392px panels over one
+ *  reading column is a stack of chrome with the work behind it, and a panel that does not know
+ *  the other exists cannot close it. */
+export type Panel = "instr" | "asst" | null;
+
+const PANEL = "eaudit:panel";
+let current: Panel = null;
+
+function setPanel(next: Panel): void {
+  current = next;
+  window.dispatchEvent(new CustomEvent<Panel>(PANEL, { detail: next }));
+}
 
 export function openAssistant(): void {
-  window.dispatchEvent(new CustomEvent(OPEN_ASSISTANT));
+  setPanel(current === "asst" ? null : "asst");
 }
-
-export function onOpenAssistant(handler: () => void): () => void {
-  window.addEventListener(OPEN_ASSISTANT, handler);
-  return () => window.removeEventListener(OPEN_ASSISTANT, handler);
-}
-
-/** Open the case's standing instructions, from the sidebar. */
-const OPEN_INSTRUCTIONS = "eaudit:open-instructions";
 
 export function openInstructions(): void {
-  window.dispatchEvent(new CustomEvent(OPEN_INSTRUCTIONS));
+  setPanel(current === "instr" ? null : "instr");
 }
 
-export function onOpenInstructions(handler: () => void): () => void {
-  window.addEventListener(OPEN_INSTRUCTIONS, handler);
-  return () => window.removeEventListener(OPEN_INSTRUCTIONS, handler);
+export function closePanels(): void {
+  setPanel(null);
+}
+
+export function panel(): Panel {
+  return current;
+}
+
+export function onPanel(handler: (p: Panel) => void): () => void {
+  const listener = (e: Event) => handler((e as CustomEvent<Panel>).detail);
+  window.addEventListener(PANEL, listener);
+  return () => window.removeEventListener(PANEL, listener);
 }

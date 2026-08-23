@@ -344,6 +344,34 @@ said was received. A challenge that only opened a chat would be a note nobody re
 assistant is then offered, pre-loaded with the item, what the check said, and the auditor's own
 reason, rather than opening blank and asking what they wanted to challenge.
 
+## The visual language
+
+`frontend/src/theme.css` + `frontend/public/fonts/`. The design is a client handoff, and two
+rules in it are load-bearing rather than decorative:
+
+**Teal carries meaning; orange carries interaction.** Teal is what the engine found and what
+you confirmed — observed findings, the confirm control, evidence links, article citations.
+Orange is what you can press and what is selected — the assistant button, the active module,
+the selected row, the high-priority bar. They must not swap: a page where the accent means
+both "this is important" and "this is clickable" teaches the auditor nothing. `#FF7F51` is only
+ever a fill or a wash; as small text it fails contrast at about 2.6:1, so `--accent-text`
+(`#C24A22`) is the one that may sit on a light ground.
+
+**Somar has three weights and there is no fourth.** Light 300 for display headings and large
+figures, Regular 400 for body, Medium 500 for labels, buttons and emphasis. The previous scale
+asked for 600/650/700/750, which this face does not carry — the browser was synthesising them,
+which is why the old screens looked heavier and blurrier than the design. `b`, `strong` and
+`th` are all Medium now. **JetBrains Mono carries every figure**: Somar has no tabular
+numerals, so a column of amounts in it does not line up.
+
+The ground is one flat warm colour (`#F8F2EC`) with a sand rail (`#F2EADF`) and white cards.
+There is no texture and no gradient: a wash behind the app tints every white card sitting on
+it, which is what made a page of clean panels read as muddy. Shadow is used twice only — the
+assistant button and the slide-over panels. **Cards are defined by their border.**
+
+Dark mode is not in the handoff and is kept anyway: the same hues at low luminance, so the
+teal/orange split still reads.
+
 ## The agents (and what they may not do)
 
 `app/agents/roster.py`. The auditors named three and left the fourth to us; the fourth is

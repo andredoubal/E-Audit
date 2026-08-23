@@ -121,20 +121,28 @@ function sampleFiles(): File[] {
   });
 }
 
-function Step({ n, title, note, children }: {
+/** One step of a round, as its own card.
+ *
+ *  Steps 2 and 3 open by default: the state of the response is what the auditor came for, and
+ *  the two letters are one click away. Opening all four at once put a page of correspondence
+ *  between them and the answer. */
+function Step({ n, title, note, defaultOpen = false, children }: {
   n: number;
   title: string;
   note?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="rstep">
-      <div className="rstep-head">
+    <section className={"rstep" + (open ? " on" : "")}>
+      <button className="rstep-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="rstep-n">{n}</span>
-        <h3>{title}</h3>
+        <b>{title}</b>
         {note && <span className="sub">{note}</span>}
-      </div>
-      <div className="rstep-body">{children}</div>
+        <span className="rstep-mark">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && <div className="rstep-body">{children}</div>}
     </section>
   );
 }
@@ -344,15 +352,6 @@ export default function RoundCard({
           </div>
         )}
 
-        <p className="detail-note">
-          The chain goes in as files rather than as pasted text because the headers are the
-          part that matters: they say who sent each message, when, and what came attached. The
-          spreadsheets land in step 2 without a second upload, the messages sort into the order
-          they were actually sent, and <b>only ZATCA&rsquo;s own messages define the request</b> —
-          the taxpayer writing &ldquo;please find the sales analysis attached&rdquo; is not them
-          asking themselves for it. Reading the chain turns it into the specification step 3
-          checks against; nothing binds until you confirm the reading.
-        </p>
 
         {parsed && (
           <div className="parsed">
@@ -431,7 +430,7 @@ export default function RoundCard({
         )}
       </Step>
 
-      <Step n={2} title="Documents received"
+      <Step n={2} defaultOpen title="Documents received"
             note={docs.length ? `${docs.length} on file` : "nothing yet"}>
         <div
           className={"dropzone" + (drag ? " over" : "")}
@@ -457,7 +456,7 @@ export default function RoundCard({
         )}
       </Step>
 
-      <Step n={3} title="Documents received analysis"
+      <Step n={3} defaultOpen title="Documents received analysis"
             note={rows.length ? `${outstanding} outstanding of ${rows.length}` : ""}>
         {!docs.length ? (
           <p className="detail-note" style={{ margin: 0 }}>
@@ -511,11 +510,6 @@ export default function RoundCard({
                 </div>
               ))}
             </div>
-            <p className="detail-note">
-              <b>Incomplete</b> is the taxpayer's to fix; <b>needs review</b> is yours to settle.
-              A chase written from the second asks for something that was already sent. Anything
-              you <b>challenge</b> stays on the file with your reason and stops being chased.
-            </p>
           </>
         )}
       </Step>

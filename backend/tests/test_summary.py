@@ -241,3 +241,42 @@ def test_confirming_a_matter_is_what_reaches_the_report(api, own_case):
         "the summary shows what the auditor ruled"
     after = api.get(f"/api/cases/{own_case}/audit-report").json()
     assert after != before, "confirming it changed the report"
+
+
+def test_a_ruling_can_be_taken_back(api, own_case):
+    """The design gives every settled matter an "undo".
+
+    A decision an auditor cannot reverse is one they hesitate to make, and hesitating over a
+    first pass is the opposite of what the assessment section is for. What goes is the
+    auditor's position; the hypothesis and its verdict are untouched.
+    """
+    # An undecided matter of its own: an earlier test in this module confirms one, and a
+    # ruling withdrawn here must not be read off that one.
+    card = next(c for c in summary(api, own_case)["cards"]
+                if c["hypothesis_ids"] and not c["decision"])
+    hid = card["hypothesis_ids"][0]
+
+    def mine(cards):
+        return next(c for c in cards if c["key"] == card["key"])
+
+    r = api.post(f"/api/cases/{own_case}/hypotheses/{hid}/decision",
+                 json={"decision": "accepted", "comment": "on the listing"})
+    assert r.status_code == 200, r.text
+    assert mine(summary(api, own_case)["cards"])["decision"] == "accepted"
+
+    r = api.delete(f"/api/cases/{own_case}/hypotheses/{hid}/decision")
+    assert r.status_code == 200, r.text
+    assert mine(summary(api, own_case)["cards"])["decision"] == ""
+
+    state = api.get(f"/api/cases/{own_case}/investigation").json()
+    h = next(h for h in state["hypotheses"] if h["hypothesis_id"] == hid)
+    assert h["decision"] is None
+    assert h["status"], "the verdict itself survives — only the ruling was withdrawn"
+
+
+def test_undoing_a_decision_that_was_never_made_is_not_an_error(api, own_case):
+    """Idempotent, because the button is in the UI and a double-click is not a fault."""
+    hid = next(c for c in summary(api, own_case)["cards"]
+               if c["hypothesis_ids"])["hypothesis_ids"][0]
+    assert api.delete(f"/api/cases/{own_case}/hypotheses/{hid}/decision").status_code == 200
+    assert api.delete(f"/api/cases/{own_case}/hypotheses/{hid}/decision").status_code == 200

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
 import RoundCard from "../components/RoundCard";
-import CaseAssistant from "../components/CaseAssistant";
 import { getLoop, getThreads, type LoopState, type ThreadState } from "../api";
 
 /** Everything said to the taxpayer, and everything they sent back. */
@@ -29,22 +28,16 @@ export default function Correspondence() {
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h1>Taxpayer correspondence</h1>
-          <p className="sub">{id} · what we asked for, and what arrived</p>
-        </div>
-        <div className="chips">
-          <span className={"pill " + (outstanding ? "pri-high" : "pri-low")}>
-            Round {Math.max(rounds.length, 1)}
-          </span>
-          {outstanding > 0 && (
-            <span className="pill pri-high">{outstanding} outstanding</span>
-          )}
-        </div>
-      </header>
-
       <CaseTabs id={id} />
+      <div className="page">
+      <div className="modulehead">
+        <h2 className="display">Round {Math.max(rounds.length, 1)} — {
+          rounds.length > 1 ? "the enquiry so far" : "opening request"
+        }</h2>
+        {outstanding > 0 && (
+          <span className="pill pri-high">{outstanding} outstanding</span>
+        )}
+      </div>
       {err && <p className="error">{err}</p>}
 
       {threads?.missing_attachments?.map((m) => (
@@ -97,7 +90,7 @@ export default function Correspondence() {
         </div>
       </div>
 
-      <CaseAssistant id={id} />
+    </div>
     </>
   );
 }

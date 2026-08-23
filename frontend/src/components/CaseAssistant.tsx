@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { onAsk, onOpenAssistant } from "../ai/ask";
+import { closePanels, onAsk, onPanel, openAssistant } from "../ai/ask";
 import {
   askAssistant, clearAssistant, getAssistant, type AssistantState,
 } from "../api";
-import { Sparkles } from "./Icon";
+import { Star } from "./Icon";
 
 /** One conversation per case, reachable from every tab. */
 export default function CaseAssistant({ id }: { id: string }) {
@@ -20,17 +20,21 @@ export default function CaseAssistant({ id }: { id: string }) {
   }, [id]);
   useEffect(() => { if (open) load(); }, [open, load]);
 
+  useEffect(() => onPanel((p) => setOpen(p === "asst")), []);
+
   // A challenge elsewhere on the case opens this panel with the question already written. The
   // auditor is looking at the row they dispute; making them retype it — and leaving the
   // assistant to guess which of forty rows is meant — is the version of this that helps nobody.
-  useEffect(() => onOpenAssistant(() => setOpen(true)), []);
-
   useEffect(() => onAsk((question) => {
-    setOpen(true);
+    openAssistant();
     setQ(question);
     setTimeout(() => inputRef.current?.focus(), 60);
   }), []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [d?.messages.length]);
+
+  // Only when the count changes. Scrolling on every state change fights the user, who may be
+  // reading a message further up while a panel elsewhere re-renders.
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); },
+            [d?.messages.length]);
 
   const send = async (question: string, action = "") => {
     if (!question.trim() && !action) return;
@@ -46,9 +50,8 @@ export default function CaseAssistant({ id }: { id: string }) {
 
   if (!open) {
     return (
-      <button className="asst-fab" onClick={() => setOpen(true)}
-              title="Ask about this case">
-        <span className="ai-chip"><Sparkles size={13} /></span> Ask about this case
+      <button className="asst-fab" onClick={openAssistant} title="Ask about this case">
+        <span className="asst-dot" /> Ask about this case
       </button>
     );
   }
@@ -57,13 +60,13 @@ export default function CaseAssistant({ id }: { id: string }) {
   const quick = (d?.actions ?? []).filter((a) => a.key !== "explain");
 
   return (
-    <aside className="asst">
-      <div className="asst-head">
-        <span className="ai-chip"><Sparkles size={13} /></span>
+    <aside className="slideover asst">
+      <div className="slideover-head">
+        <span className="ic"><Star size={13} /></span>
         <b>Case assistant</b>
-        <span className="sub">{id}</span>
+        <span className="mono">{id}</span>
         <button className="linklike" onClick={() => clearAssistant(id).then(setD)}>clear</button>
-        <button className="asst-x" onClick={() => setOpen(false)} aria-label="Close">×</button>
+        <button className="slideover-x" onClick={closePanels} aria-label="Close">×</button>
       </div>
 
       <div className="asst-body">
@@ -90,7 +93,7 @@ export default function CaseAssistant({ id }: { id: string }) {
         <div ref={endRef} />
       </div>
 
-      <div className="asst-foot">
+      <div className="slideover-foot">
         <div className="asst-quick">
           {quick.map((a) => (
             <button key={a.key} className="qchip" title={a.hint} disabled={busy}
@@ -112,6 +115,10 @@ export default function CaseAssistant({ id }: { id: string }) {
             Ask
           </button>
         </div>
+        <p>
+          The assistant runs the application's own checks. Every figure in an answer was
+          computed before the sentence was written.
+        </p>
       </div>
     </aside>
   );

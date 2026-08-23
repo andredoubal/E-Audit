@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getZatca, removeZatca, uploadZatca, type ZatcaState } from "../api";
+import { Table } from "./Icon";
 
 /** The one file that is uploaded *here* rather than in Taxpayer Correspondence.
  *
@@ -57,21 +58,24 @@ export default function ZatcaSource({ id, rev, onChanged }: {
   return (
     <section className={"zsrc" + (open ? " on" : "")}>
       <button className="zsrc-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <b>ZATCA invoice records</b>
-        <span className="zsrc-opt">Optional</span>
-        {ds ? (
-          <span className="zsrc-file">
-            <b>{ds.filename}</b>
-            <span className="sub">
-              {ds.row_count} invoice{ds.row_count === 1 ? "" : "s"}
-              {d?.comparable ? ` · ${d.matched_count} matched against the listing` : ""}
+        <span className="zsrc-ic"><Table /></span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
+            <b>ZATCA invoice records</b>
+            <span className="zsrc-opt">optional</span>
+          </span>
+          {ds ? (
+            <span className="zsrc-file" style={{ display: "block", marginTop: 4 }}>
+              {ds.filename}
+              {ds.uploaded_at && ` · loaded ${ds.uploaded_at.slice(0, 10)}`}
+              {d?.comparable && ` · ${d.matched_count} matched`}
             </span>
-          </span>
-        ) : (
-          <span className="sub zsrc-none">
-            None loaded — the investigation runs on the taxpayer's documents alone
-          </span>
-        )}
+          ) : (
+            <span className="zsrc-none" style={{ display: "block", marginTop: 4 }}>
+              None loaded — the investigation runs on the taxpayer's documents alone
+            </span>
+          )}
+        </span>
         <span className="zsrc-mark">{open ? "▾" : "▸"}</span>
       </button>
 
@@ -90,33 +94,24 @@ export default function ZatcaSource({ id, rev, onChanged }: {
                    style={{ display: "none" }}
                    onChange={(e) => send(e.target.files)} />
             <b>{busy ? "Reading…" : ds ? "Drop a file here to replace it" : "Drop the Authority's invoice extract here"}</b>
-            <span className="sub">.xlsx, .xlsm, .csv — one row per invoice, as ZATCA holds it</span>
+            <span>.xlsx, .xlsm, .csv — one row per invoice, as ZATCA holds it</span>
           </div>
 
           {ds ? (
             <div className="zsrc-meta">
-              <span>
-                <span className="k">File</span> {ds.filename}
-              </span>
-              <span>
-                <span className="k">Invoices</span> {ds.row_count}
-              </span>
-              <span>
-                <span className="k">Columns</span> {ds.columns.length}
-              </span>
-              <span>
-                <span className="k">Loaded</span> {ds.uploaded_at.slice(0, 10)}
-              </span>
+              <span><span className="k">File</span>{ds.filename}</span>
+              <span><span className="k">Invoices</span>{ds.row_count}</span>
+              <span><span className="k">Columns</span>{ds.columns.length}</span>
+              <span><span className="k">Loaded</span>{ds.uploaded_at.slice(0, 10)}</span>
               <button className="linklike danger" disabled={busy} onClick={unload}>
                 remove
               </button>
             </div>
           ) : (
             <p className="detail-note" style={{ marginBottom: 0 }}>
-              The taxpayer's own documents come from <b>Taxpayer Correspondence</b> and are
-              already in use here. This slot is for ZATCA's internal invoice extract, which the
-              listing is matched against. Without it there is one side and no comparison, so no
-              reconciliation is reported rather than every record being called unmatched.
+              The taxpayer's own documents come from Correspondence and are already in use here.
+              This slot is for ZATCA's internal invoice extract. Without it there is one side and
+              no comparison, so no reconciliation is reported.
             </p>
           )}
         </div>

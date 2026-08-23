@@ -12,7 +12,6 @@ import ZatcaSource from "../components/ZatcaSource";
 import InvestigationSummary from "../components/InvestigationSummary";
 import AuditorAssessment from "../components/AuditorAssessment";
 import Collapsible from "../components/Collapsible";
-import CaseAssistant from "../components/CaseAssistant";
 import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
 
@@ -412,27 +411,28 @@ export default function Investigation() {
   const inputFinding = d.combined?.input_state === "potential-finding";
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <p className="eyebrow">
-            <Link to="/">Cases</Link> · {d.case_id}
-          </p>
-          <h1>{d.taxpayer}</h1>
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          {inputFinding && d.combined && (
-            <span className="pill pri-high" style={{ fontSize: 12, padding: "5px 12px" }} title="Input-VAT over-claim on the purchases box">
-              + input over-claim {sar(d.combined.input_unexplained)}
-            </span>
-          )}
-          <span className={"pill " + (STATE_CLASS[cstate] || "status")} style={{ fontSize: 13, padding: "6px 14px" }}>
-            {STATE_LABEL[cstate] || cstate}
-          </span>
-        </div>
-      </div>
-
+    <>
       <CaseTabs id={id!} />
+      <div className="page">
+      {/* The case's own verdict, and the second box when it carries one. The design took the
+          exposure figure out of the case header; these are not that — they are what the engine
+          concluded, and an auditor opening the module should see it before the detail. */}
+      <div className="casestate">
+        <span className={"pill " + (STATE_CLASS[cstate] || "status")}>
+          {STATE_LABEL[cstate] || cstate}
+        </span>
+        {inputFinding && d.combined && (
+          <span className="pill pri-high" title="Input-VAT over-claim on the purchases box">
+            + input over-claim {sar(d.combined.input_unexplained)}
+          </span>
+        )}
+        {d.population_source === "document" && d.population_document && (
+          <span className="sub">
+            reconciled from <b>{d.population_document}</b>
+            {d.population_complete === false && " — treat the figures as a floor"}
+          </span>
+        )}
+      </div>
 
       {/* The page answers four questions, in this order: what else can I give it, what did it
           find, what is that resting on, and what do I conclude. Everything the taxpayer sent
@@ -564,7 +564,6 @@ export default function Investigation() {
 
       <AuditorAssessment id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
 
-      <CaseAssistant id={id!} />
 
       {modal && (
         <Modal title={modal.title} onClose={() => setModal(null)}>
@@ -578,6 +577,7 @@ export default function Investigation() {
           )}
         </Modal>
       )}
-    </div>
+      </div>
+    </>
   );
 }

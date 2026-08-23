@@ -77,46 +77,39 @@ def sar(n) -> str:
 def case_list(cases: list, open_case: str) -> str:
     """Where an auditor starts: every case they hold, and the way to add one.
 
-    The three modules are a *case's* tabs, not the application's. Landing on them would be
-    landing in the middle of one file with no way to see the others, which is not how the work
-    begins — you pick up a case, and the modules are what is inside it.
+    One bordered card of rows rather than a table. The priority bar carries no number — the
+    score is a composite nobody can check at a glance, and a bar you can rank by is what the
+    column is actually for.
     """
     rows = []
     for c in cases:
         p = c.get("priority") or {}
-        band = p.get("band", "")
-        pill = {"high": "pri-high", "medium": "pri-medium"}.get(band.lower(), "pri-low")
-        cls = "caserow on" if c["case_id"] == open_case else "caserow"
-        arrow = '<span class="linklike">open &#9656;</span>' if c["case_id"] == open_case else ""
-        # Only the seeded case carries real output, so it is the only row that goes anywhere.
+        band = (p.get("band") or "low").lower()
         opens = ' data-open="1"' if c["case_id"] == open_case else ""
+        days = p.get("deadline_days")
+        when = "" if days is None else ("past due" if days < 0 else f"{days}d")
+        pill = "pill pri-low" if c["status"] == "reconciled" else "pill status"
         rows.append(
-            f'<tr class="{cls}"{opens}>'
-            f'<td><span class="pill {pill}">{e(band or "—")}</span></td>'
-            f'<td class="mono">{e(c["case_id"])}</td>'
-            f'<td><b>{e(c["taxpayer"])}</b><div class="sub">{e(c["vat_no"])}</div></td>'
-            f'<td>{e(c["sector"])}</td><td>{e(c["reason"])}</td>'
-            f'<td class="mono">{e(c["period"])}</td>'
-            f'<td><span class="pill status">{e(c["status"])}</span></td>'
-            f'<td>{arrow}</td></tr>')
+            f'<div class="caserow"{opens}>'
+            f'<span class="pbar pri-{e(band)}"></span>'
+            f'<div class="caserow-who"><div class="caserow-name">{e(c["taxpayer"])}</div>'
+            f'<div class="caserow-sub">{e(c["sector"])} · '
+            f'<span class="mono">{e(c["vat_no"])}</span></div></div>'
+            f'<div class="caserow-id mono">{e(c["case_id"])}</div>'
+            f'<div class="caserow-reason">{e(c["reason"])}</div>'
+            f'<div class="caserow-when mono">{e(when)}</div>'
+            f'<div class="caserow-state"><span class="{pill}">{e(c["status"])}</span></div>'
+            "</div>")
 
     return f"""
-<header class="page-head"><div><p class="eyebrow">ZATCA · VAT Audit Agent</p>
-<h1>Cases</h1><p class="sub">{len(cases)} open · ranked by what is worth looking at first</p>
-</div><div><span class="btn">+ Add case</span></div></header>
+<header class="page-head"><div><h1>Cases</h1>
+<p class="sub">{len(cases)} open, ranked by what is worth looking at first</p></div>
+<div><span class="btn-ghost">New case</span></div></header>
 
-<div class="panel"><div class="panel-head"><h2>Open cases</h2>
-<span class="muted">Ranked by exposure, deadline, history and how quickly they can be settled
-</span></div>
-<div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
-<th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
-<th>Period</th><th>Status</th><th></th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table></div>
-<p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
-Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
-application&rsquo;s: <b>Cases</b> is the whole sidebar, because everything else has to know
-which case it is about. In this walkthrough only <b>{e(open_case)}</b> carries real output, so
-that is the row that opens.</p></div></div>"""
+<div class="caselist">{''.join(rows)}</div>
+<p class="detail-note">Every case covers 2025-01-01 to 2025-03-31. Only
+<b>{e(open_case)}</b> carries engine output in this walkthrough — that is the row that opens.
+</p>"""
 
 
 # ------------------------------------------------------------------ the three tabs
@@ -130,8 +123,9 @@ def correspondence(loop: dict, threads: dict) -> str:
     outstanding = [i for i in rows if i["state"] != "received"]
 
     def step(n, title, note, body):
-        return (f'<section class="rstep"><div class="rstep-head"><span class="rstep-n">{n}</span>'
-                f'<h3>{e(title)}</h3><span class="sub">{e(note)}</span></div>'
+        return (f'<section class="rstep on"><div class="rstep-head">'
+                f'<span class="rstep-n">{n}</span><b>{e(title)}</b>'
+                f'<span class="sub">{e(note)}</span><span class="rstep-mark">&#9662;</span></div>'
                 f'<div class="rstep-body">{body}</div></section>')
 
     chain = "".join(
@@ -811,7 +805,7 @@ navhead.addEventListener('click', () => {{
   document.getElementById('navcase-mark').innerHTML = open ? '&#9662;' : '&#9656;';
   navhead.setAttribute('aria-expanded', String(open));
 }});
-document.querySelectorAll('tr[data-open]').forEach(
+document.querySelectorAll('[data-open]').forEach(
   r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
 document.getElementById('back').addEventListener('click', () => view('cases'));
 document.querySelectorAll('.navlink[data-view="cases"]').forEach(

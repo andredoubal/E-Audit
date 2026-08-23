@@ -1,22 +1,22 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useMatch } from "react-router-dom";
-import { openAssistant, openInstructions } from "../ai/ask";
-import { listCases, type CaseRow } from "../api";
-import { Book, Cases, Moon, Sparkles, Sun } from "./Icon";
+import { openAssistant, openInstructions, onPanel } from "../ai/ask";
+import { getInstructions, listCases, type CaseRow } from "../api";
+import { Cases, Lines, Moon, Star, Sun } from "./Icon";
 
-const MODULES = [
-  { to: "/correspondence", label: "Taxpayer Correspondence" },
-  { to: "/investigation", label: "Investigation" },
-  { to: "/report", label: "Audit Report" },
+export const MODULES = [
+  { to: "/correspondence", label: "Taxpayer Correspondence", short: "Correspondence" },
+  { to: "/investigation", label: "Investigation", short: "Investigation" },
+  { to: "/report", label: "Audit Report", short: "Audit report" },
 ];
 
 /** Where the whole audit starts, and where this application does not.
  *
- *  The PoC begins when the taxpayer's documents arrive: the assessment that decided this
- *  taxpayer was worth auditing, and the request that went out in the auditor's own words,
- *  both happened before the app saw the case. Naming that phase and leaving it inert is
- *  the honest way to show it — a link would promise a screen that does not exist. */
-const OUT_OF_SCOPE = "Initial Assessment & Document Request";
+ *  The assessment that decided this taxpayer was worth auditing, and the request that went out
+ *  in the auditor's own words, both happened before the app saw the case. Naming the phase and
+ *  leaving it inert is the honest way to show it — a link would promise a screen that does not
+ *  exist, and leaving it out would imply the audit begins where this application does. */
+const OUT_OF_SCOPE = "Initial assessment";
 
 type Theme = "light" | "dark";
 
@@ -33,62 +33,83 @@ function useTheme(): [Theme, () => void] {
   return [theme, () => setTheme((t) => (t === "dark" ? "light" : "dark"))];
 }
 
-/** The case you have open, as a group in the sidebar.
- *
- *  The modules were briefly here on their own, pointing at a hard-coded case id — a link that
- *  lied about where it went. Nested under the case that is actually open they are what they
- *  always were: a case's own places, reached by opening it. */
+/** The case you have open: its name, its id, and its own places. */
 function OpenCase({ id }: { id: string }) {
-  const [name, setName] = useState("");
-  const [open, setOpen] = useState(true);
+  const [row, setRow] = useState<CaseRow | null>(null);
+  const [instr, setInstr] = useState("");
+  const [open, setOpen] = useState<"instr" | "asst" | null>(null);
 
   useEffect(() => {
     listCases()
-      .then((rows: CaseRow[]) => setName(rows.find((c) => c.case_id === id)?.taxpayer ?? ""))
+      .then((rows) => setRow(rows.find((c) => c.case_id === id) ?? null))
       .catch(() => {});
   }, [id]);
 
-  return (
-    <div className={"navgroup-open" + (open ? " on" : "")}>
-      <button className="navgroup-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="ic"><Book /></span>
-        <span className="navgroup-name">
-          <b>{name || "Open case"}</b>
-          <small>{id}</small>
-        </span>
-        <span className="navgroup-mark">{open ? "▾" : "▸"}</span>
-      </button>
+  // The card shows the first line of what is actually in force, so the auditor can see the
+  // steer without opening the panel — an instruction you have to go and check is one you
+  // forget you wrote.
+  useEffect(() => {
+    getInstructions(id).then((d) => setInstr(d.text)).catch(() => {});
+  }, [id, open]);
+  useEffect(() => onPanel(setOpen), []);
 
-      {open && (
+  const firstLine = instr.trim().split("\n").find((l) => l.trim()) ?? "";
+
+  return (
+    <>
+      <div className="navgroup-open">
+        <div className="navgroup-head">
+          <span className="navgroup-name">
+            <b>{row?.taxpayer || "Open case"}</b>
+            <small>{id}</small>
+          </span>
+        </div>
         <div className="navgroup-items">
           <span className="navsub out" aria-disabled="true"
                 title="Outside the scope of this proof of concept">
             {OUT_OF_SCOPE}
-            <span className="navsub-scope">Out of PoC scope</span>
+            <span className="navsub-scope">Out of scope</span>
           </span>
           {MODULES.map((m) => (
             <NavLink key={m.to} to={`/cases/${id}${m.to}`}
                      className={({ isActive }) => "navsub" + (isActive ? " active" : "")}>
-              {m.label}
+              {m.short}
             </NavLink>
           ))}
-          <button className="navsub ai" onClick={openAssistant}>
-            <span className="ic"><Sparkles size={14} /></span>
-            AI assistant
-          </button>
-          <button className="navsub" onClick={openInstructions}>
-            Custom instructions
-          </button>
         </div>
-      )}
-    </div>
+      </div>
+
+      <div className="sidecards">
+        <button className={"sidecard" + (open === "instr" ? " on" : "") + (firstLine ? " set" : "")}
+                onClick={openInstructions}>
+          <span className="ic"><Lines /></span>
+          <span className="sidecard-txt">
+            <b>Case instructions</b>
+            <span>{firstLine || "None set — add what the documents don't say"}</span>
+          </span>
+        </button>
+
+        <button className="sidecard ask" onClick={openAssistant}>
+          <span className="ic"><Star /></span>
+          <span className="sidecard-txt">
+            <b>Ask about this case</b>
+            <span>Status, gaps, ZATCA records</span>
+          </span>
+        </button>
+      </div>
+    </>
   );
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [theme, toggle] = useTheme();
+  const [count, setCount] = useState<number | null>(null);
   const match = useMatch("/cases/:id/*");
   const caseId = match?.params.id;
+
+  useEffect(() => {
+    listCases().then((rows) => setCount(rows.length)).catch(() => {});
+  }, []);
 
   return (
     <div className="app">
@@ -100,20 +121,22 @@ export default function Layout({ children }: { children: ReactNode }) {
             <small>VAT Audit Agent</small>
           </span>
         </div>
-        <nav>
-          <NavLink to="/" end
-                   className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
-            <span className="ic"><Cases /></span>
-            Cases
-          </NavLink>
-          {caseId && <OpenCase id={caseId} />}
-        </nav>
+
+        <NavLink to="/" end
+                 className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
+          <span className="ic"><Cases /></span>
+          <span>Cases</span>
+          {count !== null && <span className="count">{count}</span>}
+        </NavLink>
+
+        {caseId && <OpenCase id={caseId} />}
+
         <div className="side-foot">
           <button className="iconbtn" onClick={toggle}
                   title={theme === "dark" ? "Switch to light" : "Switch to dark"}>
-            {theme === "dark" ? <Sun /> : <Moon />}
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-          <span>ZATCA VAT Audit Agent</span>
+          <span>Synthetic demo data. Every figure is the engine's own.</span>
         </div>
       </aside>
       <main className="main">{children}</main>

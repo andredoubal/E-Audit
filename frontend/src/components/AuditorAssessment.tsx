@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   decideHypothesis,
+  undecideHypothesis,
   getAssessment,
   getInvestigationSummary,
   requestInformation,
@@ -32,7 +33,10 @@ const STEERS = [
  *  These used to be five options on every hypothesis, which said the tool expected a separate
  *  ruling on each piece of evidence. It does not: the auditor reads the investigation and takes
  *  a position, and the only thing the report needs from them is which matters they confirm. */
-const RULINGS: { key: "accepted" | "rejected" | "needs-more-info"; label: string; hint: string }[] = [
+/** "" reopens a matter — a ruling you cannot take back is one an auditor will not make. */
+type Ruling = "accepted" | "rejected" | "needs-more-info" | "";
+
+const RULINGS: { key: Exclude<Ruling, "">; label: string; hint: string }[] = [
   { key: "accepted", label: "Confirm", hint: "Carry this into the audit report as a finding" },
   { key: "rejected", label: "Dismiss", hint: "Not supported — kept on file with your reason" },
   { key: "needs-more-info", label: "Ask the taxpayer",
@@ -50,28 +54,34 @@ const RULED: Record<string, string> = {
 function Matter({ c, busy, onRule }: {
   c: SummaryCard;
   busy: boolean;
-  onRule: (hid: string, decision: "accepted" | "rejected" | "needs-more-info") => void;
+  onRule: (hid: string, decision: Ruling) => void;
 }) {
   const hid = c.hypothesis_ids[0];
   if (!hid) return null;
   return (
-    <div className={"matter" + (c.decision ? " ruled" : "")}>
+    <div className={"matter"
+                    + (c.decision === "accepted" ? " ruled" : "")
+                    + (c.decision === "rejected" ? " dismissed" : "")}>
       <div className="matter-what">
         <b>{c.title}</b>
         {!!c.amount && <span className="matter-amt">{sar(c.amount)}</span>}
       </div>
       {c.decision ? (
         <div className="matter-act">
-          <span className="pill pri-low">{RULED[c.decision] || c.decision}</span>
-          <button className="linklike" disabled={busy} onClick={() => onRule(hid, "accepted")}>
-            change
+          <span className="matter-state"
+                style={{ color: c.decision === "accepted" ? "var(--brand)" : "var(--faint)" }}>
+            {RULED[c.decision] || c.decision}
+          </span>
+          <button className="linklike" disabled={busy} style={{ color: "var(--faint)" }}
+                  onClick={() => onRule(hid, "")}>
+            undo
           </button>
         </div>
       ) : (
         <div className="matter-act">
           {RULINGS.map((r) => (
-            <button key={r.key} className="btn-ghost" title={r.hint} disabled={busy}
-                    onClick={() => onRule(hid, r.key)}>
+            <button key={r.key} className={"btn-ghost" + (r.key === "accepted" ? " confirm" : "")}
+                    title={r.hint} disabled={busy} onClick={() => onRule(hid, r.key)}>
               {r.label}
             </button>
           ))}
@@ -127,10 +137,16 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
   // opens an enquiry carrying the hypothesis id, and drafts the request from the engine's own
   // account of what is missing. Recording it as a decision and stopping there would leave the
   // auditor to write that letter themselves, which is the round this exists to save.
-  const rule = async (hid: string, decision: "accepted" | "rejected" | "needs-more-info") => {
+  const rule = async (hid: string, decision: Ruling) => {
     setBusy(true);
     setErr("");
     try {
+      if (decision === "") {
+        await undecideHypothesis(id, hid);
+        load();
+        onChanged?.();
+        return;
+      }
       if (decision === "needs-more-info") {
         await requestInformation(id, hid, "");
         nav(`/cases/${id}/correspondence`);
@@ -152,14 +168,16 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
   // matcher is a fault in the file, not a proposition to accept or dismiss.
   const matters = (sum?.cards ?? []).filter((c) => c.hypothesis_ids.length);
   const confirmed = matters.filter((c) => c.decision === "accepted");
+  const confirmedTotal = confirmed.reduce((n, c) => n + c.amount, 0);
 
   return (
     <div className="panel assess">
       <div className="panel-head">
-        <h2>Your assessment</h2>
-        <span className={"pill " + (confirmed.length ? "pri-low" : "status")}>
+        <h3 className="display">Your assessment</h3>
+        <span className="sub">only what you confirm reaches the report</span>
+        <span className="sub num" style={{ marginLeft: "auto" }}>
           {confirmed.length
-            ? `${confirmed.length} confirmed — carried into the report`
+            ? `${confirmed.length} confirmed · ${sar(confirmedTotal)}`
             : "nothing confirmed yet"}
         </span>
       </div>
@@ -169,10 +187,6 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
 
         {!!matters.length && (
           <div className="matters">
-            <div className="matters-head">
-              Which of these you are taking forward. Only what you confirm reaches the audit
-              report and the letter to the taxpayer.
-            </div>
             {matters.map((c) => (
               <Matter key={c.key} c={c} busy={busy} onRule={rule} />
             ))}

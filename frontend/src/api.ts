@@ -94,6 +94,18 @@ export interface CaseRow {
   priority: PriorityScore;
 }
 
+/** One case's own header facts. The list carries these too, but a header that waits for the
+ *  whole queue to load is a header that flashes empty on every case you open. */
+export interface CaseDetail {
+  case_id: string;
+  status: string;
+  reason: string;
+  period: string;
+  taxpayer: { name: string; vat_no: string; sector: string };
+}
+
+export const getCaseDetail = (id: string) => getJSON<CaseDetail>(`/cases/${id}`);
+
 /* ---- manual case creation — the only route a case exists through, since there is no
    live risk-engine integration in this PoC. */
 export interface NewCaseTaxpayerIn {
@@ -748,6 +760,14 @@ export const getInvestigationState = (id: string) =>
 
 export const runInvestigation = (id: string, trigger = "auditor-requested", note = "") =>
   postJSON<InvestigationState>(`/cases/${id}/investigation/run`, { trigger, note });
+
+/** Take a ruling back. The hypothesis stays; the auditor's position on it goes. */
+export const undecideHypothesis = async (id: string, hypothesisId: string) => {
+  const r = await fetch(`${BASE}/cases/${id}/hypotheses/${hypothesisId}/decision`,
+                        { method: "DELETE" });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return (await r.json()) as InvestigationState;
+};
 
 export const decideHypothesis = (
   id: string,

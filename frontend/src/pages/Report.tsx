@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
-import CaseAssistant from "../components/CaseAssistant";
 import StepEmails from "../components/StepEmails";
 import AuditReport from "../components/AuditReport";
 import EditableField from "../components/EditableField";
@@ -40,23 +39,32 @@ export default function Report() {
   const outstanding = doc?.completeness.outstanding ?? 0;
   const edited = doc?.edited_fields ?? 0;
 
+  const answered = doc?.completeness.filled ?? 0;
+
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <p className="eyebrow">Audit report</p>
-          <h1>{doc?.taxpayer || id}</h1>
-        </div>
+    <>
+      <CaseTabs id={id} />
+      <div className="page">
+      <div className="modulehead">
+        <h2 className="display">Audit report</h2>
         {doc && (
-          <div className="chips">
-            <a className="btn" href={auditReportDocUrl(id)}>Download Word</a>
-            <a className="btn small" href={auditReportHtmlUrl(id)}
-               target="_blank" rel="noreferrer">Open printable / PDF</a>
+          <span className="sub">
+            <span className="num">{answered}</span> of{" "}
+            <span className="num">{doc.completeness.fields}</span> fields answered
+            {edited > 0 && <> · <span className="num">{edited}</span> yours</>}
+            {outstanding > 0 && (
+              <> · <span className="num">{outstanding}</span> still open</>
+            )}
+          </span>
+        )}
+        {doc && (
+          <div className="modulehead-act">
+            <a className="btn-ghost" href={auditReportDocUrl(id)}>Download Word</a>
+            <a className="btn-ghost" href={auditReportHtmlUrl(id)}
+               target="_blank" rel="noreferrer">Printable</a>
           </div>
         )}
       </div>
-
-      <CaseTabs id={id} />
 
       {err && <div className="callout warn">Could not build the report — {err}</div>}
       {!doc && !err && <p className="muted">Assembling the report…</p>}
@@ -79,44 +87,18 @@ export default function Report() {
             </div>
           )}
 
-          <div className="panel">
-            <div className="panel-head">
-              <h2>{doc.title}</h2>
-              <div className="chips">
-                <span className="pill status">
-                  {doc.completeness.filled} of {doc.completeness.fields} answered
-                </span>
-                {outstanding > 0 && (
-                  <span className="pill pri-medium"
-                        title="Either ZATCA holds it in another system, or it is a judgement only you can make. Both are editable.">
-                    {outstanding} still open
-                  </span>
-                )}
-                {edited > 0 && (
-                  <span className="pill pri-low">{edited} written by you</span>
-                )}
+          {doc.sections.map((s) => (
+            <section key={s.title} className="panel rsection">
+              <h3>{s.title}</h3>
+              <div className="panel-body">
+                <div className="rfields">
+                  {s.fields.map((f) => (
+                    <EditableField key={f.key || f.label} field={f} onSave={save} />
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="panel-body">
-              <p className="detail-note" style={{ marginTop: 0 }}>
-                Every field here can be written in your own words — the ones marked{" "}
-                <b>[for the auditor to complete]</b> are judgements the tool has no business
-                making, and <b>[not held]</b> is something ZATCA keeps in another system. What
-                you write replaces what the engine wrote, is marked as yours, keeps the original
-                beside it, and goes into the Word and printable versions too.
-              </p>
-              {doc.sections.map((s) => (
-                <section key={s.title} className="rep-section">
-                  <h3 className="rep-h">{s.title}</h3>
-                  <div className="rfields">
-                    {s.fields.map((f) => (
-                      <EditableField key={f.key || f.label} field={f} onSave={save} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </div>
+            </section>
+          ))}
 
           {findingsField && findingsField.trace.length > 0 && (
             <div className="panel">
@@ -136,7 +118,7 @@ export default function Report() {
         </>
       )}
 
-      <CaseAssistant id={id} />
     </div>
+    </>
   );
 }

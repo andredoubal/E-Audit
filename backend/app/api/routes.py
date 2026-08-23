@@ -293,6 +293,27 @@ def decide(case_id: str, hypothesis_id: str, body: DecisionIn,
     return inv_service.state(db, c)
 
 
+@router.delete("/cases/{case_id}/hypotheses/{hypothesis_id}/decision")
+def undecide(case_id: str, hypothesis_id: str, db: Session = Depends(get_db)):
+    """Take a ruling back, returning the matter to open.
+
+    A decision an auditor cannot reverse is one they will hesitate to make, and hesitating
+    over a first pass is the opposite of what this section is for. The hypothesis itself is
+    untouched — what is removed is the auditor's position on it, and the removal is logged,
+    so the file still shows that a view was taken and withdrawn.
+    """
+    c = _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorDecision).where(
+        AuditorDecision.case_id == case_id,
+        AuditorDecision.hypothesis_id == hypothesis_id))
+    if row is not None:
+        db.add(EventLog(case_id=case_id, actor="auditor", action="hypothesis-undecided",
+                        payload={"hypothesis_id": hypothesis_id, "was": row.decision}))
+        db.delete(row)
+        db.commit()
+    return inv_service.state(db, c)
+
+
 class RequestInfoIn(BaseModel):
     note: str = ""
 

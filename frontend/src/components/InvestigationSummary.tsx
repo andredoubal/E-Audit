@@ -15,23 +15,15 @@ const KIND: Record<SummaryCard["kind"], { label: string; cls: string }> = {
   "data-quality": { label: "Records defect", cls: "rec" },
 };
 
-const BAND: Record<string, string> = {
-  Strong: "pri-low",
-  Moderate: "pri-medium",
-  Limited: "pri-medium",
-  Insufficient: "status",
-};
-
 function Card({ c }: { c: SummaryCard }) {
   const k = KIND[c.kind];
   return (
     <article className={"sumcard " + k.cls}>
       <header>
         <span className={"sumkind " + k.cls}>{k.label}</span>
-        <h3>{c.title}</h3>
-        {!!c.amount && <b className="sumamt">{sar(c.amount)}</b>}
+        {!!c.amount && <span className="sumamt">{sar(c.amount)}</span>}
       </header>
-
+      <h3>{c.title}</h3>
       <p className="sumobs">{c.observed}</p>
 
       {c.reading && (
@@ -59,18 +51,16 @@ function Card({ c }: { c: SummaryCard }) {
       )}
 
       <footer>
-        {c.confidence && (
-          <span className={"pill " + (BAND[c.confidence] || "status")}>
-            {c.confidence} confidence
-          </span>
-        )}
         {c.decision ? (
-          <span className="pill pri-low">{c.decision.replace(/-/g, " ")} by you</span>
+          <span className="sub" style={{ color: "var(--brand)" }}>
+            {c.decision === "accepted" ? "Confirmed by you"
+              : c.decision.replace(/-/g, " ") + " by you"}
+          </span>
         ) : (
-          <span className="sub">requires your validation</span>
+          c.confidence && <span className="sub">{c.confidence} confidence</span>
         )}
         {!!c.hypothesis_ids.length && (
-          <span className="sub mono">{c.hypothesis_ids.join(" · ")}</span>
+          <span className="mono">{c.hypothesis_ids.join(" · ")}</span>
         )}
       </footer>
     </article>
@@ -86,34 +76,29 @@ export default function InvestigationSummary({ id, rev }: { id: string; rev?: nu
     getInvestigationSummary(id).then(setD).catch(() => {});
   }, [id, rev]);
 
-  if (!d) {
-    return (
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Investigation summary</h2>
-        </div>
-        <div className="panel-body">
-          <span className="muted">Investigating…</span>
-        </div>
-      </div>
-    );
-  }
+  if (!d) return <p className="muted">Investigating…</p>;
 
   const t = d.totals;
 
   return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Investigation summary</h2>
+    <>
+      <div className="modulehead">
+        <h2 className="display">What the evidence shows</h2>
         <span
-          className="pill status"
+          className="sub"
           title="Agents propose typed tests; a deterministic adjudicator settles them. No model states a figure, and no model reaches a conclusion."
         >
-          ∑ Adjudicated (no AI)
+          {t.observations} observed
+          {!!t.unresolved && ` · ${t.unresolved} not settled`}
+          {!!t.record_defects && ` · ${t.record_defects} records defect`}
+          {!!t.not_supported && ` · ${t.not_supported} tested, not supported`}
         </span>
+        {!!t.at_stake && (
+          <span className="sub modulehead-act num">{sar(t.at_stake)} at stake</span>
+        )}
       </div>
 
-      <div className="panel-body">
+      <div>
         {!d.cards.length ? (
           <p className="detail-note" style={{ margin: 0 }}>
             Nothing was raised against the documents on file. Where a test could not be run the
@@ -122,47 +107,19 @@ export default function InvestigationSummary({ id, rev }: { id: string; rev?: nu
           </p>
         ) : (
           <>
-            <div className="sumbar">
-              <span>
-                <b>{t.observations}</b> observed
-              </span>
-              {!!t.unresolved && (
-                <span>
-                  <b>{t.unresolved}</b> not settled
-                </span>
-              )}
-              {!!t.record_defects && (
-                <span>
-                  <b>{t.record_defects}</b> records defect{t.record_defects === 1 ? "" : "s"}
-                </span>
-              )}
-              {!!t.not_supported && (
-                <span className="muted">
-                  <b>{t.not_supported}</b> tested, not supported
-                </span>
-              )}
-              {!!t.at_stake && (
-                <span className="sumbar-amt">
-                  <b>{sar(t.at_stake)}</b> at stake
-                </span>
-              )}
-            </div>
-
             <div className="sumcards">
               {d.cards.map((c) => (
                 <Card key={c.key} c={c} />
               ))}
             </div>
 
-            <p className="detail-note">
-              Each amount is counted once against the evidence it rests on, so nothing here is
-              the same money twice — but this is <b>not a proposed adjustment</b>. Everything
-              above is an observation for you to validate; what you conclude is yours to write at
-              the foot of this page, and only what you accept reaches the report.
+            <p className="detail-note" style={{ marginTop: 14 }}>
+              Each amount is counted once against the evidence it rests on. Nothing here is a
+              proposed adjustment — only what you confirm below reaches the report.
             </p>
           </>
         )}
       </div>
-    </div>
+    </>
   );
 }

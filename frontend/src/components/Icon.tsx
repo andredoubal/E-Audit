@@ -39,12 +39,40 @@ export function Moon({ size = 17 }: { size?: number }) {
   );
 }
 
-export function Cases({ size = 17 }: { size?: number }) {
+export function Cases({ size = 13 }: { size?: number }) {
+  return (
+    <svg {...BASE} strokeWidth={1.8} width={size} height={size} aria-hidden>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7" />
+    </svg>
+  );
+}
+
+/** The three lines of a standing instruction. */
+export function Lines({ size = 13 }: { size?: number }) {
+  return (
+    <svg {...BASE} strokeWidth={1.8} width={size} height={size} aria-hidden>
+      <line x1="5" y1="7" x2="19" y2="7" /><line x1="5" y1="12" x2="19" y2="12" />
+      <line x1="5" y1="17" x2="13" y2="17" />
+    </svg>
+  );
+}
+
+/** A four-point star — the assistant, everywhere it appears. */
+export function Star({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...BASE} strokeWidth={1.7} width={size} height={size} aria-hidden>
+      <path d="M12 4l1.7 5.3L19 11l-5.3 1.7L12 18l-1.7-5.3L5 11l5.3-1.7z" />
+    </svg>
+  );
+}
+
+/** A table — the ZATCA extract, which is a grid of invoices and nothing else. */
+export function Table({ size = 16 }: { size?: number }) {
   return (
     <svg {...BASE} width={size} height={size} aria-hidden>
-      <rect x="3" y="7" width="18" height="13" rx="2" />
-      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="3" y1="12" x2="21" y2="12" />
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <line x1="4" y1="9.5" x2="20" y2="9.5" /><line x1="9.5" y1="9.5" x2="9.5" y2="20" />
     </svg>
   );
 }
