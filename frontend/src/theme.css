@@ -101,6 +101,16 @@ h2{font-size:17px;margin:0}
 .navsub.active{background:var(--surface);color:var(--brand);font-weight:650}
 .navsub .ic{display:flex;align-items:center;color:var(--ai)}
 .navsub.ai{color:var(--ai)}
+/* A phase the PoC does not cover: shown so the auditor can see where this application
+   starts within the whole audit, and muted and inert so it cannot be mistaken for one of
+   the modules that works. */
+.navsub.out{color:var(--faint);cursor:default;flex-wrap:wrap;row-gap:3px;opacity:.75}
+.navsub.out:hover{background:none;color:var(--faint)}
+/* `flex-basis:100%` puts the badge on its own line; `max-width` keeps it the width of its
+   own words rather than stretching across the item like a second row of navigation. */
+.navsub-scope{flex-basis:100%;max-width:max-content;font-size:9.5px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--faint);border:1px dashed var(--line);border-radius:5px;
+  padding:1px 5px}
 /* The theme toggle lives with the footer, out of the way of the work. */
 .side-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--faint);
   font-size:11.5px;display:flex;align-items:center;gap:10px}

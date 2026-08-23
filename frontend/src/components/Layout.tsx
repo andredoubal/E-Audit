@@ -10,6 +10,14 @@ const MODULES = [
   { to: "/report", label: "Audit Report" },
 ];
 
+/** Where the whole audit starts, and where this application does not.
+ *
+ *  The PoC begins when the taxpayer's documents arrive: the assessment that decided this
+ *  taxpayer was worth auditing, and the request that went out in the auditor's own words,
+ *  both happened before the app saw the case. Naming that phase and leaving it inert is
+ *  the honest way to show it — a link would promise a screen that does not exist. */
+const OUT_OF_SCOPE = "Initial Assessment & Document Request";
+
 type Theme = "light" | "dark";
 
 function useTheme(): [Theme, () => void] {
@@ -53,6 +61,11 @@ function OpenCase({ id }: { id: string }) {
 
       {open && (
         <div className="navgroup-items">
+          <span className="navsub out" aria-disabled="true"
+                title="Outside the scope of this proof of concept">
+            {OUT_OF_SCOPE}
+            <span className="navsub-scope">Out of PoC scope</span>
+          </span>
           {MODULES.map((m) => (
             <NavLink key={m.to} to={`/cases/${id}${m.to}`}
                      className={({ isActive }) => "navsub" + (isActive ? " active" : "")}>

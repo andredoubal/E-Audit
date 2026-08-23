@@ -235,6 +235,15 @@ the case that is open they are what they always were: a case's own places, reach
 it. `Cases` is the only application-wide entry; the group appears when a case is open and goes
 when you leave it, because a module link with no case behind it points at nothing.
 
+**Above the modules sits the phase this PoC does not cover.** *Initial Assessment & Document
+Request* is where a real audit starts — the assessment that decided this taxpayer was worth
+looking at, and the request that went out in the auditor's own words, both before the app saw
+the case. It is rendered as a muted, inert `<span>` carrying an **Out of PoC scope** badge:
+not a link, no route, no screen, no backend. Showing it places the work inside the whole
+process, which a stakeholder asks about immediately; making it clickable would promise a screen
+that does not exist, and leaving it out would imply the audit begins where this application
+does.
+
 There is no horizontal tab bar: the sidebar carries the navigation, and a second row of the same
 three names one line lower is a second place for the active module to be shown — and to be shown
 wrongly. `CaseTabs` survives as the mount point for the standing instructions, which every module

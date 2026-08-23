@@ -604,6 +604,9 @@ stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 <span class="navgroup-name"><b>{e(taxpayer)}</b><small>{e(CASE)}</small></span>
 <span class="navgroup-mark" id="navcase-mark">&#9662;</span></button>
 <div class="navgroup-items" id="navcase-items">
+<span class="navsub out" aria-disabled="true"
+title="Outside the scope of this proof of concept">Initial Assessment &amp; Document Request
+<span class="navsub-scope">Out of PoC scope</span></span>
 <a class="navsub active" data-tab="correspondence">Taxpayer Correspondence</a>
 <a class="navsub" data-tab="investigation">Investigation</a>
 <a class="navsub" data-tab="report">Audit Report</a>
@@ -636,7 +639,9 @@ which have been amended since the English edition they are shown in.</div>
 <b>{e(taxpayer)}</b></div>
 <p class="tabhint">The case is open in the sidebar. Its three modules, the
 <b>case assistant</b> and the <b>case instructions</b> are underneath it &mdash; only
-<b>Cases</b> is application-wide, everything else needs to know which case it is about.</p>
+<b>Cases</b> is application-wide, everything else needs to know which case it is about.
+The greyed <b>Initial Assessment &amp; Document Request</b> above them is where the audit
+starts and this PoC does not: it is shown to place the work, and does nothing.</p>
 {instructions(instr)}
 {panes}
 </div>

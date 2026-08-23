@@ -105,6 +105,16 @@ h2{font-size:17px;margin:0}
 .navsub.active{background:var(--surface);color:var(--brand);font-weight:650}
 .navsub .ic{display:flex;align-items:center;color:var(--ai)}
 .navsub.ai{color:var(--ai)}
+/* A phase the PoC does not cover: shown so the auditor can see where this application
+   starts within the whole audit, and muted and inert so it cannot be mistaken for one of
+   the modules that works. */
+.navsub.out{color:var(--faint);cursor:default;flex-wrap:wrap;row-gap:3px;opacity:.75}
+.navsub.out:hover{background:none;color:var(--faint)}
+/* `flex-basis:100%` puts the badge on its own line; `max-width` keeps it the width of its
+   own words rather than stretching across the item like a second row of navigation. */
+.navsub-scope{flex-basis:100%;max-width:max-content;font-size:9.5px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--faint);border:1px dashed var(--line);border-radius:5px;
+  padding:1px 5px}
 /* The theme toggle lives with the footer, out of the way of the work. */
 .side-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--faint);
   font-size:11.5px;display:flex;align-items:center;gap:10px}
@@ -1048,6 +1058,9 @@ stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 <span class="navgroup-name"><b>Al-Faisaliah Trading Co.</b><small>CASE-2025-0481</small></span>
 <span class="navgroup-mark" id="navcase-mark">&#9662;</span></button>
 <div class="navgroup-items" id="navcase-items">
+<span class="navsub out" aria-disabled="true"
+title="Outside the scope of this proof of concept">Initial Assessment &amp; Document Request
+<span class="navsub-scope">Out of PoC scope</span></span>
 <a class="navsub active" data-tab="correspondence">Taxpayer Correspondence</a>
 <a class="navsub" data-tab="investigation">Investigation</a>
 <a class="navsub" data-tab="report">Audit Report</a>
@@ -1096,7 +1109,9 @@ that is the row that opens.</p></div></div></div>
 <b>Al-Faisaliah Trading Co.</b></div>
 <p class="tabhint">The case is open in the sidebar. Its three modules, the
 <b>case assistant</b> and the <b>case instructions</b> are underneath it &mdash; only
-<b>Cases</b> is application-wide, everything else needs to know which case it is about.</p>
+<b>Cases</b> is application-wide, everything else needs to know which case it is about.
+The greyed <b>Initial Assessment &amp; Document Request</b> above them is where the audit
+starts and this PoC does not: it is shown to place the work, and does nothing.</p>
 
 <button class="instrbar set" id="instr-open">
 <span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><b>Instructions for this case</b>
