@@ -2,7 +2,7 @@
    Palette: navy/teal with a warm orange accent, cream light theme / deep-navy dark theme. */
 :root{
   --brand:#34A0A4; --brand-deep:#0E2547; --brand-tint:rgba(52,160,164,.14); --gold:#FF7F51;
-  --bg:#FAF5EB; --surface:#FFFFFF; --surface-2:rgba(14,37,71,.045);
+  --bg:#EAF0ED; --surface:#FFFFFF; --surface-2:rgba(14,37,71,.045);
   --ink:#0E2547; --muted:#2A4A70; --faint:#9ABACC; --line:rgba(14,37,71,.14);
   --high:#C4453A; --high-bg:rgba(196,69,58,.10); --med:#FF7F51; --med-bg:rgba(255,127,81,.14);
   --low:#00A878; --low-bg:rgba(0,168,120,.14);
@@ -14,8 +14,6 @@
   --sans:'Somar','Somar Light','Cairo',ui-sans-serif,system-ui,"Segoe UI",Roboto,
          "Helvetica Neue",Arial,sans-serif;
   --mono:'Fira Code',ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
-  /* a faint audit/inspection motif used only in the body atmosphere, never behind content */
-  --atmosphere:url('data:image/jpeg;base64,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');
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --brand:#10CFC9; --brand-deep:#009ADE; --brand-tint:rgba(16,207,201,.16); --gold:#FF7F51;
@@ -38,21 +36,10 @@
 *{box-sizing:border-box}
 html,body,#root{height:100%}
 body{margin:0;position:relative;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
-/* atmosphere — a faint accent wash + inspection motif behind the app shell; never behind a
-   panel/card (those keep their own opaque surface), and never intercepts clicks. */
-body::before,body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none}
-body::before{
-  background-image:var(--atmosphere);background-size:cover;background-position:center 30%;
-  opacity:.05;
-}
-body::after{
-  background:
-    radial-gradient(ellipse at 82% 4%, color-mix(in srgb,var(--brand) 16%,transparent) 0%, transparent 55%),
-    radial-gradient(ellipse at 6% 100%, color-mix(in srgb,var(--gold) 10%,transparent) 0%, transparent 60%);
-}
-:root[data-theme="dark"] body::before{opacity:.12}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body::before{opacity:.12}}
-#root{position:relative;z-index:1}
+/* No wash behind the app. A texture and two accent gradients over the whole viewport tinted
+   every white card sitting on them, which is what made a page of clean panels read as muddy.
+   The background is one flat colour; the cards are what carry the contrast. */
+#root{position:relative}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 h1{font-size:26px;letter-spacing:-.02em;margin:2px 0}
@@ -394,15 +381,15 @@ input.letter-input,select.letter-input{min-height:0}
 .sumcard.obs{border-left-color:var(--brand)}
 .sumcard.open{border-left-color:var(--med)}
 .sumcard.rec{border-left-color:var(--faint)}
-.sumcard header{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-.sumcard h3{margin:0;font-size:14.5px;flex:1 1 62%;min-width:150px;line-height:1.35}
+.sumcard header{display:flex;align-items:baseline;gap:10px}
+.sumcard h3{margin:0;font-size:14.5px;flex:1;min-width:0;line-height:1.35}
 .sumkind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:650;
   padding:2px 7px;border-radius:5px;white-space:nowrap}
 .sumkind.obs{background:var(--brand-tint);color:var(--brand-deep)}
 .sumkind.open{background:var(--med-bg);color:var(--med)}
 .sumkind.rec{background:var(--surface-2);color:var(--muted)}
-.sumamt{margin-left:auto;font-size:15px;font-weight:700;
-  font-variant-numeric:tabular-nums;white-space:nowrap}
+.sumamt{flex:none;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;
+  white-space:nowrap}
 .sumobs{margin:0;font-size:13px;line-height:1.55}
 .sumread{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted);
   border-top:1px dashed var(--line);padding-top:9px}
