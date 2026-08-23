@@ -44,6 +44,7 @@ from .correspondence import (  # noqa: F401
 from .reporting import (  # noqa: F401
     ReportFieldEdit,
     LetterDraft,
+    CaseAssessment,
 )
 from .instructions import CaseInstruction  # noqa: F401
 from .reviews import ItemReview  # noqa: F401

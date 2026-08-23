@@ -672,6 +672,67 @@ export interface InvestigationState {
   last_run?: { seq: number; changed_count: number };
 }
 
+/** One matter the investigation found, as the summary states it.
+ *
+ *  A card is one *basis*, not one hypothesis: a listing above the return reads four ways off
+ *  one test over one file, so the excess is stated once and the other readings sit under
+ *  `alternatives`. `observed` is what the engine measured; `reading` is what it would report as
+ *  **if the auditor accepts it** — an observation is not a determination. */
+export interface SummaryCard {
+  key: string;
+  kind: "observation" | "unresolved" | "data-quality";
+  title: string;
+  observed: string;
+  reading: string;
+  alternatives: string[];
+  amount: number;
+  confidence: string;
+  hypothesis_ids: string[];
+  agents: string[];
+  outcome_code: string;
+  decision: string;
+  needs_info: string;
+}
+
+export interface InvestigationSummary {
+  cards: SummaryCard[];
+  totals: {
+    at_stake: number;
+    observations: number;
+    unresolved: number;
+    record_defects: number;
+    not_supported: number;
+    decided: number;
+  };
+  runs: number;
+}
+
+export const getInvestigationSummary = (id: string) =>
+  getJSON<InvestigationSummary>(`/cases/${id}/investigation/summary`);
+
+/** The auditor's assessment of the investigation. `text` is theirs once they write; until then
+ *  it is `draft`, which the engine produced from what it settled. */
+export interface AssessmentView {
+  text: string;
+  draft: string;
+  original: string;
+  edited: boolean;
+  written_by: string;
+  updated_at: string;
+  source: string;
+  verified: boolean;
+  facts: string;
+  revised?: boolean;
+}
+
+export const getAssessment = (id: string) => getJSON<AssessmentView>(`/cases/${id}/assessment`);
+
+export const saveAssessment = (id: string, text: string) =>
+  putJSON<AssessmentView>(`/cases/${id}/assessment`, { text });
+
+export const reviseAssessment = (id: string, instruction: string) =>
+  postJSON<AssessmentView>(`/cases/${id}/assessment/revise`, { instruction });
+
 export interface AuditorFindingView {
   seq: number;
   statement: string;

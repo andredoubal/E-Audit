@@ -206,7 +206,91 @@ whatever the next question turns out to be.</p></div></div>
 """
 
 
-def investigation(inv: dict, z: dict) -> str:
+def investigation(inv: dict, z: dict, summary: dict, asmt: dict) -> str:
+    """The module in the order the work happens.
+
+    Optional ZATCA data, then what the investigation found, then the evidence behind it, then
+    the auditor's own assessment. The evidence layer is everything that used to be at the top:
+    it is not less important, it is what the summary is answerable to, and it is one click away
+    rather than the first thing between the auditor and the answer.
+    """
+    ds = z.get("dataset") or {}
+    zhead = (f'<b>{e(ds["filename"])}</b> <span class="sub">{z.get("zatca_count", 0)} invoices'
+             f' · {z.get("matched_count", 0)} matched against the listing</span>'
+             if ds else '<span class="sub zsrc-none">None loaded — the investigation runs on '
+                        "the taxpayer's documents alone</span>")
+    zmeta = (f'<div class="zsrc-meta"><span><span class="k">File</span>{e(ds["filename"])}</span>'
+             f'<span><span class="k">Invoices</span>{ds.get("row_count", 0)}</span>'
+             f'<span><span class="k">Columns</span>{len(ds.get("columns", []))}</span>'
+             f'<span><span class="k">Loaded</span>{e(ds.get("uploaded_at", "")[:10])}</span></div>'
+             if ds else "")
+    zsrc = f"""
+<section class="zsrc" id="zsrc"><button class="zsrc-head" id="zsrc-head">
+<b>ZATCA invoice records</b><span class="zsrc-opt">Optional</span>
+<span class="zsrc-file">{zhead}</span><span class="zsrc-mark" id="zsrc-mark">&#9656;</span>
+</button><div class="zsrc-body" id="zsrc-body" hidden>
+<div class="dropzone"><b>Drop a file here to replace it</b>
+<span class="sub">.xlsx, .xlsm, .csv &mdash; one row per invoice, as ZATCA holds it</span></div>
+{zmeta}
+<p class="detail-note" style="margin-bottom:0">The taxpayer&rsquo;s own documents come from
+<b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
+internal invoice extract, which the listing is matched against.</p></div></section>"""
+
+    # ---------------------------------------------------------------- the summary cards
+    KIND = {"observation": ("Observed", "obs"),
+            "unresolved": ("Not settled", "open"),
+            "data-quality": ("Records defect", "rec")}
+    cards = []
+    for c in summary["cards"]:
+        label, cls = KIND[c["kind"]]
+        alt = ""
+        if c["alternatives"]:
+            items = "".join(f"<li>{e(a)}</li>" for a in c["alternatives"])
+            alt = (f'<details class="sumalt"><summary>The same evidence also reads '
+                   f'{len(c["alternatives"])} other way'
+                   f'{"" if len(c["alternatives"]) == 1 else "s"}</summary>'
+                   f"<ul>{items}</ul><p class=\"sub\">One matter, one amount. These are readings "
+                   "of the same evidence, not separate money.</p></details>")
+        read = ""
+        if c["reading"]:
+            k = "Why it matters" if c["kind"] == "data-quality" else "What it may mean"
+            read = f'<p class="sumread"><span class="k">{k}</span>{e(c["reading"])}</p>'
+        ruled = (f'<span class="pill pri-low">{e(c["decision"].replace("-", " "))} by you</span>'
+                 if c["decision"] else '<span class="sub">requires your validation</span>')
+        band = (f'<span class="pill pri-medium">{e(c["confidence"])} confidence</span>'
+                if c["confidence"] else "")
+        ids = (f'<span class="sub mono">{e(" · ".join(c["hypothesis_ids"]))}</span>'
+               if c["hypothesis_ids"] else "")
+        cards.append(f"""
+<article class="sumcard {cls}"><header><span class="sumkind {cls}">{label}</span>
+<h3>{e(c["title"])}</h3>
+{f'<b class="sumamt">{sar(c["amount"])}</b>' if c["amount"] else ""}</header>
+<p class="sumobs">{e(c["observed"])}</p>{read}{alt}
+<footer>{band}{ruled}{ids}</footer></article>""")
+
+    t = summary["totals"]
+    bar = [f"<span><b>{t['observations']}</b> observed</span>"]
+    if t["unresolved"]:
+        bar.append(f"<span><b>{t['unresolved']}</b> not settled</span>")
+    if t["record_defects"]:
+        bar.append(f"<span><b>{t['record_defects']}</b> records defect"
+                   f"{'' if t['record_defects'] == 1 else 's'}</span>")
+    if t["not_supported"]:
+        bar.append(f'<span class="muted"><b>{t["not_supported"]}</b> tested, not supported</span>')
+    if t["at_stake"]:
+        bar.append(f'<span class="sumbar-amt"><b>{sar(t["at_stake"])}</b> at stake</span>')
+
+    summary_panel = f"""
+<div class="panel"><div class="panel-head"><h2>Investigation summary</h2>
+<span class="pill status">&#8721; Adjudicated (no AI)</span></div>
+<div class="panel-body"><div class="sumbar">{"".join(bar)}</div>
+<div class="sumcards">{"".join(cards)}</div>
+<p class="detail-note">Each amount is counted once against the evidence it rests on, so nothing
+here is the same money twice &mdash; but this is <b>not a proposed adjustment</b>. Everything
+above is an observation for you to validate; what you conclude is yours to write at the foot of
+this page, and only what you accept reaches the report.</p></div></div>"""
+
+    # ------------------------------------------------------ the evidence, one click behind
     cats = "".join(
         f'<div class="statechip {"pri-high" if c["blocking"] else "pri-medium"}">'
         f'<b>{c["count"]}</b><span>{e(c["category"])}'
@@ -218,20 +302,21 @@ def investigation(inv: dict, z: dict) -> str:
         f'{e(m["code"])}</span><div><p>{e(m["detail"])}</p>'
         f'<small class="mono">{e(m["citation"])}</small></div></div>'
         for m in z.get("mismatches", []))
-
+    # With no dataset there is one side and no comparison, so the panel is not rendered at all
+    # rather than reporting a reconciliation that was never run.
     zatca = f"""
 <div class="panel"><div class="panel-head"><div class="ai-h">
 <span class="chip-det">Deterministic</span><h2>ZATCA's own invoice records</h2></div>
-<span class="muted">{z.get("zatca_count", 0)} invoices · {e((z.get("dataset") or {}).get("filename", ""))}</span>
+<span class="muted">{z.get("zatca_count", 0)} invoices · {e(ds.get("filename", ""))}</span>
 </div><div class="panel-body">
 <div class="statebar"><div class="statechip pri-low"><b>{z.get("matched_count", 0)}</b>
 <span>matched</span></div>{cats}</div>
 <p class="detail-note" style="margin-top:0">{z.get("listing_count", 0)} rows in
 <b>{e(z.get("listing_name", ""))}</b> against {z.get("zatca_count", 0)} in
 <b>{e(z.get("zatca_name", ""))}</b>. Amounts are read per rule, never added across them.</p>
-<div class="assesslist">{mismatches}</div></div></div>"""
+<div class="assesslist">{mismatches}</div></div></div>""" if ds and z.get("comparable") else ""
 
-    cards = []
+    hyps = []
     for h in inv["hypotheses"]:
         c = h.get("regulatory") or {}
         cite = ""
@@ -254,7 +339,7 @@ accordingly, {e(c['consequence'])}.</p>{warn}
 the official version.</span></details></div>"""
 
         band = h["confidence"]["band"]
-        cards.append(f"""
+        hyps.append(f"""
 <div class="hyp"><div class="hyp-side"><code>{e(h['hypothesis_id'])}</code>
 <span class="pill status">{e(h['reason_code'])}</span></div>
 <div class="hyp-main"><div class="hyp-agent">{e(h['agent']).upper()}</div>
@@ -262,27 +347,72 @@ the official version.</span></details></div>"""
 <div class="hyp-why"><b>Why raised</b> {e(h['why'])}</div>
 <div class="verdict verdict-{e(h['status'])}"><b>{e(h['status'].replace('-', ' '))}</b>
 {" — " + e(h['explanation']) if h['explanation'] else ""}</div>
-{cite}
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+{cite}</div>
 <div class="hyp-right"><span class="pill {'pri-low' if h['status'] == 'supported' else 'pri-medium'}">
 {e(h['status'])}</span><span class="pill pri-medium">{e(band)} confidence</span>
 <b>{sar(h['amount']) if h['amount'] else ''}</b></div></div>""")
 
-    return f"""
-<header class="page-head"><div><h1>Investigation</h1>
-<p class="sub">{e(CASE)} · what the evidence shows</p></div>
-<div class="chips"><span class="pill">{inv['counts']['total']} hypotheses</span>
-<span class="pill pri-medium">{inv['counts']['total'] - inv['counts']['decided']} undecided</span>
-</div></header>
-{zatca}
+    # Collapsed by default here as in the application — it is UI state, so a file with no
+    # backend can carry it honestly.
+    detail = f"""
+<div class="collapse" id="inv-detail"><button class="collapse-head" id="inv-detail-head">
+<span class="collapse-mark" id="inv-detail-mark">&#9656;</span>
+<b>Detailed investigation &amp; evidence</b>
+<span class="sub">every hypothesis, why it was raised, the figures behind it, the law it rests
+on, and the source records</span><span class="collapse-action">Open</span></button>
+<div class="collapse-body" id="inv-detail-body" hidden>{zatca}
 <div class="panel"><div class="panel-head"><div class="ai-h">
 <span class="chip-det">Agents</span><h2>Investigation</h2></div>
-<span class="pill status">∑ Adjudicated (no AI)</span></div>
-<div class="panel-body">{"".join(cards)}
+<span class="pill status">&#8721; Adjudicated (no AI)</span></div>
+<div class="panel-body">{"".join(hyps)}
 <p class="detail-note">Every verdict above was settled by the engine against the case's own
 figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
+</div></div></div></div>"""
+
+    # ---------------------------------------------------------------- the auditor's own
+    matters = "".join(
+        f"""<div class="matter{" ruled" if c["decision"] else ""}">
+<div class="matter-what"><b>{e(c["title"])}</b>
+{f'<span class="matter-amt">{sar(c["amount"])}</span>' if c["amount"] else ""}</div>
+<div class="matter-act">"""
+        + (f'<span class="pill pri-low">{e(c["decision"].replace("-", " "))}</span>'
+           if c["decision"]
+           else '<button class="btn-ghost">Confirm</button>'
+                '<button class="btn-ghost">Dismiss</button>'
+                '<button class="btn-ghost">Ask the taxpayer</button>')
+        + "</div></div>"
+        for c in summary["cards"] if c["hypothesis_ids"])
+    confirmed = len([c for c in summary["cards"] if c["decision"] == "accepted"])
+    steers = "".join(f'<button class="btn-ghost">{e(s)}</button>' for s in (
+        "Treat the largest difference as a timing difference and say why.",
+        "Rewrite this using only what I have confirmed.",
+        "Drop the matters where the evidence is insufficient.",
+        "Say it in plainer language for a taxpayer with no adviser."))
+
+    assess = f"""
+<div class="panel assess"><div class="panel-head"><h2>Your assessment</h2>
+<span class="pill {"pri-low" if confirmed else "status"}">
+{f"{confirmed} confirmed — carried into the report" if confirmed else "nothing confirmed yet"}
+</span></div><div class="panel-body">
+<div class="matters"><div class="matters-head">Which of these you are taking forward. Only what
+you confirm reaches the audit report and the letter to the taxpayer.</div>{matters}</div>
+<div class="assess-doc"><div class="assess-doc-head"><b>The assessment</b>
+<span class="sub">drafted from the investigation &mdash; yours to edit</span></div>
+<pre class="assess-text" id="assess-text">{e(asmt.get("text", ""))}</pre>
+<div class="row-actions"><button class="btn-ghost" id="assess-edit">Edit the assessment</button>
+</div></div>
+<div class="assess-ai"><span class="ai-chip">{SPARK}</span>
+<b>Or tell the assistant what to change</b>
+<div class="assess-steers">{steers}</div>
+<p class="detail-note" style="margin-bottom:0">It rewrites the assessment against the same
+figures the engine computed, checked the same way &mdash; an instruction can change how
+something is put, and cannot introduce a number. The assessment stays yours.</p></div>
 </div></div>"""
+
+    return f"""{zsrc}
+{summary_panel}
+{detail}
+{assess}"""
 
 
 def report(rep: dict, inv: dict, verdict: dict) -> str:
@@ -472,6 +602,8 @@ def build() -> str:
     threads = _get(f"/cases/{CASE}/threads")
     inv = _get(f"/cases/{CASE}/investigation")
     z = _get(f"/cases/{CASE}/zatca")
+    summary = _get(f"/cases/{CASE}/investigation/summary")
+    asmt = _get(f"/cases/{CASE}/assessment")
     rep = _get(f"/cases/{CASE}/audit-report")
     mails = _get(f"/cases/{CASE}/emails").get("emails") or []
     verdict = next((m for m in mails if m["kind"] == "verdict"), {})
@@ -514,7 +646,7 @@ def build() -> str:
     modules = {
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
-        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z)),
+        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt)),
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     panes = "".join(
@@ -535,9 +667,10 @@ body{{margin:0;padding:0 0 60px}}
 .side{{position:sticky;top:0;height:100vh}}
 .demo-note{{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}}
-/* The group's items are conditionally rendered in React; here they are toggled, and
-   `.navgroup-items` sets `display:flex`, which beats the `hidden` attribute on its own. */
+/* These are conditionally rendered in React; here they are toggled, and their `display:flex`
+   beats the `hidden` attribute on its own. */
 .navgroup-open:not(.on) .navgroup-items{{display:none}}
+[hidden]{{display:none!important}}
 .panehead{{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}}
 .panehead h1{{margin:0;font-size:20px}}
 .panehead p{{margin:3px 0 0;font-size:12.5px;color:var(--muted)}}
@@ -623,8 +756,8 @@ title="Outside the scope of this proof of concept">Initial Assessment &amp; Docu
 <div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
 citation and gap on this page is the real output of the engine for the seeded demo case
 {e(CASE)}, captured when this file was generated. <b>What works here:</b> opening the case,
-moving between its modules, writing the case instructions, and editing the report fields and
-the verdict letter — those are the auditor's own words, so a file with no backend can do the
+moving between its modules, opening the evidence behind a finding, writing the case
+instructions, and editing the assessment, the report fields and the verdict letter — those are the auditor's own words, so a file with no backend can do the
 whole interaction. <b>What does not:</b> uploading, re-running the investigation and asking the
 assistant, which all need the engine; they say so when you click them rather than going quiet.
 Nothing you change here is saved anywhere. The regulations corpus behind the citations holds
@@ -724,6 +857,58 @@ document.getElementById('nav-instr').addEventListener('click', () => {{
   instrText.focus();
   instr.scrollIntoView({{block: 'center'}});
 }});
+
+/* --------------------------------------------------- the two sections that open
+   Collapsed by default, exactly as in the application: the summary is what the auditor came
+   for, and the evidence behind it is one click away rather than in front of it. */
+function toggle(root, body, mark, action) {{
+  const el = document.getElementById(root);
+  const b = document.getElementById(body);
+  const m = document.getElementById(mark);
+  el.querySelector('.' + (action || 'zsrc') + '-head').addEventListener('click', () => {{
+    const on = b.hidden;
+    b.hidden = !on;
+    el.classList.toggle('on', on);
+    m.innerHTML = on ? '&#9662;' : '&#9656;';
+    const a = el.querySelector('.collapse-action');
+    if (a) a.textContent = on ? 'Close' : 'Open';
+  }});
+}}
+toggle('zsrc', 'zsrc-body', 'zsrc-mark', 'zsrc');
+toggle('inv-detail', 'inv-detail-body', 'inv-detail-mark', 'collapse');
+
+/* The assessment is the auditor's own words, so this file can do the whole interaction. */
+const assessText = document.getElementById('assess-text');
+document.getElementById('assess-edit').addEventListener('click', () => {{
+  if (assessText.dataset.editing) return;
+  assessText.dataset.editing = '1';
+  const ta = document.createElement('textarea');
+  ta.className = 'assess-input';
+  ta.rows = 16;
+  ta.value = assessText.textContent;
+  const bar = document.createElement('div');
+  bar.className = 'row-actions';
+  const save = document.createElement('button');
+  save.className = 'btn'; save.textContent = 'Save assessment';
+  const cancel = document.createElement('button');
+  cancel.className = 'linklike'; cancel.textContent = 'cancel';
+  bar.append(save, cancel);
+  assessText.hidden = true;
+  assessText.after(ta, bar);
+  ta.focus();
+  const done = () => {{ ta.remove(); bar.remove(); assessText.hidden = false;
+                        delete assessText.dataset.editing; }};
+  cancel.addEventListener('click', done);
+  save.addEventListener('click', () => {{
+    if (ta.value.trim()) assessText.textContent = ta.value.trim();
+    done();
+    toast('Assessment saved. In the application it is kept beside the engine\u2019s draft.');
+  }});
+}});
+document.querySelectorAll('.assess-steers .btn-ghost, .matter-act .btn-ghost').forEach(
+  btn => btn.addEventListener('click', () => toast(
+    'That needs the engine \u2014 in the application this rewrites the assessment, or records '
+    + 'your ruling on that matter.')));
 
 /* ------------------------------------------------------------ editing, for real
    The report's fields and the outbound letter are edited in place here exactly as in the

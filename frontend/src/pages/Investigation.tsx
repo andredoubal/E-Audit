@@ -8,7 +8,9 @@ import ZatcaPanel from "../components/ZatcaPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
-import SourceData from "../components/SourceData";
+import ZatcaSource from "../components/ZatcaSource";
+import InvestigationSummary from "../components/InvestigationSummary";
+import AuditorAssessment from "../components/AuditorAssessment";
 import Collapsible from "../components/Collapsible";
 import CaseAssistant from "../components/CaseAssistant";
 import CaseContextPanel from "../components/CaseContextPanel";
@@ -432,18 +434,20 @@ export default function Investigation() {
 
       <CaseTabs id={id!} />
 
-      {/* 1 · what the investigation runs on. */}
-      <SourceData id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
+      {/* The page answers four questions, in this order: what else can I give it, what did it
+          find, what is that resting on, and what do I conclude. Everything the taxpayer sent
+          is already on the case from Taxpayer Correspondence and is read from there — the one
+          thing uploaded here is the Authority's own extract, which answers to no request. */}
+      <ZatcaSource id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
 
-      {/* 2 · what it found, and 3 · how each one was reached. */}
+      <InvestigationSummary id={id!} rev={rev} />
+
+      <Collapsible
+        title="Detailed investigation & evidence"
+        note="every hypothesis, why it was raised, the figures behind it, the law it rests on, and the source records"
+      >
       <InvestigationPanel id={id} rev={rev} />
       <FindingsPanel id={id} rev={rev} />
-
-      {/* 4 · the whole working-out, behind one heading. */}
-      <Collapsible
-        title="The working-out"
-        note="the figures, the funnel, the comparison and the evidence behind every finding above"
-      >
       <div className="tiles">
         <div className="tile">
           <div className="tn">{d.counted_lines}</div>
@@ -545,7 +549,7 @@ export default function Investigation() {
         </div>
       )}
 
-      <ZatcaPanel id={id!} onChanged={() => setRev((r) => r + 1)} />
+      <ZatcaPanel id={id!} rev={rev} />
       <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
       <NextBestAction id={id} rev={rev} />
       <TaxpayerResponsePanel
@@ -557,6 +561,8 @@ export default function Investigation() {
       <CaseContextPanel id={id!} />
       <TaxpayerBrief id={id} />
       </Collapsible>
+
+      <AuditorAssessment id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
 
       <CaseAssistant id={id!} />
 

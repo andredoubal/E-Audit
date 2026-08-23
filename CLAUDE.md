@@ -192,6 +192,8 @@ backend/app/
   scope.py             # what this PoC reconciles, and what it deliberately leaves out
   priority.py          # composite case prioritization (exposure/deadline/history/quick-win)
   agents/              # contracts, adjudicator, orchestrator (rounds), correspondence
+                       #   summary.py         the investigation as a few cards, one per basis
+                       #   assessment.py      the auditor's own conclusion, drafted and owned
                        #   roster.py          the four agents
                        #   document_tests.py  how each is settled over the rows
                        #   findings.py        confirmed -> the Authority's wording
@@ -212,9 +214,9 @@ backend/app/
   seed/                # scenarios.py + dossier_seed.py + corpus.py + casework_seed.py
 frontend/src/
   pages/               # Cases, Correspondence, Investigation, Report, Dossier, Rules
-  components/          # sidebar + open-case group, source uploads, hypothesis summary
-                       # and its derivation, findings, approve/challenge, funnel,
-                       # calculations, step emails, editable report fields
+  components/          # sidebar + open-case group, optional ZATCA upload, the summary
+                       # cards, the auditor's assessment, hypothesis derivations, findings,
+                       # approve/challenge, funnel, calculations, step emails, report fields
   api.ts, ai/          # typed API + SSE streaming helpers + the assistant event bus
 docs/                  # VAT Mistakes Rulebook (66 rules) + rendered page
 portal.html            # standalone no-backend build of the workbench (see below)
@@ -251,24 +253,82 @@ shares. `Dossier` and `Rulebook` stay routable at their own paths but are off th
 first is a dormant planning-era screen, the second is reference material an auditor reads rather
 than a place the work happens.
 
-### Investigation reads in the order the work happens
+### Investigation: summary first, evidence on demand
 
-`pages/Investigation.tsx`. The page opens with **Source data** (`SourceData.tsx`) — the two
-uploads the whole module is computed from: the taxpayer's invoice listing, and, optionally,
-ZATCA's own invoice records. It used to be several screens down, under panels that were empty
-until it had been done, which read as a broken page rather than an unstarted one.
+`pages/Investigation.tsx` answers four questions in order, and refuses to answer them all at once.
 
-Then the **summary**: every hypothesis as one line — id, claim, verdict, confidence band, amount
-at stake, and the auditor's decision if there is one. Clicking a line opens **how it was
-derived**: the observation that triggered it, the adjudicator's explanation, the confidence
-signals that fired and did not, the article it rests on, what a re-run changed, and the decision
-controls. The derivation is the argument an auditor has to defend, so it is one click from the
-claim rather than the thing you scroll past to reach the claim.
+**1 · What else can I give it?** `ZatcaSource.tsx` — one compact row, collapsed, marked
+**Optional**. It is the *only* upload in this module, because everything the taxpayer sent
+already arrived on an enquiry in Taxpayer Correspondence and is read from there. A second
+dropzone for the taxpayer's listing meant the same file could be filed twice against two
+different rounds, and it implied the investigation was waiting for something it already had.
+ZATCA's own extract is internal, answers to no request, and so has nowhere else to live.
 
-Everything else — the funnel, the three-way comparison, the evidence panels, the ZATCA
-reconciliation, the auditor's own arithmetic, the taxpayer response and the case context — sits
-under one **collapsible** (`Collapsible.tsx`), closed by default. None of it is removed; it is
-the working-out behind the summary, and it is available exactly when it is wanted.
+**2 · What did it find?** `InvestigationSummary.tsx` over `agents/summary.py` — a handful of
+cards, not twelve hypotheses. Two rules make a card:
+
+- **One card per basis.** A listing above the return reads four ways off one test over one
+  file. Four cards would state the same money four times, which is the defect `exposure()`
+  exists to stop; so the excess is stated once, the alternative readings are named under a
+  disclosure, and the amount is the basis's, never a sum across readings. The headline reading
+  is the one that carries an adjustment, for the same reason `exposure()` excludes
+  documentation risk on evidence already producing one.
+- **An observation is not a determination.** `observed` is the adjudicator's own sentence about
+  what was measured; `reading` is the vocabulary statement it *would* report as **if the auditor
+  accepts it**. The badge says which of three kinds it is — Observed, Not settled, Records
+  defect — and the colour says *kind*, not severity, because an observation styled as an alert
+  is the exact conflation the split exists to prevent. Nothing here is phrased at the call site:
+  the title is `Outcome.short`, the reading is `Outcome.statement`, the observation is the
+  engine's `explanation`.
+
+Refuted hypotheses are counted in the bar and carry no card — they are part of the file and are
+not a matter to put to anyone. Records defects from the ZATCA matcher (unusable identifiers,
+repeated numbers, numbering gaps) appear only when a dataset was actually compared, claim no
+amount, and belong to no agent.
+
+**3 · What is it resting on?** Everything that used to be at the top now sits under
+**Detailed investigation & evidence** (`Collapsible.tsx`), closed by default: every hypothesis
+with why it was raised and how it was settled, the funnel, the three-way comparison, the
+evidence panels, the citations, the auditor's own arithmetic, the taxpayer response. The ZATCA
+reconciliation lives here too and opens on its rollup — *19 matched · 3 on one side only · 1
+figures disagree* — with the individual invoices behind a click on a category. With no dataset
+loaded `ZatcaPanel` renders **nothing at all**, rather than a panel reporting a comparison that
+was never run.
+
+**4 · What do I conclude?** See below. The order is deliberate: the evidence is not less
+important than the summary, it is what the summary is answerable to — and putting it first put
+it between the auditor and the answer.
+
+### The assessment is one document, not a decision per hypothesis
+
+`agents/assessment.py` + `AuditorAssessment.tsx`. Every hypothesis used to carry **Record your
+decision** and **Request information from the taxpayer**. Twelve of each said the tool expected a
+separate ruling on every piece of evidence, which is not how a conclusion is reached: an auditor
+reads the whole investigation and takes *one* position.
+
+So there is one section at the foot of the module, and it does two things.
+
+**It lists the matters, with three words each.** Confirm · Dismiss · Ask the taxpayer, once per
+matter rather than five options on every card. The consequence is unchanged and is the point:
+only what the auditor confirms reaches the audit report and the verdict letter. **Ask the
+taxpayer is the loop, not a third verdict** — it still calls `threads.open_for_hypothesis()`,
+parking the matter and opening an enquiry with a drafted request, because deleting the only
+entry point to that loop would have quietly deleted the loop.
+
+**It carries the assessment itself**, drafted from what the engine settled and then owned by the
+person who signs it. `CaseAssessment` keeps `original` beside the text, so a rewrite is visible
+and reversible, and an empty save reverts to the engine's draft — a blank assessment is not a
+position. The draft goes through `verify_correspondence` against an engine-authored facts block:
+every numeric literal must already appear there, so Claude may repeat a figure it was handed and
+may not introduce one. With no credentials the deterministic draft is complete prose that says
+what was observed, what is open, what is confirmed, and that nothing is concluded until the
+auditor confirms it.
+
+The assistant gains one action, `revise_assessment`: the auditor says *"treat this as a timing
+difference"* or *"rewrite using only what I have confirmed"*, and the rewrite runs against the
+same facts block and the same verifier as the first draft. An instruction can change how
+something is put; it cannot reach a figure. With no model reachable it says so and changes
+nothing, rather than storing the text unchanged and reporting a revision that never happened.
 
 ### Approve and Challenge, on what the app concluded
 

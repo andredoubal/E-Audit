@@ -39,6 +39,7 @@ from .prompts import (
     LETTER_SYSTEM, LETTER_INSTR, build_letter_context, fence_letter,
     DRAFT_LETTER_SYSTEM, DRAFT_REQUEST_INSTR, DRAFT_FOLLOWUP_INSTR,
     DRAFT_VERDICT_INSTR, fence_facts,
+    ASSESSMENT_SYSTEM, ASSESSMENT_INSTR, assessment_revision,
     CALC_SYSTEM, CALC_INSTR, build_calc_context, fence_calc,
 )
 from .verify import (
@@ -332,6 +333,56 @@ class LLMService:
         v = verify_correspondence(raw, facts)
         if not v["ok"]:
             corr = ("Draft the letter now. Your earlier draft was REJECTED for: "
+                    + "; ".join(v["violations"])
+                    + ". Rewrite using ONLY figures that appear verbatim in the FACTS block, and "
+                      "no scale or comparison words.")
+            raw2, err2 = _write(corr)
+            if not err2 and verify_correspondence(raw2, facts)["ok"]:
+                return {"text": raw2.strip(), "source": "claude", "verified": True,
+                        "mode": "live", "violations": []}
+            return {"text": fallback(), "source": "blocked-unverified", "verified": False,
+                    "mode": "fallback", "violations": v["violations"]}
+        return {"text": raw.strip(), "source": "claude", "verified": True,
+                "mode": "live", "violations": []}
+
+    def draft_assessment(self, *, facts: str, fallback, current: str = "",
+                         instruction: str = "") -> dict:
+        """Draft — or revise — the auditor's assessment of the investigation.
+
+        Same guard as an outbound letter, for the same reason: the assessment quotes what the
+        investigation established rather than reconciliation scalars, so the placeholder model
+        does not fit and `verify_correspondence` enforces the rule in substance. Every numeric
+        literal must already be in the FACTS block.
+
+        `instruction` is the auditor's own steer on a rewrite. It changes the ask and nothing
+        else — the same system rules, the same facts, the same verifier — so an instruction that
+        asks for a figure produces a rejected draft, never a new number.
+        """
+        enabled, reason = availability()
+        if not enabled:
+            return {"text": fallback(), "source": _src(reason), "verified": True,
+                    "mode": "fallback", "violations": []}
+
+        task = assessment_revision(current, instruction) if instruction else ASSESSMENT_INSTR
+
+        def _write(ask: str) -> tuple[str, str | None]:
+            return provider.stream_text(
+                system_blocks=[{"type": "text", "text": ASSESSMENT_SYSTEM,
+                                "cache_control": {"type": "ephemeral"}}],
+                user_content=_with_steer([
+                    {"type": "text", "text": fence_facts(facts)},
+                    {"type": "text", "text": task},
+                ], ask),
+                max_tokens=1400,
+            )
+
+        raw, err = _write("Write the assessment now.")
+        if err:
+            return {"text": fallback(), "source": err, "verified": False,
+                    "mode": "fallback", "violations": [err]}
+        v = verify_correspondence(raw, facts)
+        if not v["ok"]:
+            corr = ("Write the assessment now. Your earlier draft was REJECTED for: "
                     + "; ".join(v["violations"])
                     + ". Rewrite using ONLY figures that appear verbatim in the FACTS block, and "
                       "no scale or comparison words.")

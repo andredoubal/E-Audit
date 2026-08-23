@@ -361,16 +361,90 @@ input.letter-input,select.letter-input{min-height:0}
 .collapse-body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:18px}
 .collapse-body>.panel{box-shadow:none}
 
-/* ---- the spreadsheets the investigation runs on --------------------------------- */
-.sourcegrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:900px){.sourcegrid{grid-template-columns:1fr}}
-.srcslot-head{display:flex;flex-direction:column;gap:2px;margin-bottom:9px}
-.srcslot-head b{font-size:13.5px}
-.srcslot-head .sub{font-size:12px}
-.srcslot .dropzone{min-height:96px}
-.srcslot .doclist{margin-top:11px}
-.srcslot .docrow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.srcslot .docrow .linklike{align-self:flex-start;font-size:11.5px}
+/* ---- the one optional file uploaded inside Investigation ------------------------ */
+.zsrc{border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.zsrc.on{background:var(--surface);box-shadow:var(--shadow)}
+.zsrc-head{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:12px 18px;color:var(--ink)}
+.zsrc-head>b{font-size:13.5px;white-space:nowrap}
+.zsrc-opt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--surface)}
+.zsrc-file{flex:1;min-width:0;display:flex;align-items:baseline;gap:9px}
+.zsrc-file b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zsrc-none{flex:1;min-width:0;font-size:12px}
+.zsrc-mark{color:var(--faint);font-size:12px}
+.zsrc-body{padding:0 18px 16px;display:flex;flex-direction:column;gap:12px}
+.zsrc-body .dropzone{min-height:88px}
+.zsrc-meta{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;font-size:12.5px}
+.zsrc-meta .k{display:block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint)}
+
+/* ---- the investigation summary: a few cards, not every hypothesis --------------- */
+.sumbar{display:flex;flex-wrap:wrap;gap:7px 20px;align-items:baseline;font-size:12.5px;
+  color:var(--muted);padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.sumbar b{color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
+.sumbar-amt{margin-left:auto;font-variant-numeric:tabular-nums}
+.sumbar-amt b{color:var(--high)}
+.sumcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.sumcard{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
+  padding:14px 16px;background:var(--surface);display:flex;flex-direction:column;gap:9px}
+/* The stripe and the badge say what KIND of thing this is, not how bad it is. An observation
+   coloured like an alert would be the exact conflation this summary exists to avoid — the
+   amount beside it is what carries the weight. */
+.sumcard.obs{border-left-color:var(--brand)}
+.sumcard.open{border-left-color:var(--med)}
+.sumcard.rec{border-left-color:var(--faint)}
+.sumcard header{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.sumcard h3{margin:0;font-size:14.5px;flex:1 1 62%;min-width:150px;line-height:1.35}
+.sumkind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:650;
+  padding:2px 7px;border-radius:5px;white-space:nowrap}
+.sumkind.obs{background:var(--brand-tint);color:var(--brand-deep)}
+.sumkind.open{background:var(--med-bg);color:var(--med)}
+.sumkind.rec{background:var(--surface-2);color:var(--muted)}
+.sumamt{margin-left:auto;font-size:15px;font-weight:700;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.sumobs{margin:0;font-size:13px;line-height:1.55}
+.sumread{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted);
+  border-top:1px dashed var(--line);padding-top:9px}
+.sumread .k{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:2px}
+.sumalt summary{font-size:12px;color:var(--brand);cursor:pointer}
+.sumalt ul{margin:7px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.sumalt li{font-size:12.5px;line-height:1.5;color:var(--muted)}
+.sumalt .sub{margin:7px 0 0;font-size:11.5px}
+.sumcard footer{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:auto;
+  padding-top:4px}
+.sumcard footer .sub{font-size:11.5px}
+
+/* ---- the auditor's assessment, once, at the end --------------------------------- */
+.assess .panel-body{display:flex;flex-direction:column;gap:18px}
+.matters{border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.matters-head{padding:10px 14px;background:var(--surface-2);font-size:12.5px;color:var(--muted);
+  border-bottom:1px solid var(--line);line-height:1.5}
+.matter{display:flex;align-items:center;gap:14px;padding:11px 14px;
+  border-bottom:1px solid var(--line)}
+.matter:last-child{border-bottom:none}
+.matter.ruled{background:var(--surface-2)}
+.matter-what{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.matter-what b{font-size:13.5px}
+.matter-amt{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--muted)}
+.matter-act{display:flex;align-items:center;gap:7px;flex:none}
+.matter-act .btn-ghost{font-size:12px;padding:5px 11px}
+.assess-doc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.assess-doc-head b{font-size:13.5px}
+.assess-doc-head .sub{flex:1;min-width:0;font-size:12px}
+.assess-text{margin:0;padding:15px 17px;border:1px solid var(--line);border-radius:11px;
+  background:var(--surface-2);font:inherit;font-size:13px;line-height:1.65;
+  white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
+.assess-input{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid var(--line);
+  border-radius:11px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;
+  line-height:1.65;resize:vertical}
+.assess-input:focus{outline:none;border-color:var(--brand)}
+.assess-ai{border:1px solid var(--line);border-radius:11px;background:var(--surface-2);
+  padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.assess-ai>b{font-size:13px}
+.assess-steers{flex-basis:100%;display:flex;flex-wrap:wrap;gap:7px}
+.assess-steers .btn-ghost{font-size:12px;padding:6px 12px;text-align:left}
 
 /* scope card */
 .scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin:14px 0 16px}

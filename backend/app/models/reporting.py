@@ -42,6 +42,29 @@ class ReportFieldEdit(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class CaseAssessment(Base):
+    """The auditor's own assessment of the investigation — one per case.
+
+    Not a `Finding` and not a `ReportFieldEdit`. A finding is a vocabulary statement resting on
+    a basis, and a report field is one line of the Authority's template; this is the auditor's
+    reasoning across the whole investigation, written once and refined. It is drafted from what
+    the engine settled and then owned by the person who signs it, so `original` travels with it
+    the same way it does for a letter: an override nobody can detect is not an override.
+    """
+    __tablename__ = "case_assessment"
+    __table_args__ = (UniqueConstraint("case_id", name="uq_case_assessment"), {"schema": CORE})
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(30), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    original: Mapped[str] = mapped_column(Text, default="")
+    # auditor | ai-assisted — which of the two wrote the text now stored. A draft the auditor
+    # kept unchanged and one they rewrote are different evidence about a case.
+    written_by: Mapped[str] = mapped_column(String(30), default="auditor")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class LetterDraft(Base):
     """A letter as the auditor edited it, kept against the generated draft it replaces.
 

@@ -170,6 +170,64 @@ def investigation_state(case_id: str, db: Session = Depends(get_db)):
     return inv_service.state(db, c)
 
 
+@router.get("/cases/{case_id}/investigation/summary")
+def investigation_summary(case_id: str, db: Session = Depends(get_db)):
+    """What the investigation found, as a handful of cards rather than every hypothesis.
+
+    One card per basis, so a single excess seen four ways is stated once; and what was
+    *observed* is kept apart from what it *may mean*, because a difference between the documents
+    and the return is a fact and a tax finding is a judgement the auditor makes.
+    """
+    from ..agents import summary as summary_mod
+    from ..agents import zatca_service
+
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return summary_mod.build(inv_service.state(db, c), zatca=zatca_service.state(db, c))
+
+
+class AssessmentIn(BaseModel):
+    text: str = ""
+
+
+class AssessmentReviseIn(BaseModel):
+    instruction: str
+
+
+@router.get("/cases/{case_id}/assessment")
+def get_assessment(case_id: str, db: Session = Depends(get_db)):
+    """The auditor's assessment — theirs if they have written one, the engine's draft if not."""
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return assessment.get(db, c)
+
+
+@router.put("/cases/{case_id}/assessment")
+def put_assessment(case_id: str, body: AssessmentIn, db: Session = Depends(get_db)):
+    """Store the auditor's assessment. An empty body reverts to the engine's draft."""
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    return assessment.save(db, c, body.text)
+
+
+@router.post("/cases/{case_id}/assessment/revise")
+def revise_assessment(case_id: str, body: AssessmentReviseIn, db: Session = Depends(get_db)):
+    """Rewrite the assessment under the auditor's instruction, against the same facts.
+
+    The instruction steers wording and emphasis. It cannot introduce a figure: the facts block
+    and the verifier are the ones the first draft passed through.
+    """
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    if not body.instruction.strip():
+        raise HTTPException(422, "Say what should change about the assessment.")
+    return assessment.revise(db, c, body.instruction)
+
+
 class RunIn(BaseModel):
     trigger: str = "auditor-requested"
     note: str = ""

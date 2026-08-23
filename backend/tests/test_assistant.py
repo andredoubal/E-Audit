@@ -82,7 +82,7 @@ def test_the_action_set_is_closed_and_published(api):
     d = api.get(f"/api/cases/{CASE}/assistant").json()
     keys = {a["key"] for a in d["actions"]}
     assert keys == {"explain", "status", "outstanding", "draft_chase", "run_investigation",
-                    "findings", "zatca"}
+                    "findings", "zatca", "revise_assessment"}
     for a in d["actions"]:
         assert a["hint"], f"{a['key']} does not say what it does"
 

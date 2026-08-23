@@ -56,6 +56,8 @@ ACTIONS: tuple[Action, ...] = (
     Action("findings", "What has been established?", "Accepted findings and what they come to."),
     Action("zatca", "Compare with ZATCA's records", "What the Authority's own invoices show.",
            needs="an invoice dataset loaded on this case"),
+    Action("revise_assessment", "Revise the assessment",
+           "Rewrite your assessment of the investigation the way you describe."),
 )
 
 ACTION_BY_KEY = {a.key: a for a in ACTIONS}
@@ -69,6 +71,10 @@ _CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
                      "remind")),
     ("run_investigation", ("re-run", "rerun", "run the investigation", "re-test", "retest",
                            "investigate again")),
+    # Before `findings`, which claims "assess": "what has been established?" is a question about
+    # the case, and "rewrite the assessment" is an instruction to change a document.
+    ("revise_assessment", ("assessment", "treat this as", "treat it as", "rewrite it",
+                           "reword", "redraft")),
     ("findings", ("finding", "established", "exposure", "accepted", "conclusion", "assess")),
     ("zatca", ("zatca", "authority's records", "invoice match", "unmatched", "reconcil")),
     ("status", ("where are we", "where is this", "status", "summary", "what has happened",
@@ -209,6 +215,30 @@ def _zatca(db, case: AuditCase) -> Answer:
                   facts={"matched": c.matched_count, "unmatched": len(unmatched)})
 
 
+def _revise_assessment(db, case: AuditCase, question: str) -> Answer:
+    """Rewrite the auditor's assessment the way they just described it.
+
+    The only action that changes a document the auditor owns, so it says plainly what it did and
+    keeps the previous text recoverable. It cannot introduce a figure: the rewrite goes through
+    the same engine-authored facts block and the same verifier as the first draft.
+    """
+    from . import assessment as assessment_service
+
+    view = assessment_service.revise(db, case, question)
+    if not view.get("revised"):
+        return Answer("revise_assessment",
+                      "I could not rewrite the assessment — no model is reachable, so the "
+                      "assessment on the Investigation tab is the engine's own draft and yours "
+                      "to edit directly. Nothing has been changed.",
+                      source=view.get("source", "deterministic"))
+    return Answer("revise_assessment",
+                  "Rewritten. The assessment on the Investigation tab now reads:\n\n"
+                  + view["text"]
+                  + "\n\nIt is still yours — edit it there, or say what else to change.",
+                  source=view.get("source", "claude"),
+                  did="rewrote the auditor's assessment")
+
+
 def _explain(db, case: AuditCase, question: str) -> Answer:
     """No action fits. Answer from the reconciliation rather than inventing a capability."""
     recon = reconcile_case(db, case.case_id, persist=False)
@@ -230,6 +260,13 @@ _EXEC = {
     "run_investigation": _run_investigation,
     "findings": _findings,
     "zatca": _zatca,
+}
+
+# The two actions that read what the auditor actually typed, rather than only which action it
+# was. Everything else is answered from the case and needs no words from the question.
+_EXEC_WITH_QUESTION = {
+    "explain": _explain,
+    "revise_assessment": _revise_assessment,
 }
 
 
@@ -256,7 +293,8 @@ def ask(db, case: AuditCase, question: str, *, action: str = "") -> dict:
                        action_kind=key))
 
     fn = _EXEC.get(key)
-    answer = fn(db, case) if fn else _explain(db, case, question)
+    answer = (fn(db, case) if fn
+              else _EXEC_WITH_QUESTION.get(key, _explain)(db, case, question))
 
     db.add(CaseMessage(case_id=case.case_id, seq=seq + 1, role="assistant",
                        content=answer.text, action_kind=answer.action,

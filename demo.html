@@ -365,16 +365,90 @@ input.letter-input,select.letter-input{min-height:0}
 .collapse-body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:18px}
 .collapse-body>.panel{box-shadow:none}
 
-/* ---- the spreadsheets the investigation runs on --------------------------------- */
-.sourcegrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:900px){.sourcegrid{grid-template-columns:1fr}}
-.srcslot-head{display:flex;flex-direction:column;gap:2px;margin-bottom:9px}
-.srcslot-head b{font-size:13.5px}
-.srcslot-head .sub{font-size:12px}
-.srcslot .dropzone{min-height:96px}
-.srcslot .doclist{margin-top:11px}
-.srcslot .docrow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.srcslot .docrow .linklike{align-self:flex-start;font-size:11.5px}
+/* ---- the one optional file uploaded inside Investigation ------------------------ */
+.zsrc{border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.zsrc.on{background:var(--surface);box-shadow:var(--shadow)}
+.zsrc-head{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;
+  cursor:pointer;background:none;border:none;padding:12px 18px;color:var(--ink)}
+.zsrc-head>b{font-size:13.5px;white-space:nowrap}
+.zsrc-opt{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--surface)}
+.zsrc-file{flex:1;min-width:0;display:flex;align-items:baseline;gap:9px}
+.zsrc-file b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zsrc-none{flex:1;min-width:0;font-size:12px}
+.zsrc-mark{color:var(--faint);font-size:12px}
+.zsrc-body{padding:0 18px 16px;display:flex;flex-direction:column;gap:12px}
+.zsrc-body .dropzone{min-height:88px}
+.zsrc-meta{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;font-size:12.5px}
+.zsrc-meta .k{display:block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint)}
+
+/* ---- the investigation summary: a few cards, not every hypothesis --------------- */
+.sumbar{display:flex;flex-wrap:wrap;gap:7px 20px;align-items:baseline;font-size:12.5px;
+  color:var(--muted);padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.sumbar b{color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
+.sumbar-amt{margin-left:auto;font-variant-numeric:tabular-nums}
+.sumbar-amt b{color:var(--high)}
+.sumcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.sumcard{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;
+  padding:14px 16px;background:var(--surface);display:flex;flex-direction:column;gap:9px}
+/* The stripe and the badge say what KIND of thing this is, not how bad it is. An observation
+   coloured like an alert would be the exact conflation this summary exists to avoid — the
+   amount beside it is what carries the weight. */
+.sumcard.obs{border-left-color:var(--brand)}
+.sumcard.open{border-left-color:var(--med)}
+.sumcard.rec{border-left-color:var(--faint)}
+.sumcard header{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.sumcard h3{margin:0;font-size:14.5px;flex:1 1 62%;min-width:150px;line-height:1.35}
+.sumkind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:650;
+  padding:2px 7px;border-radius:5px;white-space:nowrap}
+.sumkind.obs{background:var(--brand-tint);color:var(--brand-deep)}
+.sumkind.open{background:var(--med-bg);color:var(--med)}
+.sumkind.rec{background:var(--surface-2);color:var(--muted)}
+.sumamt{margin-left:auto;font-size:15px;font-weight:700;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.sumobs{margin:0;font-size:13px;line-height:1.55}
+.sumread{margin:0;font-size:12.5px;line-height:1.55;color:var(--muted);
+  border-top:1px dashed var(--line);padding-top:9px}
+.sumread .k{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:2px}
+.sumalt summary{font-size:12px;color:var(--brand);cursor:pointer}
+.sumalt ul{margin:7px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.sumalt li{font-size:12.5px;line-height:1.5;color:var(--muted)}
+.sumalt .sub{margin:7px 0 0;font-size:11.5px}
+.sumcard footer{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:auto;
+  padding-top:4px}
+.sumcard footer .sub{font-size:11.5px}
+
+/* ---- the auditor's assessment, once, at the end --------------------------------- */
+.assess .panel-body{display:flex;flex-direction:column;gap:18px}
+.matters{border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.matters-head{padding:10px 14px;background:var(--surface-2);font-size:12.5px;color:var(--muted);
+  border-bottom:1px solid var(--line);line-height:1.5}
+.matter{display:flex;align-items:center;gap:14px;padding:11px 14px;
+  border-bottom:1px solid var(--line)}
+.matter:last-child{border-bottom:none}
+.matter.ruled{background:var(--surface-2)}
+.matter-what{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.matter-what b{font-size:13.5px}
+.matter-amt{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--muted)}
+.matter-act{display:flex;align-items:center;gap:7px;flex:none}
+.matter-act .btn-ghost{font-size:12px;padding:5px 11px}
+.assess-doc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.assess-doc-head b{font-size:13.5px}
+.assess-doc-head .sub{flex:1;min-width:0;font-size:12px}
+.assess-text{margin:0;padding:15px 17px;border:1px solid var(--line);border-radius:11px;
+  background:var(--surface-2);font:inherit;font-size:13px;line-height:1.65;
+  white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
+.assess-input{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid var(--line);
+  border-radius:11px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;
+  line-height:1.65;resize:vertical}
+.assess-input:focus{outline:none;border-color:var(--brand)}
+.assess-ai{border:1px solid var(--line);border-radius:11px;background:var(--surface-2);
+  padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.assess-ai>b{font-size:13px}
+.assess-steers{flex-basis:100%;display:flex;flex-wrap:wrap;gap:7px}
+.assess-steers .btn-ghost{font-size:12px;padding:6px 12px;text-align:left}
 
 /* scope card */
 .scope-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin:14px 0 16px}
@@ -989,9 +1063,10 @@ body{margin:0;padding:0 0 60px}
 .side{position:sticky;top:0;height:100vh}
 .demo-note{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
   padding:13px 16px;margin-bottom:18px;font-size:13px;line-height:1.6}
-/* The group's items are conditionally rendered in React; here they are toggled, and
-   `.navgroup-items` sets `display:flex`, which beats the `hidden` attribute on its own. */
+/* These are conditionally rendered in React; here they are toggled, and their `display:flex`
+   beats the `hidden` attribute on its own. */
 .navgroup-open:not(.on) .navgroup-items{display:none}
+[hidden]{display:none!important}
 .panehead{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .panehead h1{margin:0;font-size:20px}
 .panehead p{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
@@ -1077,8 +1152,8 @@ title="Outside the scope of this proof of concept">Initial Assessment &amp; Docu
 <div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
 citation and gap on this page is the real output of the engine for the seeded demo case
 CASE-2025-0481, captured when this file was generated. <b>What works here:</b> opening the case,
-moving between its modules, writing the case instructions, and editing the report fields and
-the verdict letter — those are the auditor's own words, so a file with no backend can do the
+moving between its modules, opening the evidence behind a finding, writing the case
+instructions, and editing the assessment, the report fields and the verdict letter — those are the auditor's own words, so a file with no backend can do the
 whole interaction. <b>What does not:</b> uploading, re-running the investigation and asking the
 assistant, which all need the engine; they say so when you click them rather than going quiet.
 Nothing you change here is saved anywhere. The regulations corpus behind the citations holds
@@ -1096,7 +1171,7 @@ which have been amended since the English edition they are shown in.</div>
 <div class="panel-body"><div class="tablescroll"><table class="inv-table"><thead><tr>
 <th>Priority</th><th>Case</th><th>Taxpayer</th><th>Sector</th><th>Referral reason</th>
 <th>Period</th><th>Status</th><th></th></tr></thead>
-<tbody><tr class="caserow on" data-open="1"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
+<tbody><tr class="caserow on" data-open="1"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0481</td><td><b>Al-Faisaliah Trading Co.</b><div class="sub">300012345600003</div></td><td>Wholesale trade</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td><span class="linklike">open &#9656;</span></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0487</td><td><b>Hail Medical Supplies Co.</b><div class="sub">300033300500003</div></td><td>Medical equipment</td><td>FINANCIAL_DISCREPANCY</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">reconciled</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-high">high</span></td><td class="mono">CASE-2025-0485</td><td><b>Najd Electronics Trading</b><div class="sub">300077700300003</div></td><td>Retail trade</td><td>SALES_UNDERREPORTED</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-medium">medium</span></td><td class="mono">CASE-2025-0486</td><td><b>Yanbu Petrochem Supplies</b><div class="sub">300088800400003</div></td><td>Manufacturing</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0483</td><td><b>Rawabi Construction Co.</b><div class="sub">300055500100003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0488</td><td><b>Dhahran Infrastructure Contracting Co.</b><div class="sub">300044400600003</div></td><td>Construction</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0482</td><td><b>Nael Foodstuff Est.</b><div class="sub">300098765400003</div></td><td>Food retail</td><td>PURCHASE_SALES_RATIO</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr><tr class="caserow"><td><span class="pill pri-low">low</span></td><td class="mono">CASE-2025-0484</td><td><b>Tabuk Logistics Co.</b><div class="sub">300066600200003</div></td><td>Transport &amp; logistics</td><td>EINV_VS_RETURN</td><td class="mono">2025-01-01 → 2025-03-31</td><td><span class="pill status">referred</span></td><td></td></tr></tbody></table></div>
 <p class="detail-note"><b>Open a case</b> and its three modules appear inside it — Taxpayer
 Correspondence, Investigation, Audit Report. They are a case&rsquo;s tabs, not the
 application&rsquo;s: <b>Cases</b> is the whole sidebar, because everything else has to know
@@ -1211,12 +1286,72 @@ on the evidence held, requesting information from the taxpayer starts the next r
 <div class="rstep"><p class="detail-note" style="margin:0">The same four steps, against
 whatever the next question turns out to be.</p></div></div>
 </div><div class="pane" id="pane-investigation"><div class="panehead"><h1>Investigation</h1><p>What the evidence shows</p></div>
-<header class="page-head"><div><h1>Investigation</h1>
-<p class="sub">CASE-2025-0481 · what the evidence shows</p></div>
-<div class="chips"><span class="pill">12 hypotheses</span>
-<span class="pill pri-medium">10 undecided</span>
-</div></header>
+<section class="zsrc" id="zsrc"><button class="zsrc-head" id="zsrc-head">
+<b>ZATCA invoice records</b><span class="zsrc-opt">Optional</span>
+<span class="zsrc-file"><b>ZATCA_Invoices_Q1_2025.xlsx</b> <span class="sub">22 invoices · 19 matched against the listing</span></span><span class="zsrc-mark" id="zsrc-mark">&#9656;</span>
+</button><div class="zsrc-body" id="zsrc-body" hidden>
+<div class="dropzone"><b>Drop a file here to replace it</b>
+<span class="sub">.xlsx, .xlsm, .csv &mdash; one row per invoice, as ZATCA holds it</span></div>
+<div class="zsrc-meta"><span><span class="k">File</span>ZATCA_Invoices_Q1_2025.xlsx</span><span><span class="k">Invoices</span>22</span><span><span class="k">Columns</span>7</span><span><span class="k">Loaded</span>2026-08-22</span></div>
+<p class="detail-note" style="margin-bottom:0">The taxpayer&rsquo;s own documents come from
+<b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
+internal invoice extract, which the listing is matched against.</p></div></section>
 
+<div class="panel"><div class="panel-head"><h2>Investigation summary</h2>
+<span class="pill status">&#8721; Adjudicated (no AI)</span></div>
+<div class="panel-body"><div class="sumbar"><span><b>5</b> observed</span><span><b>2</b> not settled</span><span><b>1</b> records defect</span><span class="muted"><b>2</b> tested, not supported</span><span class="sumbar-amt"><b>SAR 1,344,000</b> at stake</span></div>
+<div class="sumcards">
+<article class="sumcard obs"><header><span class="sumkind obs">Observed</span>
+<h3>Exceeds declared, no trial balance</h3>
+<b class="sumamt">SAR 618,000</b></header>
+<p class="sumobs">Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports. No trial balance was supplied to substantiate it.</p><p class="sumread"><span class="k">What it may mean</span>Sales records submitted are higher than the sales declared in the VAT return, with no trial balance provided.</p><details class="sumalt"><summary>The same evidence also reads 3 other ways</summary><ul><li>The documents provided do not correspond to the declared sales.</li><li>Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return.</li><li>Sales that were not disclosed in the VAT returns.</li></ul><p class="sub">One matter, one amount. These are readings of the same evidence, not separate money.</p></details>
+<footer><span class="pill pri-medium">Moderate confidence</span><span class="pill pri-low">accepted by you</span><span class="sub mono">EV-02 · EV-03 · CA-01 · CA-02</span></footer></article>
+<article class="sumcard obs"><header><span class="sumkind obs">Observed</span>
+<h3>Invalid tax invoice</h3>
+<b class="sumamt">SAR 357,000</b></header>
+<p class="sumobs">3 of 22 rows in Sales_Analysis_Q1_2025.xlsx are missing invoice_number, carrying SAR 357,000.00 of VAT between them.</p><p class="sumread"><span class="k">What it may mean</span>Failure to meet all the requirements of a valid tax invoice.</p>
+<footer><span class="pill pri-medium">Moderate confidence</span><span class="sub">requires your validation</span><span class="sub mono">RG-S1</span></footer></article>
+<article class="sumcard obs"><header><span class="sumkind obs">Observed</span>
+<h3>Undisclosed sales</h3>
+<b class="sumamt">SAR 357,000</b></header>
+<p class="sumobs">3 of the 22 invoices in ZATCA&#x27;s records for this period are not in the listing supplied, carrying VAT of SAR 357,000.00. The listing therefore cannot be a complete record of the period&#x27;s sales.</p><p class="sumread"><span class="k">What it may mean</span>Sales that were not disclosed in the VAT returns.</p>
+<footer><span class="pill pri-medium">Moderate confidence</span><span class="sub">requires your validation</span><span class="sub mono">ZR-01</span></footer></article>
+<article class="sumcard obs"><header><span class="sumkind obs">Observed</span>
+<h3>Documents do not correspond</h3>
+<b class="sumamt">SAR 12,000</b></header>
+<p class="sumobs">1 of the 19 invoices present in both the listing and ZATCA&#x27;s records is recorded with a different VAT amount in each, differing by SAR 12,000.00 in total and SAR 12,000.00 on balance. The documents supplied do not correspond to the Authority&#x27;s own record of the same invoices.</p><p class="sumread"><span class="k">What it may mean</span>The documents provided do not correspond to the declared sales.</p>
+<footer><span class="pill pri-medium">Moderate confidence</span><span class="sub">requires your validation</span><span class="sub mono">ZR-02</span></footer></article>
+<article class="sumcard obs"><header><span class="sumkind obs">Observed</span>
+<h3>Lack of cooperation</h3>
+</header>
+<p class="sumobs">2 requested items remain outstanding — Credit and debit note listing, Reconciliation of the return to the ledger. Claims that depend on them cannot be substantiated.</p><p class="sumread"><span class="k">What it may mean</span>Purchases excluded due to the taxpayer&#x27;s lack of cooperation.</p>
+<footer><span class="pill pri-medium">Moderate confidence</span><span class="sub">requires your validation</span><span class="sub mono">EV-05</span></footer></article>
+<article class="sumcard open"><header><span class="sumkind open">Not settled</span>
+<h3>The declaration may be out of character for this taxpayer&#x27;s own trading…</h3>
+</header>
+<p class="sumobs">Too few prior periods on file to judge the magnitude.</p>
+<footer><span class="pill pri-medium">Insufficient confidence</span><span class="sub">requires your validation</span><span class="sub mono">DE-03</span></footer></article>
+<article class="sumcard open"><header><span class="sumkind open">Not settled</span>
+<h3>Undisclosed secondary activity</h3>
+</header>
+<p class="sumobs">Sales_Analysis_Q1_2025.xlsx has no description column, so supplies cannot be matched to the registered activities.</p><p class="sumread"><span class="k">What it may mean</span>Sales from secondary business activities that were not disclosed in the VAT return.</p>
+<footer><span class="pill pri-medium">Insufficient confidence</span><span class="sub">requires your validation</span><span class="sub mono">EV-04</span></footer></article>
+<article class="sumcard rec"><header><span class="sumkind rec">Records defect</span>
+<h3>Invoices that cannot be matched</h3>
+</header>
+<p class="sumobs">1 affected in the comparison against ZATCA_Invoices_Q1_2025.xlsx.</p><p class="sumread"><span class="k">Why it matters</span>Some records carry no invoice identifier the matching can use, so they are neither confirmed present in both sets nor reported as missing from either.</p>
+<footer><span class="sub">requires your validation</span></footer></article></div>
+<p class="detail-note">Each amount is counted once against the evidence it rests on, so nothing
+here is the same money twice &mdash; but this is <b>not a proposed adjustment</b>. Everything
+above is an observation for you to validate; what you conclude is yours to write at the foot of
+this page, and only what you accept reaches the report.</p></div></div>
+
+<div class="collapse" id="inv-detail"><button class="collapse-head" id="inv-detail-head">
+<span class="collapse-mark" id="inv-detail-mark">&#9656;</span>
+<b>Detailed investigation &amp; evidence</b>
+<span class="sub">every hypothesis, why it was raised, the figures behind it, the law it rests
+on, and the source records</span><span class="collapse-action">Open</span></button>
+<div class="collapse-body" id="inv-detail-body" hidden>
 <div class="panel"><div class="panel-head"><div class="ai-h">
 <span class="chip-det">Deterministic</span><h2>ZATCA's own invoice records</h2></div>
 <span class="muted">22 invoices · ZATCA_Invoices_Q1_2025.xlsx</span>
@@ -1229,7 +1364,7 @@ whatever the next question turns out to be.</p></div></div>
 <div class="assesslist"><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1023 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 20 (INV-2025-1023)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1024 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 21 (INV-2025-1024)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-01</span><div><p>Invoice INV-2025-1025 is in ZATCA&#x27;s records but not in the listing supplied.</p><small class="mono">row 22 (INV-2025-1025)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-03</span><div><p>Invoice INV-2025-1005 is listed with VAT of SAR 119,000.00; ZATCA&#x27;s record shows SAR 131,000.00.</p><small class="mono">listing row 5 (INV-2025-1005) · ZATCA row 5 (INV-2025-1005)</small></div></div><div class="assessrow incomplete"><span class="pill pri-high">ZR-10</span><div><p>3 of 22 rows in the listing carry no invoice number and cannot be matched against ZATCA&#x27;s records.</p><small class="mono">listing row 7, row 13, row 18</small></div></div></div></div></div>
 <div class="panel"><div class="panel-head"><div class="ai-h">
 <span class="chip-det">Agents</span><h2>Investigation</h2></div>
-<span class="pill status">∑ Adjudicated (no AI)</span></div>
+<span class="pill status">&#8721; Adjudicated (no AI)</span></div>
 <div class="panel-body">
 <div class="hyp"><div class="hyp-side"><code>EV-02</code>
 <span class="pill status">R01</span></div>
@@ -1246,9 +1381,7 @@ accordingly, records that do not correspond to the declared supplies do not subs
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
 <span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 618,000</b></div></div>
@@ -1267,9 +1400,7 @@ accordingly, an excess of the records over the return that no trial balance reco
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
 <span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 618,000</b></div></div>
@@ -1288,9 +1419,7 @@ accordingly, supplies evidenced by documents that do not meet those conditions a
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">1- 22 a) Each Taxable Person must issue or arrange for the issuance of a Tax Invoice containing – at a minimum- the information provided in Paragraph (5) of this Article in the following cases: 1. Where the Taxable Person makes a Taxable Supply of Goods or Services which he to another Taxable Person or to a non-taxable legal Person or to an establishment (sole proprietorship) or to any other entity established in accordance with the laws of the Kingdom 2. Where the Taxable Person receives Consideration in respect of and prior to making a Taxable Supply of Goods or Services to an another Taxable Person, to a Nonresident Legal Person, to an establishment (sole proprietorship) or to any other…</pre>
 <span class="sub">CHAPTER NINE: CALCULATION OF TAX PAYABLE · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 357,000</b></div></div>
@@ -1309,9 +1438,7 @@ accordingly, supplies that were not disclosed in the return may understate taxab
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
 <span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 357,000</b></div></div>
@@ -1330,9 +1457,7 @@ accordingly, records that do not correspond to the declared supplies do not subs
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">1- The invoices, books, records and accounting documents required to be maintained by a Taxable Person in accordance with the Law and these Regulations shall be kept for a minimum period of six (6) years from the end of the Tax Period to which they relate. Records with respect to Capital Assets must be kept for a minimum of the adjustment period for these Capital Assets prescribed in Article fifty-two of these Regulations, plus five (5) years, with such period starting from the date those Capital Assets are acquired by the Taxable Person. 2- Records shall be kept in Arabic, and all Tax Invoices shall be issued in Arabic in addition to any other language also shown on the Tax Invoices as a…</pre>
 <span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 partially-supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 12,000</b></div></div>
@@ -1343,9 +1468,7 @@ The declared figure may be the supported one with the decimal point in the wrong
 <div class="hyp-why"><b>Why raised</b> The declared figure and the figure the documents support differ by more than materiality, which is the precondition for a keying test.</div>
 <div class="verdict verdict-refuted"><b>refuted</b>
  — No power-of-ten multiple of the declared SAR 2,000,000 reaches the expected SAR 2,618,000.</div>
-<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 refuted</span><span class="pill pri-medium">Insufficient confidence</span>
 <b></b></div></div>
@@ -1356,9 +1479,7 @@ The declared figure may carry the supported figure&#x27;s digits in a different 
 <div class="hyp-why"><b>Why raised</b> A transposition produces the same digits in another order, which is worth excluding before treating the difference as undeclared revenue.</div>
 <div class="verdict verdict-refuted"><b>refuted</b>
  — The declared and expected figures do not share the same digits.</div>
-<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 refuted</span><span class="pill pri-medium">Insufficient confidence</span>
 <b></b></div></div>
@@ -1369,9 +1490,7 @@ The declaration may be out of character for this taxpayer&#x27;s own trading his
 <div class="hyp-why"><b>Why raised</b> A declaration far outside this taxpayer&#x27;s own filing range supports a keying explanation over a trading one.</div>
 <div class="verdict verdict-inconclusive"><b>inconclusive</b>
  — Too few prior periods on file to judge the magnitude.</div>
-<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+<div class="cite none"><span class="pill status">no provision identified</span><span class="sub">No legal basis is recorded for this outcome, so no provision is cited. The finding rests on the evidence alone.</span></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 inconclusive</span><span class="pill pri-medium">Insufficient confidence</span>
 <b></b></div></div>
@@ -1390,9 +1509,7 @@ accordingly, revenue from an activity the registration does not disclose is stil
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
 <span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-medium">
 inconclusive</span><span class="pill pri-medium">Insufficient confidence</span>
 <b></b></div></div>
@@ -1411,9 +1528,7 @@ accordingly, claims that depend on documents which were requested and not suppli
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">1- All Persons must provide the Authority with any information requested by the Authority for the purposes of establishing whether that Person is complying fully with its Tax obligations. 2- In addition to the other rights provided for in this Article, the Authority may access relevant information held by third parties directly from those parties including requiring direct access to records generally on an ongoing basis. 3- The third parties to which this Article applies are limited to government entities, banks and other financial institutions regulated in the Kingdom by the Saudi Central Bank or the Capital Market Authority. 4- A failure of a third party to provide access to information…</pre>
 <span class="sub">CHAPTER TEN: PROCEDURE AND ADMINISTRATION · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b></b></div></div>
@@ -1432,9 +1547,7 @@ accordingly, taxable sales evidenced by the records but not reflected in the ret
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
 <span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 618,000</b></div></div>
@@ -1453,14 +1566,70 @@ accordingly, supplies that were not disclosed in the return may understate taxab
 <details><summary>read the article</summary>
 <pre class="letterpre cite-text">Without prejudice to Article two of the Law, for the purposes of applying the Agreement and the Law in the Kingdom, the Tax is imposed on all Taxable Supplies of Goods and Services made by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity or those received by a Taxable Person in the Kingdom in the course of carrying on their Economic Activity where the Reverse Charge Mechanism applies, as well as on the Import of Goods into the Kingdom.</pre>
 <span class="sub">CHAPTER THREE: SUPPLIES OF GOODS AND SERVICES · ZATCA English translation, unofficial — the Arabic is
-the official version.</span></details></div>
-<div class="row-actions"><button class="btn" disabled>Record your decision</button>
-<span class="linklike">✉ Request information from the taxpayer</span></div></div>
+the official version.</span></details></div></div>
 <div class="hyp-right"><span class="pill pri-low">
 supported</span><span class="pill pri-medium">Moderate confidence</span>
 <b>SAR 618,000</b></div></div>
 <p class="detail-note">Every verdict above was settled by the engine against the case's own
 figures. The audit conclusion is the auditor's: only what you accept reaches the report.</p>
+</div></div></div></div>
+
+<div class="panel assess"><div class="panel-head"><h2>Your assessment</h2>
+<span class="pill pri-low">
+1 confirmed — carried into the report
+</span></div><div class="panel-body">
+<div class="matters"><div class="matters-head">Which of these you are taking forward. Only what
+you confirm reaches the audit report and the letter to the taxpayer.</div><div class="matter ruled">
+<div class="matter-what"><b>Exceeds declared, no trial balance</b>
+<span class="matter-amt">SAR 618,000</span></div>
+<div class="matter-act"><span class="pill pri-low">accepted</span></div></div><div class="matter">
+<div class="matter-what"><b>Invalid tax invoice</b>
+<span class="matter-amt">SAR 357,000</span></div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div><div class="matter">
+<div class="matter-what"><b>Undisclosed sales</b>
+<span class="matter-amt">SAR 357,000</span></div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div><div class="matter">
+<div class="matter-what"><b>Documents do not correspond</b>
+<span class="matter-amt">SAR 12,000</span></div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div><div class="matter">
+<div class="matter-what"><b>Lack of cooperation</b>
+</div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div><div class="matter">
+<div class="matter-what"><b>The declaration may be out of character for this taxpayer&#x27;s own trading…</b>
+</div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div><div class="matter">
+<div class="matter-what"><b>Undisclosed secondary activity</b>
+</div>
+<div class="matter-act"><button class="btn-ghost">Confirm</button><button class="btn-ghost">Dismiss</button><button class="btn-ghost">Ask the taxpayer</button></div></div></div>
+<div class="assess-doc"><div class="assess-doc-head"><b>The assessment</b>
+<span class="sub">drafted from the investigation &mdash; yours to edit</span></div>
+<pre class="assess-text" id="assess-text">The investigation settled 5 matters against the documents on file, with SAR 1,344,000 at stake across them. A further 2 hypotheses were tested and not supported by the evidence.
+
+What was observed:
+• Exceeds declared, no trial balance (SAR 618,000) — Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports. No trial balance was supplied to substantiate it.
+• Invalid tax invoice (SAR 357,000) — 3 of 22 rows in Sales_Analysis_Q1_2025.xlsx are missing invoice_number, carrying SAR 357,000.00 of VAT between them.
+• Undisclosed sales (SAR 357,000) — 3 of the 22 invoices in ZATCA&#x27;s records for this period are not in the listing supplied, carrying VAT of SAR 357,000.00. The listing therefore cannot be a complete record of the period&#x27;s sales.
+• Documents do not correspond (SAR 12,000) — 1 of the 19 invoices present in both the listing and ZATCA&#x27;s records is recorded with a different VAT amount in each, differing by SAR 12,000.00 in total and SAR 12,000.00 on balance. The documents supplied do not correspond to the Authority&#x27;s own record of the same invoices.
+• Lack of cooperation — 2 requested items remain outstanding — Credit and debit note listing, Reconciliation of the return to the ledger. Claims that depend on them cannot be substantiated.
+
+Not settled on the evidence held:
+• The declaration may be out of character for this taxpayer&#x27;s own trading… — Too few prior periods on file to judge the magnitude.
+• Undisclosed secondary activity — Sales_Analysis_Q1_2025.xlsx has no description column, so supplies cannot be matched to the registered activities.
+
+Defects in the records themselves:
+• Invoices that cannot be matched — 1 affected in the comparison against ZATCA_Invoices_Q1_2025.xlsx.
+
+Confirmed by the auditor, and carried into the audit report: Exceeds declared, no trial balance.
+
+[Assessment to be completed by the auditor: whether each matter above is accepted, the reason where it is not, and the position to be put to the taxpayer.]</pre>
+<div class="row-actions"><button class="btn-ghost" id="assess-edit">Edit the assessment</button>
+</div></div>
+<div class="assess-ai"><span class="ai-chip"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span>
+<b>Or tell the assistant what to change</b>
+<div class="assess-steers"><button class="btn-ghost">Treat the largest difference as a timing difference and say why.</button><button class="btn-ghost">Rewrite this using only what I have confirmed.</button><button class="btn-ghost">Drop the matters where the evidence is insufficient.</button><button class="btn-ghost">Say it in plainer language for a taxpayer with no adviser.</button></div>
+<p class="detail-note" style="margin-bottom:0">It rewrites the assessment against the same
+figures the engine computed, checked the same way &mdash; an instruction can change how
+something is put, and cannot introduce a number. The assessment stays yours.</p></div>
 </div></div></div><div class="pane" id="pane-report"><div class="panehead"><h1>Audit Report</h1><p>What you concluded</p></div>
 <header class="page-head"><div><p class="eyebrow">Audit report</p>
 <h1>Al-Faisaliah Trading Co.</h1></div>
@@ -1549,7 +1718,7 @@ it answers with no API key at all.</p>
 • Detailed sales analysis — incomplete: The &#x27;Customer VAT number&#x27; column was requested but is not in the file.
 • Reconciliation of the return to the ledger — missing
 • Credit and debit note listing — missing</pre></div><div class="asst-msg auditor"><pre>compare with ZATCA&#x27;s records</pre></div><div class="asst-msg assistant"><span class="pill status">zatca</span><pre>19 invoice(s) appear in both the listing and ZATCA&#x27;s records. 3 invoice(s) in ZATCA&#x27;s records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.</pre></div></div>
-<div class="asst-foot"><div class="asst-quick"><button class="qchip" title="What has arrived, what is still outstanding.">Where is this case?</button><button class="qchip" title="The gaps, and what the chase asks for.">What is still missing?</button><button class="qchip" title="Write the email for what is still outstanding.">Draft the chase</button><button class="qchip" title="Re-test every hypothesis against the evidence now on file.">Re-run the investigation</button><button class="qchip" title="Accepted findings and what they come to.">What has been established?</button><button class="qchip" title="What the Authority&#x27;s own invoices show.">Compare with ZATCA&#x27;s records</button></div>
+<div class="asst-foot"><div class="asst-quick"><button class="qchip" title="What has arrived, what is still outstanding.">Where is this case?</button><button class="qchip" title="The gaps, and what the chase asks for.">What is still missing?</button><button class="qchip" title="Write the email for what is still outstanding.">Draft the chase</button><button class="qchip" title="Re-test every hypothesis against the evidence now on file.">Re-run the investigation</button><button class="qchip" title="Accepted findings and what they come to.">What has been established?</button><button class="qchip" title="What the Authority&#x27;s own invoices show.">Compare with ZATCA&#x27;s records</button><button class="qchip" title="Rewrite your assessment of the investigation the way you describe.">Revise the assessment</button></div>
 <div class="asst-input"><input placeholder="Ask about this case…" disabled>
 <button class="btn" disabled>Ask</button></div></div>
 </aside><script>
@@ -1630,6 +1799,58 @@ document.getElementById('nav-instr').addEventListener('click', () => {
   instrText.focus();
   instr.scrollIntoView({block: 'center'});
 });
+
+/* --------------------------------------------------- the two sections that open
+   Collapsed by default, exactly as in the application: the summary is what the auditor came
+   for, and the evidence behind it is one click away rather than in front of it. */
+function toggle(root, body, mark, action) {
+  const el = document.getElementById(root);
+  const b = document.getElementById(body);
+  const m = document.getElementById(mark);
+  el.querySelector('.' + (action || 'zsrc') + '-head').addEventListener('click', () => {
+    const on = b.hidden;
+    b.hidden = !on;
+    el.classList.toggle('on', on);
+    m.innerHTML = on ? '&#9662;' : '&#9656;';
+    const a = el.querySelector('.collapse-action');
+    if (a) a.textContent = on ? 'Close' : 'Open';
+  });
+}
+toggle('zsrc', 'zsrc-body', 'zsrc-mark', 'zsrc');
+toggle('inv-detail', 'inv-detail-body', 'inv-detail-mark', 'collapse');
+
+/* The assessment is the auditor's own words, so this file can do the whole interaction. */
+const assessText = document.getElementById('assess-text');
+document.getElementById('assess-edit').addEventListener('click', () => {
+  if (assessText.dataset.editing) return;
+  assessText.dataset.editing = '1';
+  const ta = document.createElement('textarea');
+  ta.className = 'assess-input';
+  ta.rows = 16;
+  ta.value = assessText.textContent;
+  const bar = document.createElement('div');
+  bar.className = 'row-actions';
+  const save = document.createElement('button');
+  save.className = 'btn'; save.textContent = 'Save assessment';
+  const cancel = document.createElement('button');
+  cancel.className = 'linklike'; cancel.textContent = 'cancel';
+  bar.append(save, cancel);
+  assessText.hidden = true;
+  assessText.after(ta, bar);
+  ta.focus();
+  const done = () => { ta.remove(); bar.remove(); assessText.hidden = false;
+                        delete assessText.dataset.editing; };
+  cancel.addEventListener('click', done);
+  save.addEventListener('click', () => {
+    if (ta.value.trim()) assessText.textContent = ta.value.trim();
+    done();
+    toast('Assessment saved. In the application it is kept beside the engine’s draft.');
+  });
+});
+document.querySelectorAll('.assess-steers .btn-ghost, .matter-act .btn-ghost').forEach(
+  btn => btn.addEventListener('click', () => toast(
+    'That needs the engine — in the application this rewrites the assessment, or records '
+    + 'your ruling on that matter.')));
 
 /* ------------------------------------------------------------ editing, for real
    The report's fields and the outbound letter are edited in place here exactly as in the
