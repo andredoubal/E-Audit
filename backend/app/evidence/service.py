@@ -11,10 +11,12 @@ run looks identical to a test that ran and found nothing.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import AuditCase, DatasetOverride
+from ..models import AuditCase, DatasetOverride, ZatcaDataset
 from ..requests import service as req_service
 from . import profile as prof
 
@@ -25,14 +27,44 @@ def _overrides(db: Session, case_id: str) -> dict[str, DatasetOverride]:
     return {r.filename: r for r in rows if r.dataset_type or r.workstream}
 
 
+def _sources(db: Session, case_id: str) -> list[tuple[Any, str]]:
+    """Every tabular file on the case, with where it came from.
+
+    The taxpayer's documents and the Authority's own extract are deliberately different tables —
+    one is evidence the taxpayer produced and is checked against what was requested, the other
+    answers to no request. But they carry the same extracted shape, and a comparison needs both,
+    so profiling reads both and keeps the provenance on the profile rather than in the plumbing.
+    """
+    rows: list[tuple[Any, str]] = [(d, "taxpayer") for d in req_service.documents(db, case_id)]
+    rows += [(z, "authority") for z in db.scalars(
+        select(ZatcaDataset).where(ZatcaDataset.case_id == case_id)).all()]
+    return rows
+
+
 def profiles(db: Session, case_id: str) -> list[dict]:
-    """Every document on the case, read for what it is. Derived fresh on every call."""
+    """Every dataset on the case, read for what it is. Derived fresh on every call."""
     over = _overrides(db, case_id)
     out: list[dict] = []
-    for d in req_service.documents(db, case_id):
+    for d, provenance in _sources(db, case_id):
         p = prof.build({"filename": d.filename, "content": d.content or {}}).to_dict()
         p["document_id"] = d.id
-        p["received_at"] = d.received_at.isoformat() if d.received_at else ""
+        p["provenance"] = provenance
+        received = getattr(d, "received_at", None) or getattr(d, "uploaded_at", None)
+        p["received_at"] = received.isoformat() if received else ""
+
+        # The Authority's own extract is an e-invoice record by definition — it is what the
+        # system that produced it holds. Reading that off its columns would be inferring a fact
+        # already known, and getting it wrong on a file that happens to lack a status column.
+        if provenance == "authority" and p["dataset_type"] in (
+                prof.UNKNOWN, prof.SALES_REGISTER, prof.PURCHASE_REGISTER):
+            p["read_as"] = {"dataset_type": p["dataset_type"], "label": p["dataset_label"],
+                            "confidence": p["confidence"], "why": p["why"]}
+            p["dataset_type"] = prof.EINVOICE_EXTRACT
+            p["dataset_label"] = prof.LABEL[prof.EINVOICE_EXTRACT]
+            p["workstream"] = prof.WORKSTREAM[prof.EINVOICE_EXTRACT]
+            p["confidence"] = "high"
+            p["why"] = ("loaded as the Authority's own invoice extract, which is what it is "
+                        "regardless of which columns it happens to carry")
 
         o = over.get(d.filename)
         if o:
@@ -84,6 +116,18 @@ def set_override(db: Session, case_id: str, *, filename: str, dataset_type: str,
     row.workstream = workstream or prof.WORKSTREAM.get(dataset_type, "")
     row.note = note.strip()
     return row
+
+
+def rows_by_file(db: Session, case_id: str) -> dict[str, list]:
+    """The extracted rows behind every profile, keyed the same way the profiles are.
+
+    Lives here rather than in the reconciliation service because this is the module that knows
+    a case's evidence spans two tables. A consumer that built this itself would read one of them
+    and silently compare against an empty population — which is a variance the size of the whole
+    file, reported with total confidence.
+    """
+    return {d.filename: (d.content or {}).get("rows") or []
+            for d, _ in _sources(db, case_id)}
 
 
 # ------------------------------------------------------------------ what this makes possible

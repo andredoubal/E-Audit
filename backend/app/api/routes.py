@@ -1133,6 +1133,26 @@ def override_dataset(case_id: str, body: DatasetOverrideIn, db: Session = Depend
     return evidence_service.state(db, case_id)
 
 
+@router.get("/cases/{case_id}/reconciliations")
+def reconciliations(case_id: str, workstream: str = "", db: Session = Depends(get_db)):
+    """Stage 1 — every comparison the evidence supports, and every one it does not.
+
+    The second half is the point. A comparison that silently does not run looks identical to
+    one that ran and found nothing, so a definition that cannot run publishes what is missing
+    — which is also the list a chase letter should be asking for.
+    """
+    from ..recon import registry as recon_registry
+    from ..recon import service as recon_service
+
+    _case_or_404(db, case_id)
+    if workstream and workstream not in (recon_registry.SALES, recon_registry.PURCHASES):
+        raise HTTPException(422, "workstream must be sales or purchases")
+    try:
+        return recon_service.state(db, case_id, workstream=workstream)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
 @router.get("/cases/{case_id}/registers")
 def registers(case_id: str, db: Session = Depends(get_db)):
     """The sales and purchase registers, each against its own box on the return.

@@ -403,7 +403,7 @@ def classify(filename: str, columns: list[str], rows: list[list[Any]],
     # A clearance status is what distinguishes the Authority's own extract from the taxpayer's
     # listing of the same invoices — the listing has no clearance behind it to report.
     if has_status and has_ref and has_vat:
-        candidates.append((EINVOICE_EXTRACT, "medium",
+        candidates.append((EINVOICE_EXTRACT, "high",
                            "rows carry invoices with a clearance status, which a taxpayer's own "
                            "listing does not have"))
 
