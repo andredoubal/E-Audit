@@ -330,12 +330,32 @@ reads the whole investigation and takes *one* position.
 
 So there is one section at the foot of the module, and it does two things.
 
-**It lists the matters, with three words each.** Confirm · Dismiss · Ask the taxpayer, once per
-matter rather than five options on every card. The consequence is unchanged and is the point:
-only what the auditor confirms reaches the audit report and the verdict letter. **Ask the
-taxpayer is the loop, not a third verdict** — it still calls `threads.open_for_hypothesis()`,
-parking the matter and opening an enquiry with a drafted request, because deleting the only
-entry point to that loop would have quietly deleted the loop.
+**It lists the matters, with four words each.** Confirm · Challenge · Dismiss · Ask the
+taxpayer, once per matter rather than five options on every card. The consequence is unchanged
+and is the point: only what the auditor confirms reaches the audit report and the verdict
+letter. **Ask the taxpayer is the loop, not a fourth verdict** — it still calls
+`threads.open_for_hypothesis()`, parking the matter and opening an enquiry with a drafted
+request, because deleting the only entry point to that loop would have quietly deleted the loop.
+
+**Challenge is where the doubt goes.** Dismiss is a verdict — the matter is not supported, and
+the file records it. Challenge is the auditor saying they do not accept the engine's reading *as
+it stands* and want to put it to the assistant first, which is a real position the tool had no
+word for. Pressing it records `needs-more-investigation` — already in the decision vocabulary,
+already excluded from the report, so nothing new is defined or migrated — and *then* opens the
+case assistant with the matter written into it: the title, the adjudicator's own `observed`
+sentence (which carries the figure, so the question quotes the engine rather than composing a
+number) and the vocabulary statement it would report as. Recording before opening is the same
+rule the completeness rows follow: a challenge that only opened a chat would be a note nobody
+reads. The row then shows *Challenged by you* with a link back into the conversation, so an
+auditor who closed the panel does not have to undo their own ruling to get it back.
+
+One defect had to be fixed underneath it. `pages/Investigation.tsx` set its data to `null` on
+every refresh, including a refresh of the same case, which fell through to the loading branch
+and unmounted `CaseTabs` — and the assistant docked inside it. Recording *any* decision
+therefore closed the assistant and discarded the question it had just been handed. Blanking is
+right when the case id changes (the old case's figures must not sit under a new case's name)
+and wrong on a re-fetch, so the two are now separate effects, with a liveness guard so a
+response for the case you just left cannot land on this one.
 
 **It carries the assessment itself**, drafted from what the engine settled and then owned by the
 person who signs it. `CaseAssessment` keeps `original` beside the text, so a rewrite is visible

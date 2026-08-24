@@ -1260,8 +1260,12 @@ input.letter-input,select.letter-input{min-height:0}
   font-variant-numeric:tabular-nums}
 .matter-act{display:flex;align-items:center;gap:7px;flex:none}
 .matter-act .btn-ghost{font-size:12px;padding:5px 12px;border-color:var(--line)}
-/* Confirm is the one that carries meaning, so it is the one in teal. */
+/* Confirm is the one that carries meaning, so it is the one in teal. Challenge is the counter
+   position and takes the accent — the same pairing the completeness rows already use, so an
+   auditor who has approved and challenged a gap upstairs recognises the two words here. */
 .matter-act .btn-ghost.confirm{border-color:var(--brand);color:var(--brand)}
+.matter-act .btn-ghost.challenge{border-color:var(--med);color:var(--accent-text)}
+.matter.challenged{background:var(--med-bg)}
 .matter-state{font-size:11.5px;font-weight:500}
 .assess-doc-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
 .assess-text,.letterpre{margin:0;padding:15px 17px;border:1px solid var(--line);

@@ -228,6 +228,14 @@ the case-ID generation and the taxpayer fields are the real thing.</p>"""
 
 # ------------------------------------------------------------------ the three tabs
 
+def challenge_q(c: dict) -> str:
+    """What the auditor is disputing, worded exactly as the application words it."""
+    return (f"I am challenging this finding: “{c['title']}”."
+            + (f" The investigation says: “{c['observed']}”." if c.get("observed") else "")
+            + (f" It would report as: “{c['reading']}”." if c.get("reading") else "")
+            + " Talk me through what it rests on, and whether it holds.")
+
+
 def handoff(label: str, tab: str, carries: str, caution: str) -> str:
     """The end of a module, and the control that moves to the next one.
 
@@ -504,7 +512,14 @@ figures. The audit conclusion is the auditor's: only what you accept reaches the
 <div class="matter-act">"""
         + (f'<span class="pill pri-low">{e(c["decision"].replace("-", " "))}</span>'
            if c["decision"]
-           else '<button class="btn-ghost">Confirm</button>'
+           # Challenge is the one of the four a file with no backend can honour honestly: it
+           # opens the conversation with the matter already written into it, which needs no
+           # engine. The other three record a decision, and a decision recorded only in this
+           # browser would not move the report or the handoff count — both embedded — so they
+           # stay inert rather than pretending.
+           else '<button class="btn-ghost confirm">Confirm</button>'
+                f'<button class="btn-ghost challenge" data-challenge="{e(challenge_q(c))}">'
+                'Challenge</button>'
                 '<button class="btn-ghost">Dismiss</button>'
                 '<button class="btn-ghost">Ask the taxpayer</button>')
         + "</div></div>"
@@ -1477,6 +1492,14 @@ const send = () => {{
 }};
 document.getElementById('asst-send').addEventListener('click', send);
 asstQ.addEventListener('keydown', ev => {{ if (ev.key === 'Enter') send(); }});
+
+/* Challenging a matter opens the conversation with the question already written — it does not
+   send it, so the auditor can put it in their own words first. Same behaviour as the app. */
+document.querySelectorAll('[data-challenge]').forEach(btn => btn.addEventListener('click', () => {{
+  dock(true);
+  asstQ.value = btn.dataset.challenge;
+  asstQ.focus();
+}}));
 
 document.getElementById('asst-open').addEventListener('click', () => dock(true));
 document.getElementById('asst-close').addEventListener('click', () => dock(false));

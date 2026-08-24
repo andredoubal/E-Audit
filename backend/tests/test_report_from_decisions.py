@@ -188,3 +188,34 @@ def test_exposure_still_counts_one_excess_once(api):
 
     assert _total(before) == _total(after), \
         "accepting an alternative characterisation of the same evidence must not add money"
+
+
+def test_a_challenged_hypothesis_stays_out_of_the_report(api):
+    """Challenge is the auditor disputing the engine's reading, not endorsing it.
+
+    It records `needs-more-investigation`, and the whole point of the control is that the
+    matter is *not* settled — so it must not reach the report on its way to being argued
+    about. Last in the file because it consumes an undecided hypothesis, and the tests above
+    need those.
+    """
+    inv = api.get(f"/api/cases/{CASE}/investigation").json()
+    decided = {h["hypothesis_id"] for h in inv["hypotheses"] if h["decision"]}
+    hid = next((h["hypothesis_id"] for h in inv["hypotheses"]
+                if h["outcome_code"] and h["hypothesis_id"] not in decided), "")
+    if not hid:
+        pytest.skip("every hypothesis carrying an outcome has already been ruled on")
+
+    r = api.post(f"/api/cases/{CASE}/hypotheses/{hid}/decision",
+                 json={"decision": "needs-more-investigation",
+                       "comment": "Putting this to the assistant before I accept it."})
+    assert r.status_code == 200, r.text
+
+    found = _fields(api)["Audit Findings"]
+    assert all(t["hypothesis_id"] != hid for t in found["trace"]), \
+        "a challenged matter is disputed, not established — it must not reach the report"
+
+    # and the challenge itself is on the file, with the auditor's reason
+    after = api.get(f"/api/cases/{CASE}/investigation").json()
+    kept = next(h for h in after["hypotheses"] if h["hypothesis_id"] == hid)
+    assert kept["decision"]["decision"] == "needs-more-investigation"
+    assert kept["decision"]["comment"].startswith("Putting this")

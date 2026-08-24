@@ -378,17 +378,25 @@ export default function Investigation() {
   const [rev, setRev] = useState(0);
   const [modal, setModal] = useState<{ title: string; detail?: Detail; amount?: number } | null>(null);
 
+  // Blanking the page is right when the *case* changes — the old case's figures must not sit
+  // on screen under a new case's name. It is wrong on a refresh of the same case: `!d` falls
+  // through to the loading branch, which unmounts `CaseTabs` and the assistant docked inside
+  // it. Recording a decision therefore closed the assistant and threw away the question it had
+  // just been handed, which is precisely what Challenge exists to open.
+  useEffect(() => { setD(null); setErr(null); }, [id]);
+
   useEffect(() => {
     if (!id) return;
-    setD(null);
-    setErr(null);
+    // A response for the case you have just navigated away from must not land on this one.
+    let live = true;
     fetch(`/api/cases/${id}/reconcile`)
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json();
       })
-      .then(setD)
-      .catch((e) => setErr(String(e)));
+      .then((j) => { if (live) { setD(j); setErr(null); } })
+      .catch((e) => { if (live) setErr(String(e)); });
+    return () => { live = false; };
   }, [id, rev]);
 
   if (err)
