@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import {
   getDashboard,
   type Comparison,
+  type CompareSide,
   type MatchRow,
   type ReconDashboard,
   type ReconException,
   type ReconObservation,
   type WorkstreamDash,
 } from "../api";
+import { Legend, ProportionBar, RankedBars, SourceBars,
+         type Segment, type SourceBar } from "./Charts";
 
 const sar = (n: number | null | undefined) =>
   n === null || n === undefined
@@ -55,8 +58,20 @@ function Transactions({ c }: { c: Comparison }) {
   const ordered = [...groups.entries()].sort(
     (a, b) => MATCH_ORDER.indexOf(a[0]) - MATCH_ORDER.indexOf(b[0]));
 
+  const segs: Segment[] = ordered.map(([status, rows]) => ({
+    key: status,
+    label: rows[0].status_label,
+    value: rows.length,
+    tone: status === "exact-match" ? "agree"
+      : status === "missing-identifier" ? "warn" : "differ",
+  }));
+
   return (
     <div className="l3">
+      {/* Proportion, not count: "18 of 22 agree" is a glance rather than four chips read and
+          added. Selecting a segment is the same act as selecting its chip. */}
+      <ProportionBar segments={segs} onSelect={(k) => setOpen(open === k ? null : k)}
+                     selected={open} />
       <div className="l3-rollup">
         {ordered.map(([status, rows]) => (
           <button
@@ -222,6 +237,38 @@ function ComparisonCard({ c }: { c: Comparison }) {
                   </tbody>
                 </table>
               </div>
+              {/* The two sides as proportions. Money moved between treatments nets to nothing
+                  in the totals above, so this is the only level that shows it — and side by
+                  side as proportions is the only way two sources of different size compare. */}
+              <div className="ch-splits">
+                {([["a", c.a] as const, ["b", c.b] as const]).map(([which, side]) => {
+                  const segs: Segment[] = c.treatments.map((t) => ({
+                    key: t.treatment,
+                    label: t.label,
+                    value: Math.abs((which === "a" ? t.a_total : t.b_total) || 0),
+                    tone: t.treatment === "standard-rated" ? "agree"
+                      : t.treatment === "unclassified" ? "warn" : "neutral",
+                  }));
+                  if (!segs.some((x) => x.value)) return null;
+                  return (
+                    <div className="ch-split" key={which}>
+                      <span className="ch-split-l">{side.label}</span>
+                      <ProportionBar segments={segs} />
+                    </div>
+                  );
+                })}
+                <Legend segments={c.treatments.map((t) => ({
+                  key: t.treatment, label: t.label,
+                  value: Math.abs(t.variance || 0),
+                  tone: t.treatment === "standard-rated" ? "agree"
+                    : t.treatment === "unclassified" ? "warn" : "neutral",
+                }))} />
+                <p className="ch-note">
+                  Each bar is one source&rsquo;s own composition; the legend carries the
+                  difference between them per treatment.
+                </p>
+              </div>
+
               {!varyTreatments.length && (
                 <p className="detail-note">Every treatment agrees within tolerance.</p>
               )}
@@ -243,6 +290,34 @@ function WorkstreamDashboard({ w, name, comparisons }: {
   comparisons: Comparison[];
 }) {
   const s = w.summary;
+
+  // The three sources on one scale. Every value here is lifted from a comparison the engine
+  // already ran — nothing is recomputed to draw the picture.
+  const vat = comparisons.filter((c) => c.metric === "vat");
+  const sideOf = (src: CompareSide["source"]) => {
+    for (const c of vat) {
+      if (c.a.source === src && c.a.present) return c.a;
+      if (c.b.source === src && c.b.present) return c.b;
+    }
+    return null;
+  };
+  const registerLabel = name.startsWith("Sales") ? "Sales register" : "Purchase register";
+  const sources: SourceBar[] = ([
+    ["register", registerLabel, "the taxpayer\u2019s own listing",
+     `no ${registerLabel.toLowerCase()} on the case`],
+    ["e-invoices", "E-invoices", "the Authority\u2019s extract",
+     "no e-invoice extract for this side on the case"],
+    ["vat-return", "VAT return", "as filed", "no return on file for this period"],
+  ] as const).map(([key, label, origin, missing]) => {
+    const side = sideOf(key);
+    return {
+      key, label,
+      value: side?.total ?? null,
+      origin: side?.origin || origin,
+      present: !!side && side.total !== null,
+      missing,
+    };
+  });
   return (
     <div className="panel">
       <div className="panel-head">
@@ -269,6 +344,18 @@ function WorkstreamDashboard({ w, name, comparisons }: {
           ))}
         </div>
       )}
+
+      {/* The picture the module exists to give: which of the three sources is out of line,
+          at a glance rather than six figures read across the tiles above. */}
+      <div className="ch-row">
+        <SourceBars
+          title="What each source says this period is worth, in VAT"
+          bars={sources}
+          note="One scale, so the outlier is the one that stands out. A source not on the case
+                has no bar rather than a bar of nothing — a zero-length bar would say the
+                taxpayer declared nothing, which is a different claim entirely."
+        />
+      </div>
 
       {/* The one figure a stakeholder repeats, and deliberately not a total. Three comparisons
           over the same two files disagree about the same money three times; adding them yields
@@ -350,6 +437,25 @@ function Exceptions({ exceptions }: { exceptions: ReconException[] }) {
         <h2>Exceptions</h2>
         <span className="sub">{material.length} — what the investigation works from</span>
       </div>
+      {/* Separate baselines, never stacked and never running to a total. The shape is the
+          argument: several of these rest on the same records, so a stacked bar would draw a
+          figure that corresponds to nothing. */}
+      <div className="ch-row">
+        <RankedBars
+          rows={[...material]
+            .filter((e) => e.metric === "vat" && e.variance)
+            .sort((a, b) => Math.abs(b.variance || 0) - Math.abs(a.variance || 0))
+            .slice(0, 8)
+            .map((e) => ({ key: e.id, label: e.category,
+                           sub: `${e.reconciliation}${e.affected_count
+                             ? ` · ${e.affected_count} record(s)` : ""}`,
+                           value: e.variance || 0 }))}
+          note="Ranked, not accumulated. These bars share a scale but not a baseline: adding
+                them would count the same records more than once, which is why the dashboard
+                publishes the largest single exception and never a total."
+        />
+      </div>
+
       <div className="tablewrap">
         <table className="dtable">
           <thead>

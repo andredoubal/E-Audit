@@ -188,10 +188,39 @@ class Dataset:
             }
         return out
 
+    def by_period(self, metric: str) -> list[dict]:
+        """Records and value per tax period, in order.
+
+        A register that stops mid-period is one of the few defects visible at a glance and
+        invisible in any total: the sum is simply short by whatever is in the missing weeks,
+        and no comparison downstream can tell that from an under-declaration. Records with no
+        readable date are counted separately rather than dropped — they are not "no invoices in
+        that month", they are invoices whose month could not be read.
+        """
+        buckets: dict[str, dict] = {}
+        undated = 0
+        for r in self.records:
+            if r.tax_period is None:
+                undated += 1
+                continue
+            b = buckets.setdefault(r.tax_period, {"period": r.tax_period, "count": 0,
+                                                  "total": 0.0, "counted": 0})
+            b["count"] += 1
+            v = r.amount(metric)
+            if v is not None:
+                b["total"] = round(b["total"] + v, 2)
+                b["counted"] += 1
+        out = [buckets[k] for k in sorted(buckets)]
+        if undated:
+            out.append({"period": None, "count": undated, "total": 0.0, "counted": 0})
+        return out
+
     def to_dict(self) -> dict:
         return {
             "source_dataset": self.source_dataset, "source_file": self.source_file,
             "direction": self.direction, "count": self.count,
+            "by_period": self.by_period("vat"),
+            "by_treatment": self.by_treatment("vat"),
             "fields_available": sorted(self.fields_available),
             "unreadable_rows": {k: v[:25] for k, v in self.unreadable_rows.items()},
             "unreadable_counts": {k: len(v) for k, v in self.unreadable_rows.items()},

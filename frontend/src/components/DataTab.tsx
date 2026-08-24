@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getDashboard, getEvidence, type DatasetProfile, type EvidenceState,
          type ReconDashboard } from "../api";
+import { PeriodBars } from "./Charts";
 import EvidencePanel from "./EvidencePanel";
 import ZatcaSource from "./ZatcaSource";
 
@@ -258,6 +259,15 @@ export default function DataTab({ id, rev, onChanged }: {
   }, [id]);
   useEffect(load, [load, rev]);
 
+  // One entry per canonicalised dataset the comparisons actually used, with the workstream it
+  // was used on — the same file can only stand on one side, and saying which is half the point.
+  const datasets = dash
+    ? (Object.entries(dash.workstreams) as [string, typeof dash.workstreams.sales][])
+        .flatMap(([ws, w]) => [w.sources.register, w.sources.einvoices]
+          .filter((s): s is NonNullable<typeof s> => !!s)
+          .map((src) => ({ ws, src })))
+    : [];
+
   return (
     <>
       <ZatcaSource id={id} rev={rev} onChanged={onChanged} />
@@ -282,6 +292,31 @@ export default function DataTab({ id, rev, onChanged }: {
           correct it there if it is wrong.
         </div>
       </div>
+
+      {/* Where the records actually fall across the period. The empty column is the finding:
+          a register that stops six weeks before the period ends looks entirely healthy in
+          every total it produces. */}
+      {!!datasets.length && (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Coverage across the period</h2>
+            <span className="sub">{dash!.period_from} → {dash!.period_to}</span>
+          </div>
+          <div className="ch-covers">
+            {datasets.map(({ ws, src }) => (
+              <div className="ch-cover" key={src.source_file + ws}>
+                <div className="ch-cover-head">
+                  <b className="mono xs">{src.source_file}</b>
+                  <span className="sub">{ws} · {src.count} records</span>
+                </div>
+                <PeriodBars series={src.by_period} from={dash!.period_from}
+                            to={dash!.period_to}
+                            undated={src.by_period.find((b) => b.period === null)?.count} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <div className="panel-head"><h2>Data quality</h2></div>

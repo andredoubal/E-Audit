@@ -1634,3 +1634,80 @@ h4.lvl{font-size:11px;font-weight:500;color:var(--soft);text-transform:uppercase
 .afadd{padding:14px 18px}
 .cmp-note{margin:0 0 10px;font-size:12px;color:var(--med);line-height:1.55;max-width:86ch;
   padding-left:11px;border-left:2px solid var(--med)}
+
+/* ============================================================ charts
+   No library and no canvas: CSS boxes sized from figures the engine computed, with the exact
+   value printed beside every bar. A reader must never estimate from a bar length something
+   Python knows precisely — the picture is for spotting the outlier, the label is the fact.
+
+   Palette discipline, same as everywhere: teal is what the engine found and what agrees, red is
+   disagreement, amber is "could not be classified", and orange remains *only* what you pressed. */
+.ch-row{padding:16px 18px;border-bottom:1px solid var(--line)}
+.ch-chart{display:flex;flex-direction:column;gap:10px}
+.ch-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+.ch-head>b{font-size:12.5px;font-weight:500}
+.ch-sub{font-size:11.5px;color:var(--muted)}
+.ch-note{margin:2px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;max-width:88ch}
+
+/* ---- horizontal bars: three sources on one scale, and exceptions ranked */
+.ch-hbars{display:flex;flex-direction:column;gap:7px}
+.ch-hbar{display:grid;grid-template-columns:minmax(140px,190px) 1fr minmax(96px,auto);
+  align-items:center;gap:12px}
+.ch-hbar-l{font-size:12px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.ch-hbar-l>i{font-style:normal;font-size:10.5px;color:var(--faint);font-family:var(--mono);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-hbar-track{height:20px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:5px;overflow:hidden}
+.ch-hbar-fill{display:block;height:100%;background:var(--low);opacity:.55;
+  transition:width .25s ease}
+.ch-hbar-fill.out{opacity:1;background:var(--high)}
+.ch-hbar-fill.differ{background:var(--high);opacity:.8}
+.ch-hbar-v{font-size:12.5px;text-align:right}
+.ch-hbar-absent{font-size:11.5px;color:var(--faint);font-style:italic}
+
+/* ---- one proportional bar: composition, and match outcomes */
+.ch-pbar{display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--line);
+  background:var(--surface-2)}
+.ch-seg{display:flex;align-items:center;justify-content:center;min-width:2px;border:none;
+  padding:0;font:inherit;transition:filter .15s,opacity .15s}
+.ch-seg.tap{cursor:pointer}
+.ch-seg.tap:hover{filter:brightness(1.08)}
+.ch-seg-n{font-size:10.5px;color:#fff;opacity:.95;padding:0 4px}
+.ch-seg.t-agree{background:var(--low)}
+.ch-seg.t-differ{background:var(--high)}
+.ch-seg.t-warn{background:var(--med)}
+.ch-seg.t-neutral{background:var(--sand)}
+/* Selection is the one place orange appears in a chart, and it means exactly what it means
+   everywhere else in the app: this is the thing you pressed. */
+.ch-seg.on{background:var(--accent);box-shadow:inset 0 0 0 2px var(--accent-deep)}
+
+.ch-legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11.5px;color:var(--muted)}
+.ch-lg{display:inline-flex;align-items:center;gap:6px}
+.ch-lg>b{font-weight:400;color:var(--ink);font-size:11.5px}
+.ch-sw{width:9px;height:9px;border-radius:2px;flex:none}
+.ch-sw.t-agree{background:var(--low)}
+.ch-sw.t-differ{background:var(--high)}
+.ch-sw.t-warn{background:var(--med)}
+.ch-sw.t-neutral{background:var(--sand)}
+
+.ch-splits{display:flex;flex-direction:column;gap:9px;margin:14px 0 4px}
+.ch-split{display:grid;grid-template-columns:minmax(120px,160px) 1fr;align-items:center;gap:12px}
+.ch-split-l{font-size:11.5px;color:var(--muted)}
+
+/* ---- vertical bars: records across the period, empty months included on purpose */
+.ch-vbars{display:flex;align-items:flex-end;gap:6px;height:118px}
+.ch-vbar{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;
+  min-width:26px}
+.ch-vbar-n{font-size:11px;color:var(--muted);height:14px}
+.ch-vbar-track{flex:1;width:100%;display:flex;align-items:flex-end;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.ch-vbar-fill{width:100%;background:var(--low);opacity:.6;transition:height .25s ease}
+/* A month with nothing in it is drawn, not omitted — the empty column is the finding. */
+.ch-vbar.none .ch-vbar-track{border-style:dashed;border-color:var(--high);background:var(--high-bg)}
+.ch-vbar.none .ch-vbar-l{color:var(--high)}
+.ch-vbar-l{font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+
+.ch-covers{display:flex;flex-direction:column}
+.ch-cover{padding:16px 18px;border-bottom:1px solid var(--divider)}
+.ch-cover:last-child{border-bottom:none}
+.ch-cover-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}

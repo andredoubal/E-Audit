@@ -1580,7 +1580,7 @@ export const getRegulatoryCoverage = () =>
 /** One side of a comparison. `present: false` means the source is not on the case at all —
  *  which is not the same as a total of zero, and is why `total` is nullable. */
 export interface CompareSide {
-  source: "return" | "register" | "e-invoices";
+  source: "vat-return" | "register" | "e-invoices";
   label: string;
   origin: string;
   total: number | null;
@@ -1694,6 +1694,11 @@ export interface DatasetSummary {
   source_file: string;
   direction: string;
   count: number;
+  /** records and value per tax period; `period: null` is the undated bucket, which is not the
+   *  same thing as a month with no records and is never folded into one */
+  by_period: { period: string | null; count: number; total: number; counted: number }[];
+  by_treatment: Record<string, { treatment: string; label: string; count: number;
+                                 counted: number; total: number | null }>;
   fields_available: string[];
   unreadable_rows: Record<string, number[]>;
   unreadable_counts: Record<string, number>;
