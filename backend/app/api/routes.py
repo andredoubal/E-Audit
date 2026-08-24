@@ -1153,6 +1153,44 @@ def reconciliations(case_id: str, workstream: str = "", db: Session = Depends(ge
         raise HTTPException(404, str(e))
 
 
+@router.get("/cases/{case_id}/regulatory-controls")
+def regulatory_controls(case_id: str, workstream: str = "", db: Session = Depends(get_db)):
+    """Which regulatory controls this case's evidence brings into scope, and what they show.
+
+    Screening starts from the evidence rather than from a confirmed hypothesis, which is what
+    makes the case the specification cares about reachable: the numbers reconcile and a
+    compliance question still arises. Every citation is retrieved from the corpus, and an
+    article whose English wording is superseded says so rather than being quoted as the rule.
+    """
+    from ..evidence import service as evidence_service
+    from ..recon import registry as recon_registry
+    from ..recon import service as recon_service
+    from ..regulatory import applicability
+
+    c = _case_or_404(db, case_id)
+    if workstream and workstream not in (recon_registry.SALES, recon_registry.PURCHASES):
+        raise HTTPException(422, "workstream must be sales or purchases")
+
+    profiles = evidence_service.profiles(db, case_id)
+    rows = evidence_service.rows_by_file(db, case_id)
+    declared, _ = recon_service._declared(db, c)
+    return applicability.assess(profiles, rows, declared, workstream=workstream)
+
+
+@router.get("/regulatory/controls")
+def regulatory_control_set():
+    """The control set itself, and how much of the regulations it reaches.
+
+    Published because ten controls over seventy-nine articles is a start rather than coverage,
+    and a screening tool that does not say so is claiming more than it has.
+    """
+    from ..regulatory import controls as control_corpus
+
+    corpus = control_corpus.load()
+    return {**control_corpus.coverage(),
+            "controls": [c.to_dict() for c in corpus.controls]}
+
+
 @router.get("/cases/{case_id}/registers")
 def registers(case_id: str, db: Session = Depends(get_db)):
     """The sales and purchase registers, each against its own box on the return.
