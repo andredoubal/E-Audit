@@ -129,7 +129,7 @@ def case_list(cases: list, open_case: str) -> str:
     return f"""
 <header class="page-head"><div><h1>Cases</h1>
 <p class="sub">{len(cases)} open, ranked by what is worth looking at first</p></div>
-<div><span class="btn-ghost">New case</span></div></header>
+<div><button class="btn-ghost" id="new-case">New case</button></div></header>
 
 <div class="caselist">{''.join(rows)}</div>
 <p class="detail-note">Every case covers 2025-01-01 to 2025-03-31. Only
@@ -869,6 +869,9 @@ function view(name) {{
 
 document.querySelectorAll('[data-open]').forEach(
   r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
+document.getElementById('new-case').addEventListener('click', () => toast(
+  'In the application this opens the Add case form \u2014 taxpayer, TIN, period, activities '
+  + '\u2014 and writes a real case. A static file has no database to write it to.'));
 document.getElementById('back').addEventListener('click', () => view('cases'));
 document.querySelectorAll('.navlink[data-view="cases"]').forEach(
   n => n.addEventListener('click', () => view('cases')));

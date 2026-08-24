@@ -140,3 +140,55 @@ def test_a_seeded_case_still_shows_not_held_and_risk_engine(api):
     assert fields["Audit Manager"]["value"] == "[not held]"
     # the pre-existing fallback for a case with no stated reason — unchanged behaviour
     assert fields["Case Creation Reason"]["value"] == "Risk Engine"
+
+
+def test_a_reissued_case_id_does_not_inherit_the_last_case_s_writing(api):
+    """The auditor's own writing is keyed on `case_id` with no foreign key — deliberately, so a
+    decision survives the hypothesis being re-derived. The cost is that a deleted case leaves
+    its writing behind, and ids are sequential: without this, the next case created is handed
+    the previous one's steer, its edited report fields and its assistant conversation. That is
+    one audit appearing inside another.
+    """
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import AuditCase, CaseInstruction, ItemReview, LetterDraft, ReportFieldEdit
+
+    first = api.post("/api/cases", json={
+        "period_from": "2025-01-01", "period_to": "2025-03-31",
+        "taxpayer": {"name": "Reissue Co.", "vat_registration_number": "391100220099001"},
+    }).json()["case_id"]
+
+    api.put(f"/api/cases/{first}/instructions",
+            json={"text": "Somebody else's steer.", "enabled": True})
+    api.put(f"/api/cases/{first}/audit-report/fields",
+            json={"key": "Audit outcome::Rulings", "value": "Somebody else's ruling."})
+    api.put(f"/api/cases/{first}/letters/verdict",
+            json={"subject": "Theirs", "body": "Somebody else's letter."})
+    api.put(f"/api/cases/{first}/reviews",
+            json={"item_kind": "completeness-item", "item_key": "k::v",
+                  "verdict": "challenged", "note": "theirs"})
+
+    # Delete the case the way a re-seed or a cleanup would, leaving the writing behind.
+    db = SessionLocal()
+    row = db.scalar(select(AuditCase).where(AuditCase.case_id == first))
+    db.delete(row)
+    db.commit()
+    assert db.scalar(select(CaseInstruction).where(CaseInstruction.case_id == first)) is not None, \
+        "the orphan is the precondition this test is about"
+    db.close()
+
+    # A new case takes the id back.
+    again = api.post("/api/cases", json={
+        "case_id": first,
+        "period_from": "2025-04-01", "period_to": "2025-06-30",
+        "taxpayer": {"name": "Fresh Co.", "vat_registration_number": "391100220099002"},
+    })
+    assert again.status_code == 200, again.text
+
+    assert api.get(f"/api/cases/{first}/instructions").json()["text"] == ""
+    db = SessionLocal()
+    for model in (CaseInstruction, ReportFieldEdit, LetterDraft, ItemReview):
+        assert not db.scalars(select(model).where(model.case_id == first)).all(), \
+            f"{model.__name__} from the previous case survived into the new one"
+    db.close()

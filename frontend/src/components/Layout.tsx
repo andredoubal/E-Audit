@@ -106,7 +106,10 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [count, setCount] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const match = useMatch("/cases/:id/*");
-  const caseId = match?.params.id;
+  // `/cases/new` is the create form, not a case called "new". Without this the rail renders an
+  // open-case card for a case that does not exist, with module links pointing nowhere and an
+  // instructions fetch that 404s.
+  const caseId = match?.params.id === "new" ? undefined : match?.params.id;
 
   useEffect(() => {
     listCases().then((rows) => setCount(rows.length)).catch(() => {});

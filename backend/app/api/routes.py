@@ -859,6 +859,29 @@ def _next_case_id(db: Session, year: int) -> str:
     return f"{prefix}{max_seq + 1:04d}"
 
 
+def _clear_orphaned_case_state(db: Session, case_id: str) -> None:
+    """Wipe anything still filed under this id before a new case takes it.
+
+    The auditor's own writing — instructions, the assessment, report fields, letter drafts,
+    reviews, the assistant conversation — is keyed on `case_id` with no foreign key, because it
+    outlives the rows it describes on purpose: a hypothesis is re-derived on every run and a
+    decision must not vanish with it. The cost is that a deleted case leaves its writing behind,
+    and ids are sequential, so the next case created can be handed the last one's steer and its
+    edited report fields. That is somebody else's audit appearing inside a fresh one.
+
+    A case id being issued is the moment to clear it: at that point nothing can legitimately be
+    filed under it yet.
+    """
+    from sqlalchemy import delete
+
+    from ..models import (AuditorDecision, AuditorFinding, CaseAssessment, CaseInstruction,
+                          CaseMessage, ItemReview, LetterDraft, ReportFieldEdit)
+
+    for model in (CaseInstruction, CaseAssessment, ReportFieldEdit, LetterDraft, ItemReview,
+                  CaseMessage, AuditorDecision, AuditorFinding):
+        db.execute(delete(model).where(model.case_id == case_id))
+
+
 @router.post("/cases")
 def create_case(body: NewCaseIn, db: Session = Depends(get_db)):
     """Create a case by hand. Reuses the taxpayer by VAT registration number if one already
@@ -908,6 +931,7 @@ def create_case(body: NewCaseIn, db: Session = Depends(get_db)):
         audit_supervisor=body.audit_supervisor.strip(),
         audit_officer=body.audit_officer.strip(),
     ))
+    _clear_orphaned_case_state(db, case_id)
     db.add(EventLog(case_id=case_id, actor="auditor", action="case-created",
                     payload={"taxpayer": tp.name, "vat_no": tp.vat_registration_number}))
     db.commit()
