@@ -32,6 +32,24 @@ from .model import (EXEMPT, OUT_OF_SCOPE, STANDARD, UNCLASSIFIED, ZERO_RATED)
 #: historic record read after it.
 STANDARD_RATE = 15.0
 
+#: Every rate that is *standard-rated in substance*, newest first.
+#:
+#: KSA charged 5% from January 2018 until July 2020 and 15% since, and the VAT return still
+#: carries its own boxes for both — "المبيعات الخاضعة للنسبة الأساسية (%5)" sits beside the 15%
+#: one, on the purchases side too. So a 5% line is not an anomaly to be set aside; it is a
+#: standard-rated supply at the rate then in force, and treating it as unclassified put real
+#: standard-rated money in a bucket the auditor was told nothing could be concluded about.
+#:
+#: The rate itself stays on the record, so a comparison that needs to reach the 15% box and the
+#: 5% box separately still can. What this decides is only the *treatment*, which is the same
+#: for both.
+STANDARD_RATES: tuple[float, ...] = (15.0, 5.0)
+
+
+def _standard_rate(rate: float) -> float | None:
+    """The standard rate this one is, or None if it is not one."""
+    return next((r for r in STANDARD_RATES if abs(rate - r) < 0.01), None)
+
 #: What a treatment column may say. Matched whole-word against the cell, lowercased.
 _WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (ZERO_RATED, ("zero", "zero rated", "zero-rated", "zerorated", "z", "0%", "zr",
@@ -85,23 +103,29 @@ def classify(*, stated: Any = None, indicator: Any = None, vat_rate: float | Non
             if taxable_amount:
                 return ZERO_RATED, "the stated VAT rate is 0% on a taxable amount"
             return UNCLASSIFIED, "the stated VAT rate is 0% with no taxable amount to place it"
-        if abs(vat_rate - STANDARD_RATE) < 0.01:
-            return STANDARD, f"the stated VAT rate is {STANDARD_RATE:g}%"
+        matched = _standard_rate(vat_rate)
+        if matched is not None:
+            return STANDARD, (f"the stated VAT rate is {matched:g}%"
+                              + ("" if matched == STANDARD_RATE else
+                                 ", the standard rate in force before July 2020, which the "
+                                 "return declares in its own box"))
         return (UNCLASSIFIED,
-                f"the stated VAT rate is {vat_rate:g}%, which is neither the standard rate nor "
+                f"the stated VAT rate is {vat_rate:g}%, which is neither a standard rate nor "
                 f"zero — it is left uncategorised rather than folded into a box it was not "
                 f"shown to belong to")
 
     # 4 · a rate derived from the two amounts, where both are present and the base is non-zero
     if taxable_amount and vat_amount is not None:
         derived = round(vat_amount / taxable_amount * 100, 2)
-        if abs(derived - STANDARD_RATE) < 0.15:
+        near = next((r for r in STANDARD_RATES if abs(derived - r) < 0.15), None)
+        if near is not None:
             return STANDARD, (f"no rate column, but VAT is {derived:g}% of the taxable amount, "
-                              f"which is the standard rate")
+                              f"which is the standard rate"
+                              + ("" if near == STANDARD_RATE else " in force before July 2020"))
         if abs(derived) < 0.01:
             return ZERO_RATED, "no rate column, but no VAT is charged on a taxable amount"
         return (UNCLASSIFIED,
                 f"no rate column, and VAT is {derived:g}% of the taxable amount, which matches "
-                f"neither the standard rate nor zero")
+                f"neither a standard rate nor zero")
 
     return UNCLASSIFIED, "the file carries nothing that decides the VAT treatment"

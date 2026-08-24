@@ -104,22 +104,24 @@ def test_a_material_difference_is_a_variance_and_says_nothing_about_a_taxpayer()
 def test_totals_that_agree_can_hide_a_material_difference_inside_one_vat_treatment():
     """The case level 2 exists for. Money moved between zero-rated and standard-rated nets to
     nothing overall, and the only place it shows is the category breakdown."""
+    # 7%, not 5%: KSA's pre-2020 standard rate is standard-rated and would land in that
+    # column, which is not the movement this test is about.
     register = ds("register.csv", [
-        ["2025-01-14", "INV-1", "B", "300", 1_000_000, 15, 150_000],
+        ["2025-01-14", "INV-1", "B", "300", 1_200_000, 15, 180_000],
         ["2025-01-15", "INV-2", "C", "300", 1_000_000, 0, 0],
     ])
     einvoice = ds("zatca.csv", [
         ["2025-01-14", "INV-1", "B", "300", 500_000, 15, 75_000],
-        ["2025-01-15", "INV-2", "C", "300", 1_500_000, 5, 75_000],
+        ["2025-01-15", "INV-2", "C", "300", 1_500_000, 7, 105_000],
     ])
     c = run("S1", side(P.REGISTER, "Sales register", register),
             side(P.EINVOICE, "E-invoices", einvoice))
 
     assert c.variance == 0.0, "the totals agree exactly — that is the trap"
     rows = {t.treatment: t for t in c.treatments}
-    assert rows[STANDARD].variance == 75_000.0
+    assert rows[STANDARD].variance == 105_000.0
     assert rows[ZERO_RATED].variance == 0.0
-    assert rows[UNCLASSIFIED].variance == -75_000.0
+    assert rows[UNCLASSIFIED].variance == -105_000.0
     assert any(t.status == S.VARIANCE for t in c.treatments)
 
 

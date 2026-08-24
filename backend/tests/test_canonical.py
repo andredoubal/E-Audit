@@ -118,11 +118,22 @@ def test_the_standard_rate_and_a_zero_rate_are_read_from_the_rate_column():
 
 
 def test_a_rate_that_is_neither_is_left_uncategorised_rather_than_folded_into_standard():
-    """Folding a 5%-rated line into standard would put it in a box it was never shown to
+    """Folding a 7%-rated line into standard would put it in a box it was never shown to
     belong to, and a breakdown is read to decide where a difference is."""
-    treatment, why = T.classify(vat_rate=5.0, taxable_amount=100.0)
+    treatment, why = T.classify(vat_rate=7.0, taxable_amount=100.0)
     assert treatment == UNCLASSIFIED
-    assert "neither the standard rate nor zero" in why
+    assert "neither a standard rate nor zero" in why
+
+
+def test_the_pre_2020_five_percent_rate_is_standard_rated_and_not_an_anomaly():
+    """KSA charged 5% until July 2020 and the VAT return still declares it in its own box, so a
+    5% line is a standard-rated supply at the rate then in force. Reading it as unclassified
+    put real standard-rated money in the bucket the auditor is told nothing can be concluded
+    about."""
+    treatment, why = T.classify(vat_rate=5.0, taxable_amount=100.0)
+    assert treatment == STANDARD
+    assert "before July 2020" in why
+    assert T.classify(taxable_amount=100_000.0, vat_amount=5_000.0)[0] == STANDARD
 
 
 def test_a_treatment_is_derived_from_the_two_amounts_only_when_it_is_decisive():
@@ -140,10 +151,10 @@ def test_nothing_at_all_to_go_on_is_unclassified_and_says_so():
 def test_unclassified_is_a_real_row_in_the_breakdown_rather_than_a_bucket_that_disappears():
     ds = dataset("r.csv", SALES_COLS,
                  [["2025-01-14", "INV-1", "Buyer A", "300", 100000, 15, 15000],
-                  ["2025-02-03", "INV-2", "Buyer B", "300", 100000, 5, 5000]])
+                  ["2025-02-03", "INV-2", "Buyer B", "300", 100000, 7, 7000]])
     breakdown = ds.by_treatment("vat")
     assert breakdown[STANDARD]["total"] == 15000.0
-    assert breakdown[UNCLASSIFIED]["total"] == 5000.0
+    assert breakdown[UNCLASSIFIED]["total"] == 7000.0
     assert sum(b["total"] for b in breakdown.values()) == ds.total("vat")
 
 
@@ -174,3 +185,55 @@ def test_a_tax_period_is_derived_wherever_a_date_could_be_read():
     assert ds.records[0].tax_period == "2025-01"
     assert ds.records[0].transaction_date == date(2025, 1, 14)
     assert ds.records[1].tax_period is None, "no date, no period — never guessed"
+
+
+# ------------------------------------------------------------------ real-world headers
+#: The column names the Authority's own sales and purchase register templates carry.
+_SALES_REGISTER = ["invoice_number", "invoice_date", "customer_tax_id", "customer_name",
+                   "description", "amount_excl_vat", "vat_charged", "total_incl_vat"]
+_PURCHASE_REGISTER = ["invoice_number", "invoice_date", "supplier_tax_id", "supplier_name",
+                      "description", "amount_excl_vat", "vat_charged", "total_incl_vat"]
+
+
+def test_the_authority_s_own_register_headers_are_read_correctly():
+    """The regression this exists for: every amount column read as VAT.
+
+    `_BY_FRAGMENT` is first-match-wins, and both `amount_excl_vat` and `total_incl_vat` contain
+    "vat" — so the taxable base and the gross were each matched as the VAT amount and the three
+    columns were summed together. On these two rows that reported SAR 345,000 of output VAT
+    against a truth of 45,000, with no taxable base at all: an eightfold overstatement that
+    nothing downstream could detect, because by then the reading had been made.
+    """
+    rows = [["INV-1", "2025-01-14", "300000000000004", "Buyer A", "Consulting",
+             100_000, 15_000, 115_000],
+            ["INV-2", "2025-02-03", "300000000000004", "Buyer B", "Goods",
+             200_000, 30_000, 230_000]]
+    ds = dataset("sales_register.xlsx", _SALES_REGISTER, rows)
+
+    assert ds.total("vat") == 45_000.0
+    assert ds.total("taxable") == 300_000.0
+    assert ds.total("gross") == 345_000.0
+    assert ds.direction == SALE
+    assert ds.records[0].counterparty_name == "Buyer A"
+    assert ds.records[0].buyer_tax_id == "300000000000004", \
+        "a tax id column is an identifier, not the counterparty's name"
+
+
+def test_the_purchase_register_template_reads_as_purchases():
+    rows = [["PI-1", "2025-01-09", "300000000000009", "Vendor A", "Stationery",
+             40_000, 6_000, 46_000]]
+    ds = dataset("purchase_register.xlsx", _PURCHASE_REGISTER, rows)
+    assert ds.direction == PURCHASE
+    assert ds.total("vat") == 6_000.0
+    assert ds.total("taxable") == 40_000.0
+
+
+def test_a_header_naming_vat_only_as_the_tax_itself_still_reads_as_vat():
+    """The fix must not overshoot: "total vat" carries neither excl/incl nor a bare net or
+    gross, so it is still the tax and not a gross amount."""
+    ds = dataset("r.xlsx",
+                 ["invoice_number", "invoice_date", "customer_name", "taxable_amount",
+                  "total_vat"],
+                 [["INV-1", "2025-01-14", "Buyer A", 100_000, 15_000]])
+    assert ds.total("vat") == 15_000.0
+    assert ds.total("taxable") == 100_000.0

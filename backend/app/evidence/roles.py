@@ -109,9 +109,12 @@ _BY_CANONICAL: dict[str, tuple[str, str]] = {
 # Fragments matched against a header that the alias table did not recognise. Ordered: the first
 # match wins, so the more specific patterns come first.
 _BY_FRAGMENT: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    (COUNTERPARTY_TAX_ID, ("customer_vat", "customer_trn", "buyer_tin", "customer_tin"), CUSTOMER),
-    (COUNTERPARTY_TAX_ID, ("supplier_vat", "vendor_vat", "supplier_tin", "seller_tin"), SUPPLIER),
-    (COUNTERPARTY_TAX_ID, ("vat_registration", "tax_identification", "trn", "tin"), ""),
+    (COUNTERPARTY_TAX_ID, ("customer_vat", "customer_trn", "buyer_tin", "customer_tin",
+                           "customer_tax", "buyer_tax", "customer_tax_id"), CUSTOMER),
+    (COUNTERPARTY_TAX_ID, ("supplier_vat", "vendor_vat", "supplier_tin", "seller_tin",
+                           "supplier_tax", "vendor_tax", "seller_tax"), SUPPLIER),
+    (COUNTERPARTY_TAX_ID, ("vat_registration", "tax_identification", "tax_id", "tax_no",
+                           "tax_number", "trn", "tin"), ""),
     (COUNTERPARTY_NAME, ("customer", "buyer", "client", "debtor"), CUSTOMER),
     (COUNTERPARTY_NAME, ("supplier", "vendor", "seller", "creditor", "payee"), SUPPLIER),
     (CUSTOMS_DECLARATION, ("customs", "declaration", "bayan", "sad_number", "import_decl"), ""),
@@ -119,9 +122,22 @@ _BY_FRAGMENT: tuple[tuple[str, tuple[str, ...], str], ...] = (
                      "tax_code", "rate_type"), ""),
     (DOCUMENT_TYPE, ("document_type", "doc_type", "transaction_type", "entry_type"), ""),
     (VAT_RATE, ("rate", "percent", "pct"), ""),
+    # These two sit *above* the VAT rule and the plain net/gross rules, and they have to.
+    # The table is first-match-wins, and "amount_excl_vat" and "total_incl_vat" both contain
+    # "vat": on a real taxpayer register that read the taxable base and the gross as VAT, and
+    # the engine then totalled all three amount columns together. On a two-line fixture it
+    # reported SAR 345,000 of output VAT against a truth of 45,000, with no taxable base at
+    # all — an eightfold overstatement that nothing downstream could have detected, because by
+    # then the reading had already been made. The specific compound cues are matched before the
+    # greedy ones; "total_vat" still reaches VAT_AMOUNT, because it carries neither
+    # "excl"/"incl" nor a bare "net"/"gross".
+    (NET_AMOUNT, ("excl_vat", "excluding_vat", "exclusive_of_vat", "before_vat", "net_of_vat",
+                  "amount_excl", "ex_vat"), ""),
+    (GROSS_AMOUNT, ("incl_vat", "including_vat", "inclusive_of_vat", "amount_incl",
+                    "with_vat"), ""),
     (VAT_AMOUNT, ("vat", "tax_amount", "output_tax", "input_tax"), ""),
-    (NET_AMOUNT, ("net", "excl_vat", "excluding_vat", "before_vat", "taxable"), ""),
-    (GROSS_AMOUNT, ("gross", "incl_vat", "including_vat", "total"), ""),
+    (NET_AMOUNT, ("net", "taxable"), ""),
+    (GROSS_AMOUNT, ("gross", "total"), ""),
     (BALANCE, ("balance", "running_total", "closing"), ""),
     (CURRENCY, ("currency", "ccy"), ""),
     (SUPPLY_DATE, ("delivery", "supply"), ""),
