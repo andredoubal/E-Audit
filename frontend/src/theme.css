@@ -1098,6 +1098,7 @@ input.letter-input,select.letter-input{min-height:0}
   background:var(--surface-2);border-bottom:1px solid var(--line)}
 .round-n{font-size:14.5px;font-weight:700}
 .round-origin{flex:1;font-size:12.5px;color:var(--muted)}
+.round-subject{color:var(--ink);font-weight:500}
 
 /* Each step is its own card, so it needs air around it: without the inset the four cards sat
    flush against each other and against the round's own border, and the seam between step 3 and
@@ -1115,6 +1116,53 @@ input.letter-input,select.letter-input{min-height:0}
   text-overflow:ellipsis;white-space:nowrap}
 .rstep-mark{flex:none;font-size:11.5px;color:var(--faint)}
 .rstep-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
+
+/* ---- the VAT return against the taxpayer's own invoice registers --------------------
+   Three numbers per box and nothing between them. The earlier version of this was a bridge
+   with a rule deduction on every second line; the rules are what made it arguable, and which
+   documents qualify is a different question answered further down the page. */
+.vregs .panel-body{display:flex;flex-direction:column;gap:16px}
+.vreg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.vreg{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.vreg.empty{background:var(--bg)}
+.vreg-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:13px 16px;
+  border-bottom:1px solid var(--line);background:var(--surface-2)}
+.vreg-head>b{font-size:14px;font-weight:500}
+.vreg-head .sub{flex:1;min-width:0;font-size:11.5px;color:var(--soft)}
+.vreg-none{margin:0;padding:16px}
+.vreg-rows{display:flex;flex-direction:column}
+.vregrow{display:grid;grid-template-columns:1fr auto 14px;align-items:center;gap:12px;
+  width:100%;text-align:left;font:inherit;color:var(--ink);background:none;border:none;
+  border-bottom:1px solid var(--divider);padding:12px 16px;cursor:pointer}
+.vregrow.flat,.vregrow.diff{cursor:default}
+.vregrow:last-child{border-bottom:none}
+.vregrow:not(.flat):not(.diff):hover{background:var(--surface-2)}
+.vregrow .k{display:flex;flex-direction:column;gap:2px;font-size:13px;min-width:0}
+.vregrow .k small{font-size:11px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.vregrow .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14.5px}
+.vregrow .go{color:var(--faint);font-size:13px}
+/* The gap is the point of the card, so it is the line that carries weight — and its colour
+   says which way the exposure runs rather than merely that a number is non-zero. */
+.vregrow.diff{background:var(--surface-2);border-top:1px solid var(--line)}
+.vregrow.diff .k{font-weight:500}
+.vregrow.diff .v{font-size:17px;font-weight:500}
+.vregrow.diff.agrees .v{color:var(--low)}
+.vregrow.diff.under-declared .v,.vregrow.diff.over-claimed .v{color:var(--high)}
+.vregrow.diff.over-declared .v,.vregrow.diff.under-claimed .v{color:var(--accent-text)}
+
+.vreg-ins{border-top:1px solid var(--line);background:var(--bg)}
+.vreg-ins-head{padding:10px 16px 6px;font-size:11.5px;font-weight:500;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--soft)}
+.vins{padding:10px 16px 14px;border-top:1px solid var(--divider)}
+.vins-what{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.vins-what>b{font-size:12.5px;font-weight:500}
+.vins-amt{font-family:var(--mono);font-size:12.5px;color:var(--high)}
+.vins-what p{flex-basis:100%;margin:4px 0 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.vins-act{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}
+.vins-act .btn-ghost{font-size:11.5px;padding:4px 10px;border-color:var(--med);
+  color:var(--accent-text)}
+.dropzone.slim{padding:14px 16px}
 
 /* ---- the end of a module: what carries forward, and the control that takes you there.
    Teal, because this is the confirm colour in this design — what the engine found and what you

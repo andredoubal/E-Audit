@@ -1102,6 +1102,7 @@ input.letter-input,select.letter-input{min-height:0}
   background:var(--surface-2);border-bottom:1px solid var(--line)}
 .round-n{font-size:14.5px;font-weight:700}
 .round-origin{flex:1;font-size:12.5px;color:var(--muted)}
+.round-subject{color:var(--ink);font-weight:500}
 
 /* Each step is its own card, so it needs air around it: without the inset the four cards sat
    flush against each other and against the round's own border, and the seam between step 3 and
@@ -1119,6 +1120,53 @@ input.letter-input,select.letter-input{min-height:0}
   text-overflow:ellipsis;white-space:nowrap}
 .rstep-mark{flex:none;font-size:11.5px;color:var(--faint)}
 .rstep-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
+
+/* ---- the VAT return against the taxpayer's own invoice registers --------------------
+   Three numbers per box and nothing between them. The earlier version of this was a bridge
+   with a rule deduction on every second line; the rules are what made it arguable, and which
+   documents qualify is a different question answered further down the page. */
+.vregs .panel-body{display:flex;flex-direction:column;gap:16px}
+.vreg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.vreg{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.vreg.empty{background:var(--bg)}
+.vreg-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:13px 16px;
+  border-bottom:1px solid var(--line);background:var(--surface-2)}
+.vreg-head>b{font-size:14px;font-weight:500}
+.vreg-head .sub{flex:1;min-width:0;font-size:11.5px;color:var(--soft)}
+.vreg-none{margin:0;padding:16px}
+.vreg-rows{display:flex;flex-direction:column}
+.vregrow{display:grid;grid-template-columns:1fr auto 14px;align-items:center;gap:12px;
+  width:100%;text-align:left;font:inherit;color:var(--ink);background:none;border:none;
+  border-bottom:1px solid var(--divider);padding:12px 16px;cursor:pointer}
+.vregrow.flat,.vregrow.diff{cursor:default}
+.vregrow:last-child{border-bottom:none}
+.vregrow:not(.flat):not(.diff):hover{background:var(--surface-2)}
+.vregrow .k{display:flex;flex-direction:column;gap:2px;font-size:13px;min-width:0}
+.vregrow .k small{font-size:11px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.vregrow .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14.5px}
+.vregrow .go{color:var(--faint);font-size:13px}
+/* The gap is the point of the card, so it is the line that carries weight — and its colour
+   says which way the exposure runs rather than merely that a number is non-zero. */
+.vregrow.diff{background:var(--surface-2);border-top:1px solid var(--line)}
+.vregrow.diff .k{font-weight:500}
+.vregrow.diff .v{font-size:17px;font-weight:500}
+.vregrow.diff.agrees .v{color:var(--low)}
+.vregrow.diff.under-declared .v,.vregrow.diff.over-claimed .v{color:var(--high)}
+.vregrow.diff.over-declared .v,.vregrow.diff.under-claimed .v{color:var(--accent-text)}
+
+.vreg-ins{border-top:1px solid var(--line);background:var(--bg)}
+.vreg-ins-head{padding:10px 16px 6px;font-size:11.5px;font-weight:500;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--soft)}
+.vins{padding:10px 16px 14px;border-top:1px solid var(--divider)}
+.vins-what{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.vins-what>b{font-size:12.5px;font-weight:500}
+.vins-amt{font-family:var(--mono);font-size:12.5px;color:var(--high)}
+.vins-what p{flex-basis:100%;margin:4px 0 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.vins-act{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}
+.vins-act .btn-ghost{font-size:11.5px;padding:4px 10px;border-color:var(--med);
+  color:var(--accent-text)}
+.dropzone.slim{padding:14px 16px}
 
 /* ---- the end of a module: what carries forward, and the control that takes you there.
    Teal, because this is the confirm colour in this design — what the engine found and what you
@@ -1677,6 +1725,32 @@ whatever the next question turns out to be.</p></div></div>
 <b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
 internal invoice extract, which the listing is matched against.</p></div></section>
 
+<div class="panel vregs"><div class="panel-head">
+<h2>The VAT return, against the invoice registers</h2>
+<span class="sub">2025-01-01 &rarr; 2025-03-31</span></div>
+<div class="panel-body">
+<div class="vreg-grid"><section class="vreg"><div class="vreg-head">
+<b>Sales</b><span class="sub">Standard-rated sales</span>
+<span class="pill pri-high">Register exceeds the return — output VAT may be under-declared</span></div>
+<div class="vreg-rows">
+<div class="vregrow flat"><span class="k">Invoice register
+<small>22 invoices &middot; Sales_Analysis_Q1_2025.xlsx</small>
+</span><span class="v">SAR 2,618,000</span><span class="go"></span></div>
+<div class="vregrow flat"><span class="k">Declared in the VAT return
+<small>Output VAT the listing evidences, against the output VAT declared.</small></span><span class="v">SAR 2,000,000</span>
+<span class="go"></span></div>
+<div class="vregrow diff under-declared"><span class="k">Difference
+<small>register less return</small></span>
+<span class="v">+SAR 618,000</span>
+<span class="go"></span></div></div>
+<div class="vreg-ins"><div class="vreg-ins-head">Where the difference comes from</div><div class="vins"><div class="vins-what"><b>3 invoices in ZATCA&#x27;s records are not in the register</b><span class="vins-amt">SAR 357,000</span><p>The Authority holds these invoices for this period and the listing supplied does not include them, so the register is short by their VAT. This is the one line here that names particular invoices.</p></div><div class="vins-act"><span class="linklike">3 invoices behind this</span><button class="btn-ghost challenge" data-tab="correspondence">Ask the taxpayer</button></div></div><div class="vins"><div class="vins-what"><b>The file&#x27;s stated total does not agree with its own rows</b><p>The stated total for &#x27;VAT amount&#x27; is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 — a difference of SAR 119,000.00.</p></div><div class="vins-act"><button class="btn-ghost challenge" data-tab="correspondence">Ask the taxpayer</button></div></div><div class="vins"><div class="vins-what"><b>The register runs 2025-01-06 to 2025-02-20, the period runs 2025-01-01 to 2025-03-31</b><p>Part of the period is not covered by the listing, so the register is a floor rather than the period&#x27;s full total and the difference cannot yet be read as an adjustment.</p></div><div class="vins-act"><button class="btn-ghost challenge" data-tab="correspondence">Ask the taxpayer</button></div></div></div>
+</section><section class="vreg empty"><div class="vreg-head"><b>Purchases</b><span class="sub">Standard-rated purchases</span><span class="pill status">No listing on file — nothing to compare</span></div><p class="detail-note vreg-none">No purchases listing has been filed on this case, so there is nothing to set against the 150,000.00 declared. This is a missing document, not a discrepancy — ask for it in Taxpayer Correspondence.</p></section></div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> The register total is the VAT
+the listing itself states, summed row by row &mdash; no rule has acted on it, and a row with no
+readable VAT amount is skipped rather than counted as zero. Opening the rows behind a figure
+needs the engine, so in this walkthrough the counts are shown and the tables are not.</div>
+</div></div>
+
 <div class="panel"><div class="panel-head"><h2>Investigation summary</h2>
 <span class="pill status">&#8721; Adjudicated (no AI)</span></div>
 <div class="panel-body"><div class="sumbar"><span><b>5</b> observed</span><span><b>2</b> not settled</span><span><b>1</b> records defect</span><span class="muted"><b>2</b> tested, not supported</span><span class="sumbar-amt"><b>SAR 1,344,000</b> at stake</span></div>
@@ -2046,9 +2120,9 @@ Outstanding at the date of this report (7):
 22 lines were read from Sales_Analysis_Q1_2025.xlsx and tested against the conditions for inclusion in Standard-rated sales VAT for the period.
 The records that qualify total SAR 2,618,000.00 against SAR 2,000,000.00 declared, a difference of SAR 618,000.00.
 Four automated checks were then run over the records received — the conditions the law sets for a document, keying and transposition errors, the totals the records support against those declared, and whether there is supporting evidence behind what was claimed. Each proposal was settled against the source records; the findings below are those that were confirmed.
-NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Findings</span><span class="v">- Sales that were not disclosed in the VAT returns. SAR 618,000.00.
+NOTE: the records supplied do not yet meet the terms of the request. The figures above should be treated as a floor rather than a settled position.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Findings</span><span class="v">- Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. SAR 618,000.00.
     Basis: Sales_Analysis_Q1_2025.xlsx totals SAR 2,618,000.00 across 22 rows against SAR 2,000,000.00 declared — SAR 618,000.00 more than the return reports.
-  Also characterised as: Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return.
+  Also characterised as: Sales that were not disclosed in the VAT returns.
 - Failure to meet all the requirements of a valid tax invoice. SAR 357,000.00.
     Basis: 3 of 22 rows in Sales_Analysis_Q1_2025.xlsx are missing invoice_number, carrying SAR 357,000.00 of VAT between them.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Audit Recommendations</span><span class="v">Put the findings above to the taxpayer in writing and invite representations before any assessment is raised. Where a finding rests on a defect in the records rather than on the figures, request the underlying documents.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide edited"><span class="k">Rulings<span class="rfield-tag">yours</span></span><span class="v">No ruling has been issued. The taxpayer accepted the adjustment at the closing meeting of 12 August.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Assessment</span><span class="v">Output VAT understated: SAR 618,000.00
 Input VAT not recoverable: SAR 0.00
@@ -2057,7 +2131,7 @@ Total proposed adjustment: SAR 618,000.00
 
 Each amount is stated once. Where several findings describe the same records, the amount is counted against the records and not against each finding.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Penalties imposed</span><span class="v gap">[for the auditor to complete]</span><div class="rfield-actions"><span class="linklike">fill this in</span></div></div><div class="rfield wide"><span class="k">Future Audits</span><span class="v">Findings raised on this period: DOC-INVOICE, SAL-HIGHER, SAL-UNDISCLOSED.
 Worth re-testing in the next period to establish whether the cause was corrected.
-The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="rfields"><div class="rfield"><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Indicator response description</span><span class="v">The referral is borne out. 3 findings were established from the records supplied.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Under reporting driver</span><span class="v">Output VAT understated</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Under reporting reason</span><span class="v">Sales that were not disclosed in the VAT returns.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section></div></div>
+The response to the information request was incomplete; consider whether a field visit is warranted if the pattern repeats.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section><section class="rep-section"><h3 class="rep-h">Risk feedback</h3><div class="rfields"><div class="rfield"><span class="k">Indicators</span><span class="v">OUTPUT_UNDERDECLARED</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Indicator response description</span><span class="v">The referral is borne out. 3 findings were established from the records supplied.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Under reporting driver</span><span class="v">Output VAT understated</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield wide"><span class="k">Under reporting reason</span><span class="v">Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return.</span><div class="rfield-actions"><span class="linklike">edit</span></div></div><div class="rfield"><span class="k">Primary source of evidence</span><span class="v">Records supplied by the taxpayer (Sales_Analysis_Q1_2025.xlsx)</span><div class="rfield-actions"><span class="linklike">edit</span></div></div></div></section></div></div>
 <div class="panel ai-panel"><div class="panel-head">
 <div class="ai-h"><span class="ai-chip"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75z"/></svg></span><h2>Outcome of the review</h2></div>
 <div class="chips"><span class="pill status">3 findings you accepted</span>
@@ -2072,8 +2146,8 @@ Dear Sir or Madam,
 The Authority has completed its review of the VAT return filed for the period 01 January 2025 to 31 March 2025. This letter sets out the outcome.
 
 The following matters were established on review of the documents you supplied:
-  - Sales that were not disclosed in the VAT returns. SAR 618,000.00.
-      Also characterised as: Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return.
+  - Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. SAR 618,000.00.
+      Also characterised as: Sales that were not disclosed in the VAT returns.
   - Failure to meet all the requirements of a valid tax invoice. SAR 357,000.00.
 
 A difference of SAR 618,000.00 remains unexplained, against a materiality threshold of SAR 10,000.00. This is a proposed position and not an assessment.
@@ -2106,7 +2180,7 @@ Authority&rsquo;s name.</p></div></div></div>
 <p>The assistant runs the application&rsquo;s own checks. Every figure in an answer was
 computed before the sentence was written.</p></div>
 </aside>
-<script id="asst-data" type="application/json">{"cues": [["outstanding", ["missing", "outstanding", "still need", "not supplied", "gaps", "gap"]], ["draft_chase", ["chase", "draft the email", "follow up", "follow-up", "write the email", "remind"]], ["run_investigation", ["re-run", "rerun", "run the investigation", "re-test", "retest", "investigate again"]], ["revise_assessment", ["assessment", "treat this as", "treat it as", "rewrite it", "reword", "redraft"]], ["findings", ["finding", "established", "exposure", "accepted", "conclusion", "assess"]], ["zatca", ["zatca", "authority's records", "invoice match", "unmatched", "reconcil"]], ["status", ["where are we", "where is this", "status", "summary", "what has happened", "catch me up"]]], "answers": {"explain": {"text": "For CASE-2025-0481, the records on file support SAR 2,618,000 of output VAT against SAR 2,000,000 declared \u2014 a difference of SAR 618,000, of which SAR 618,000 is not yet accounted for.\n\nI can only do a fixed set of things on a case: where is this case?, what is still missing?, draft the chase, re-run the investigation, what has been established?, compare with zatca's records, revise the assessment. Ask for one of those, or work the tabs directly.", "tag": "explain", "did": ""}, "status": {"text": "Round 1 of correspondence on CASE-2025-0481. 1 document(s) received; 0 of 3 requested item(s) fully answered. 4 item(s) still outstanding \u2014 Detailed sales analysis (incomplete), Reconciliation of the return to the ledger (missing), Credit and debit note listing (missing)", "tag": "status", "did": ""}, "outstanding": {"text": "3 item(s) still outstanding.\n\n\u2022 Detailed sales analysis \u2014 incomplete: The 'Customer VAT number' column was requested but is not in the file.\n\u2022 Reconciliation of the return to the ledger \u2014 missing\n\u2022 Credit and debit note listing \u2014 missing", "tag": "outstanding", "did": ""}, "draft_chase": {"text": "Al-Faisaliah Trading Co.\nVAT registration number 300012345600003\n\nSubject: Outstanding information \u2014 VAT period 01 January 2025 to 31 March 2025\n\nDear Sir or Madam,\n\nThank you for the information supplied. On review, the following remains outstanding or does not meet the terms of the original request. Items already supplied in full are not repeated here.\n\n1. Detailed sales analysis\n   - The 'Customer VAT number' column was requested but is not in the file. (header row of xlsx)\n   - The 'Description' column was requested but is not in the file. (header row of xlsx)\n   - 'Invoice number' must be completed on every row, but is empty in 3 of 22 rows. (rows 7, 13, 18)\n   - The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 \u2014 39 days are not covered. (latest dated row)\n   - The stated total for 'VAT amount' is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 \u2014 a difference of SAR 119,000.00. (totals row vs 22 data rows)\n\n2. Reconciliation of the return to the ledger\n   - Nothing was supplied for 'Reconciliation of the return to the ledger'.\n\n3. Credit and debit note listing\n   - Nothing was supplied for 'Credit and debit note listing'.\n\nPlease supply the outstanding items by 16 August 2026.\n\nYours faithfully,\nZakat, Tax and Customs Authority\nVAT Audit", "tag": "draft_chase", "did": "drafted the chase for the outstanding items"}, "run_investigation": {"text": "Re-ran the investigation. 12 hypotheses on the case, 3 already ruled on by you and 3 accepted. Nothing is a finding until you accept it on the Investigation tab.", "tag": "run_investigation", "did": "recorded investigation run 18"}, "findings": {"text": "3 finding(s) you have accepted, coming to SAR 618,000 of adjustment and SAR 357,000 of documentation risk.\n\n\u2022 Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. \u2014 SAR 618,000\n\u2022 Sales that were not disclosed in the VAT returns. \u2014 SAR 618,000\n\u2022 Failure to meet all the requirements of a valid tax invoice. \u2014 SAR 357,000", "tag": "findings", "did": ""}, "zatca": {"text": "19 invoice(s) appear in both the listing and ZATCA's records. 3 invoice(s) in ZATCA's records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.", "tag": "zatca", "did": ""}, "revise_assessment": {"text": "I could not rewrite the assessment \u2014 no model is reachable, so the assessment on the Investigation tab is the engine's own draft and yours to edit directly. Nothing has been changed.", "tag": "revise_assessment", "did": ""}}, "labels": {"explain": "Explain", "status": "Where is this case?", "outstanding": "What is still missing?", "draft_chase": "Draft the chase", "run_investigation": "Re-run the investigation", "findings": "What has been established?", "zatca": "Compare with ZATCA's records", "revise_assessment": "Revise the assessment"}}</script><script>
+<script id="asst-data" type="application/json">{"cues": [["outstanding", ["missing", "outstanding", "still need", "not supplied", "gaps", "gap"]], ["draft_chase", ["chase", "draft the email", "follow up", "follow-up", "write the email", "remind"]], ["run_investigation", ["re-run", "rerun", "run the investigation", "re-test", "retest", "investigate again"]], ["revise_assessment", ["assessment", "treat this as", "treat it as", "rewrite it", "reword", "redraft"]], ["findings", ["finding", "established", "exposure", "accepted", "conclusion", "assess"]], ["zatca", ["zatca", "authority's records", "invoice match", "unmatched", "reconcil"]], ["status", ["where are we", "where is this", "status", "summary", "what has happened", "catch me up"]]], "answers": {"explain": {"text": "For CASE-2025-0481, the records on file support SAR 2,618,000 of output VAT against SAR 2,000,000 declared \u2014 a difference of SAR 618,000, of which SAR 618,000 is not yet accounted for.\n\nI can only do a fixed set of things on a case: where is this case?, what is still missing?, draft the chase, re-run the investigation, what has been established?, compare with zatca's records, revise the assessment. Ask for one of those, or work the tabs directly.", "tag": "explain", "did": ""}, "status": {"text": "Round 1 of correspondence on CASE-2025-0481. 1 document(s) received; 0 of 3 requested item(s) fully answered. 4 item(s) still outstanding \u2014 Detailed sales analysis (incomplete), Reconciliation of the return to the ledger (missing), Credit and debit note listing (missing)", "tag": "status", "did": ""}, "outstanding": {"text": "3 item(s) still outstanding.\n\n\u2022 Detailed sales analysis \u2014 incomplete: The 'Customer VAT number' column was requested but is not in the file.\n\u2022 Reconciliation of the return to the ledger \u2014 missing\n\u2022 Credit and debit note listing \u2014 missing", "tag": "outstanding", "did": ""}, "draft_chase": {"text": "Al-Faisaliah Trading Co.\nVAT registration number 300012345600003\n\nSubject: Outstanding information \u2014 VAT period 01 January 2025 to 31 March 2025\n\nDear Sir or Madam,\n\nThank you for the information supplied. On review, the following remains outstanding or does not meet the terms of the original request. Items already supplied in full are not repeated here.\n\n1. Detailed sales analysis\n   - The 'Customer VAT number' column was requested but is not in the file. (header row of xlsx)\n   - The 'Description' column was requested but is not in the file. (header row of xlsx)\n   - 'Invoice number' must be completed on every row, but is empty in 3 of 22 rows. (rows 7, 13, 18)\n   - The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 \u2014 39 days are not covered. (latest dated row)\n   - The stated total for 'VAT amount' is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 \u2014 a difference of SAR 119,000.00. (totals row vs 22 data rows)\n\n2. Reconciliation of the return to the ledger\n   - Nothing was supplied for 'Reconciliation of the return to the ledger'.\n\n3. Credit and debit note listing\n   - Nothing was supplied for 'Credit and debit note listing'.\n\nPlease supply the outstanding items by 16 August 2026.\n\nYours faithfully,\nZakat, Tax and Customs Authority\nVAT Audit", "tag": "draft_chase", "did": "drafted the chase for the outstanding items"}, "run_investigation": {"text": "Re-ran the investigation. 12 hypotheses on the case, 3 already ruled on by you and 3 accepted. Nothing is a finding until you accept it on the Investigation tab.", "tag": "run_investigation", "did": "recorded investigation run 20"}, "findings": {"text": "3 finding(s) you have accepted, coming to SAR 618,000 of adjustment and SAR 357,000 of documentation risk.\n\n\u2022 Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. \u2014 SAR 618,000\n\u2022 Sales that were not disclosed in the VAT returns. \u2014 SAR 618,000\n\u2022 Failure to meet all the requirements of a valid tax invoice. \u2014 SAR 357,000", "tag": "findings", "did": ""}, "zatca": {"text": "19 invoice(s) appear in both the listing and ZATCA's records. 3 invoice(s) in ZATCA's records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.", "tag": "zatca", "did": ""}, "revise_assessment": {"text": "I could not rewrite the assessment \u2014 no model is reachable, so the assessment on the Investigation tab is the engine's own draft and yours to edit directly. Nothing has been changed.", "tag": "revise_assessment", "did": ""}}, "labels": {"explain": "Explain", "status": "Where is this case?", "outstanding": "What is still missing?", "draft_chase": "Draft the chase", "run_investigation": "Re-run the investigation", "findings": "What has been established?", "zatca": "Compare with ZATCA's records", "revise_assessment": "Revise the assessment"}}</script><script>
 /* The modules are reachable from the rail and from the header tabs. Both are the same
    selector, so the two cannot get out of step. */
 const tabs = document.querySelectorAll('[data-tab]');

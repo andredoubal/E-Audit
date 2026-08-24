@@ -9,6 +9,7 @@ import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
 import ZatcaSource from "../components/ZatcaSource";
+import VatRegisters from "../components/VatRegisters";
 import InvestigationSummary from "../components/InvestigationSummary";
 import AuditorAssessment from "../components/AuditorAssessment";
 import Collapsible from "../components/Collapsible";
@@ -447,6 +448,13 @@ export default function Investigation() {
           is already on the case from Taxpayer Correspondence and is read from there — the one
           thing uploaded here is the Authority's own extract, which answers to no request. */}
       <ZatcaSource id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
+
+      {/* The first question, first: what do the taxpayer's own registers total, what did they
+          declare, and what is the gap. Before the summary, because the summary is a reading of
+          this and an auditor who has not seen the two figures has nothing to read it against. */}
+      <VatRegisters id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)}
+                    onInvoices={(title, invoices, note) =>
+                      open(title, { type: "invoice-list", invoices, note })} />
 
       <InvestigationSummary id={id!} rev={rev} />
 

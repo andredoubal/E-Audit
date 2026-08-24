@@ -192,3 +192,61 @@ def test_a_reissued_case_id_does_not_inherit_the_last_case_s_writing(api):
         assert not db.scalars(select(model).where(model.case_id == first)).all(), \
             f"{model.__name__} from the previous case survived into the new one"
     db.close()
+
+
+def test_a_reissued_id_does_not_inherit_the_previous_taxpayers_evidence(api):
+    """The half the writing-only cleanup missed, and the more serious half.
+
+    Documents and correspondence are keyed on `case_id` the same way the auditor's writing is,
+    so a reissued id inherited the previous taxpayer's spreadsheets — and every figure
+    downstream is built from those. The new case showed another taxpayer's invoice register,
+    expected return and completeness gaps under its own name. Inheriting a stale instruction is
+    somebody else's steer; inheriting their invoices is somebody else's audit.
+    """
+    import io
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import AuditCase, CorrespondenceThread, ReceivedDocument
+
+    csv = (b"invoice_date,invoice_number,customer_name,taxable_amount,vat_amount\n"
+           b"2025-02-11,INV-OLD-1,Their Buyer,400000.00,60000.00\n")
+
+    first = api.post("/api/cases", json={
+        "period_from": "2025-01-01", "period_to": "2025-03-31",
+        "taxpayer": {"name": "Evidence Co.", "vat_registration_number": "391100220099003"},
+    }).json()["case_id"]
+    api.post(f"/api/cases/{first}/threads", json={"subject": "Opening request"})
+    up = api.post(f"/api/cases/{first}/documents",
+                  files={"file": ("Their_Sales.csv", io.BytesIO(csv), "text/csv")})
+    assert up.status_code == 200, up.text
+    assert api.get(f"/api/cases/{first}/registers").json()["registers"][0]["comparable"] is True
+
+    db = SessionLocal()
+    db.delete(db.scalar(select(AuditCase).where(AuditCase.case_id == first)))
+    db.commit()
+    assert db.scalars(select(ReceivedDocument)
+                      .where(ReceivedDocument.case_id == first)).all(), \
+        "the orphaned document is the precondition this test is about"
+    db.close()
+
+    again = api.post("/api/cases", json={
+        "case_id": first,
+        "period_from": "2025-07-01", "period_to": "2025-09-30",
+        "taxpayer": {"name": "Nothing Filed Co.",
+                     "vat_registration_number": "391100220099004"},
+    })
+    assert again.status_code == 200, again.text
+
+    sale = api.get(f"/api/cases/{first}/registers").json()["registers"][0]
+    assert sale["comparable"] is False, \
+        "a brand-new case must not be reconciling the last taxpayer's listing"
+    assert sale["register_total"] == 0
+    assert api.get(f"/api/cases/{first}/threads").json()["threads"] == []
+
+    db = SessionLocal()
+    for model in (ReceivedDocument, CorrespondenceThread):
+        assert not db.scalars(select(model).where(model.case_id == first)).all(), \
+            f"{model.__name__} from the previous case survived into the new one"
+    db.close()

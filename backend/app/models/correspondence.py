@@ -41,6 +41,9 @@ STATUS_CLOSED = "closed"
 ORIGIN_INITIAL = "initial"
 ORIGIN_INVESTIGATION = "investigation-request"
 ORIGIN_CLARIFICATION = "clarification"
+#: The closed set. A round's origin is what the correspondence trail shows the auditor when
+#: they land on it, so an unrecognised one would present a real enquiry as an opening request.
+ORIGINS = (ORIGIN_INITIAL, ORIGIN_INVESTIGATION, ORIGIN_CLARIFICATION)
 
 DIRECTION_OUT = "outbound"
 DIRECTION_IN = "inbound"

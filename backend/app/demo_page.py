@@ -341,7 +341,7 @@ whatever the next question turns out to be.</p></div></div>
 """
 
 
-def investigation(inv: dict, z: dict, summary: dict, asmt: dict) -> str:
+def investigation(inv: dict, z: dict, summary: dict, asmt: dict, regs: dict) -> str:
     """The module in the order the work happens.
 
     Optional ZATCA data, then what the investigation found, then the evidence behind it, then
@@ -370,6 +370,57 @@ def investigation(inv: dict, z: dict, summary: dict, asmt: dict) -> str:
 <p class="detail-note" style="margin-bottom:0">The taxpayer&rsquo;s own documents come from
 <b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
 internal invoice extract, which the listing is matched against.</p></div></section>"""
+
+    # ------------------------------------------------- the return against the registers
+    # Three numbers per box and no rule between them. The drill-down into the rows needs the
+    # engine, so the walkthrough shows the counts and says where the rows live rather than
+    # offering a control that would do nothing.
+    def register(r: dict) -> str:
+        if not r["comparable"]:
+            return (f'<section class="vreg empty"><div class="vreg-head">'
+                    f'<b>{e(r["title"])}</b><span class="sub">{e(r["box_label"])}</span>'
+                    f'<span class="pill status">{e(r["risk_label"])}</span></div>'
+                    f'<p class="detail-note vreg-none">{e(r["not_comparable_note"])}</p>'
+                    f"</section>")
+        pill = "pri-high" if r["risk"] in ("under-declared", "over-claimed") else "pri-low"
+        ins = "".join(
+            f'<div class="vins"><div class="vins-what"><b>{e(i["headline"])}</b>'
+            + (f'<span class="vins-amt">{sar(i["amount"])}</span>' if i["amount"] else "")
+            + f'<p>{e(i["detail"])}</p></div><div class="vins-act">'
+            + (f'<span class="linklike">{len(i["invoices"])} invoice'
+               f'{"" if len(i["invoices"]) == 1 else "s"} behind this</span>'
+               if i["invoices"] else "")
+            + '<button class="btn-ghost challenge" data-tab="correspondence">Ask the taxpayer'
+              "</button></div></div>"
+            for i in r["insights"])
+        return f"""<section class="vreg"><div class="vreg-head">
+<b>{e(r["title"])}</b><span class="sub">{e(r["box_label"])}</span>
+<span class="pill {pill}">{e(r["risk_label"])}</span></div>
+<div class="vreg-rows">
+<div class="vregrow flat"><span class="k">Invoice register
+<small>{r["invoice_count"]} invoices &middot; {e((r["document"] or {}).get("filename", ""))}</small>
+</span><span class="v">{sar(r["register_total"])}</span><span class="go"></span></div>
+<div class="vregrow flat"><span class="k">Declared in the VAT return
+<small>{e(r["note"])}</small></span><span class="v">{sar(r["declared"])}</span>
+<span class="go"></span></div>
+<div class="vregrow diff {r["risk"]}"><span class="k">Difference
+<small>register less return</small></span>
+<span class="v">{"+" if r["difference"] > 0 else "&minus;" if r["difference"] < 0 else ""}{sar(r["difference"])}</span>
+<span class="go"></span></div></div>
+{f'<div class="vreg-ins"><div class="vreg-ins-head">Where the difference comes from</div>{ins}</div>' if ins else ""}
+</section>"""
+
+    vregs = f"""
+<div class="panel vregs"><div class="panel-head">
+<h2>The VAT return, against the invoice registers</h2>
+<span class="sub">{e(regs["period_from"])} &rarr; {e(regs["period_to"])}</span></div>
+<div class="panel-body">
+<div class="vreg-grid">{"".join(register(r) for r in regs["registers"])}</div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> The register total is the VAT
+the listing itself states, summed row by row &mdash; no rule has acted on it, and a row with no
+readable VAT amount is skipped rather than counted as zero. Opening the rows behind a figure
+needs the engine, so in this walkthrough the counts are shown and the tables are not.</div>
+</div></div>"""
 
     # ---------------------------------------------------------------- the summary cards
     KIND = {"observation": ("Observed", "obs"),
@@ -554,6 +605,7 @@ something is put, and cannot introduce a number. The assessment stays yours.</p>
 </div></div>"""
 
     return f"""{zsrc}
+{vregs}
 {summary_panel}
 {detail}
 {assess}
@@ -784,6 +836,7 @@ def build() -> str:
     inv = _get(f"/cases/{CASE}/investigation")
     z = _get(f"/cases/{CASE}/zatca")
     summary = _get(f"/cases/{CASE}/investigation/summary")
+    regs = _get(f"/cases/{CASE}/registers")
     asmt = _get(f"/cases/{CASE}/assessment")
     rep = _get(f"/cases/{CASE}/audit-report")
     mails = _get(f"/cases/{CASE}/emails").get("emails") or []
@@ -833,7 +886,7 @@ def build() -> str:
     modules = {
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
-        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt)),
+        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt, regs)),
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     panes = "".join(

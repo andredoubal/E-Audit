@@ -266,6 +266,12 @@ export default function RoundCard({
           {thread?.origin_hypothesis_id && (
             <span className="mono"> · {thread.origin_hypothesis_id}</span>
           )}
+          {/* What this round is actually about. A round opened from the investigation carries
+              the question in its subject, and an auditor who lands here from that button needs
+              to see it — "Raised by the investigation" alone does not say which matter. */}
+          {thread?.subject && thread.origin !== "initial" && (
+            <span className="round-subject"> — {thread.subject}</span>
+          )}
         </span>
         {exchanges > 1 && (
           <span className="pill status" title="Each reply and each chase is an exchange. The round stays open until nothing is outstanding.">

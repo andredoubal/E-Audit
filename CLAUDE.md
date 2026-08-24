@@ -187,6 +187,7 @@ backend/app/
                        #   source.py       lines from an uploaded listing, not the feed
                        #   reconciliation.py  declarative matching against ZATCA's records
   recon_engine.py      # qualify -> expected -> compare with declared (output & input VAT)
+  registers.py         # the listings' own totals vs the return, with no rule between them
   rule_taxonomy.py     # explanation/mistake/risk + precedence stage + difference reason codes
   risk_indicators.py   # the risk-engine vocabulary + which internal source to consult first
   scope.py             # what this PoC reconciles, and what it deliberately leaves out
@@ -285,6 +286,46 @@ already arrived on an enquiry in Taxpayer Correspondence and is read from there.
 dropzone for the taxpayer's listing meant the same file could be filed twice against two
 different rounds, and it implied the investigation was waiting for something it already had.
 ZATCA's own extract is internal, answers to no request, and so has nowhere else to live.
+
+**1b · What do the registers say against the return?** `registers.py` + `VatRegisters.tsx` —
+the first question an auditor asks, so it is the first thing on the page. One card for sales,
+one for purchases, each with **three numbers and no rule between them**: the VAT the listing
+itself states summed row by row, the figure declared in that box of the return, and the gap.
+
+An earlier version of this screen was a *bridge* — reconstructed total, minus a clearance-lag
+rule, minus netted credit notes, arriving at declared. The rule lines are what made it
+unreadable and what made it arguable, and they answer a different question anyway: which
+documents **qualify** for a box is settled by the funnel, further down. Reading a listing's own
+arithmetic is not a qualification judgement and must not borrow one, so nothing here is set
+aside, deferred or explained away. This is also why it does not contradict *no pre-qualification
+total*: the objection there is to a figure that exists only so a waterfall can be drawn from it,
+and there is no waterfall here.
+
+Three rules hold it up:
+
+- **No listing is not a register of zero.** Subtracting an absent listing from a declared figure
+  reports the whole box as a discrepancy — SAR 150,000 "over-claimed" because nobody has
+  uploaded the purchases analysis yet. `comparable` is false, the difference is not computed,
+  and the card says a document is missing. Same rule the ZATCA matcher enforces: one side is not
+  a comparison.
+- **Nothing is attributed to an invoice unless the attribution is real.** A difference against
+  one declared figure cannot be pinned on particular rows. *Where the difference comes from*
+  is therefore assembled only from what the engine already settled — invoices ZATCA holds that
+  the listing omits, rows whose VAT could not be read, a stated total that does not foot to its
+  own rows, coverage short of the period — and only the first of those hands over invoices,
+  because only it can. An insight with nothing behind it is not written at all, because a panel
+  that always finds four reasons teaches an auditor to stop reading it.
+- **The loop back is the existing loop.** *Ask the taxpayer* on an insight opens a round with
+  `origin="investigation-request"` carrying the insight as its subject, and lands the auditor on
+  Correspondence with the round head reading *Raised by the investigation — <what it is about>*.
+  A round raised from the investigation that filed itself as an opening request told the auditor
+  the wrong story about their own case.
+
+A file can be dropped here, and it is filed onto the **open correspondence round** rather than
+into a store of its own — which is how this keeps the rule that Correspondence is the one source
+of taxpayer documents while still letting the auditor put the sheet in where they are looking at
+it. Which box a file belongs to is decided by its own columns (`source.pick_listing`), not by
+where it was dropped.
 
 **2 · What did it find?** `InvestigationSummary.tsx` over `agents/summary.py` — a handful of
 cards, not twelve hypotheses. Two rules make a card:

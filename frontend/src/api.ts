@@ -1165,8 +1165,62 @@ export interface ThreadState {
 
 export const getThreads = (id: string) => getJSON<ThreadState>(`/cases/${id}/threads`);
 
-export const openThread = (id: string, subject = "") =>
-  postJSON<ThreadState>(`/cases/${id}/threads`, { subject });
+/** The VAT return against the taxpayer's own invoice registers.
+ *
+ *  Deliberately not part of `/reconcile`: that endpoint answers which documents *qualify* for a
+ *  box and every figure in it has been through the rules. These three numbers have had no rule
+ *  act on them — the listing's own arithmetic, the return's own figure, and the gap. */
+export interface RegisterInsight {
+  key: string;
+  headline: string;
+  detail: string;
+  count: number;
+  amount: number;
+  invoices: Record<string, unknown>[];
+  ask: string;
+}
+
+export interface Register {
+  direction: "sale" | "purchase";
+  title: string;
+  box_label: string;
+  box_code: string;
+  note: string;
+  /** False when no listing is on file. Then there is no difference — there is a missing file. */
+  comparable: boolean;
+  not_comparable_note: string;
+  document: { filename: string; rows: number; columns: string[] } | null;
+  invoice_count: number;
+  credit_note_count: number;
+  register_total: number;
+  declared: number;
+  difference: number;
+  materiality: number;
+  risk: string;
+  risk_label: string;
+  invoices: Record<string, unknown>[];
+  insights: RegisterInsight[];
+}
+
+export interface RegistersView {
+  case_id: string;
+  period_from: string;
+  period_to: string;
+  return_on_file: boolean;
+  registers: Register[];
+}
+
+export const getRegisters = (id: string) =>
+  getJSON<RegistersView>(`/cases/${id}/registers`);
+
+/** Open the next round. `origin` is what the trail shows the auditor about why it exists —
+ *  a round raised from the investigation that files itself as an opening request tells them
+ *  the wrong story about their own case. */
+export const openThread = (
+  id: string,
+  subject = "",
+  origin: "initial" | "investigation-request" | "clarification" = "initial",
+) => postJSON<ThreadState>(`/cases/${id}/threads`, { subject, origin });
 
 export const recordReply = (id: string, body: string, subject = "") =>
   postJSON<ThreadState>(`/cases/${id}/threads/reply`, { body, subject });

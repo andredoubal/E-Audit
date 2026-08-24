@@ -358,6 +358,9 @@ def correspondence_threads(case_id: str, db: Session = Depends(get_db)):
 
 class ThreadIn(BaseModel):
     subject: str = ""
+    #: Why this round exists. A round raised from the investigation that files itself as an
+    #: opening request tells the auditor who lands on it the wrong story about their own case.
+    origin: str = "initial"
 
 
 @router.post("/cases/{case_id}/threads")
@@ -365,9 +368,13 @@ def open_correspondence_thread(case_id: str, body: ThreadIn | None = None,
                                db: Session = Depends(get_db)):
     from ..requests import threads as thread_service
 
+    from ..requests.threads import ORIGINS
+
     _case_or_404(db, case_id)
     body = body or ThreadIn()
-    thread_service.start(db, case_id, subject=body.subject)
+    if body.origin not in ORIGINS:
+        raise HTTPException(422, f"origin must be one of {', '.join(ORIGINS)}")
+    thread_service.start(db, case_id, subject=body.subject, origin=body.origin)
     db.commit()
     return thread_service.state(db, case_id)
 
@@ -871,14 +878,42 @@ def _clear_orphaned_case_state(db: Session, case_id: str) -> None:
 
     A case id being issued is the moment to clear it: at that point nothing can legitimately be
     filed under it yet.
+
+    **The evidence has to go too, and that is the half this originally missed.** Documents,
+    correspondence and the investigation are keyed the same way, so a reissued id inherited the
+    previous taxpayer's spreadsheets — and every figure downstream is built from those. A new
+    case opened on a recycled id showed another taxpayer's invoice register, expected return and
+    completeness gaps under its own name. Inheriting a stale instruction is somebody else's
+    steer; inheriting their invoices is somebody else's audit.
     """
     from sqlalchemy import delete
 
-    from ..models import (AuditorDecision, AuditorFinding, CaseAssessment, CaseInstruction,
-                          CaseMessage, ItemReview, LetterDraft, ReportFieldEdit)
+    from ..models import (AuditorCalculation, AuditorDecision, AuditorFinding, BoxOutcome,
+                          CaseAssessment, CaseInstruction, CaseMessage, CaseRecon, Conclusion,
+                          CorrespondenceMessage, CorrespondenceThread, EventLog, GapFinding,
+                          HypothesisRegulatoryRef, InformationRequest, InvestigationRun,
+                          ItemReview, LetterDraft, PersistedHypothesis, QualificationStep,
+                          ReceivedDocument, ReportFieldEdit, RequestItem, TaxpayerResponse,
+                          Unexplained, ZatcaDataset)
 
-    for model in (CaseInstruction, CaseAssessment, ReportFieldEdit, LetterDraft, ItemReview,
-                  CaseMessage, AuditorDecision, AuditorFinding):
+    # Children keyed on their parent rather than on the case have to go through it.
+    for recon in db.scalars(select(CaseRecon).where(CaseRecon.case_id == case_id)).all():
+        for child in (BoxOutcome, QualificationStep, Unexplained, Conclusion):
+            db.execute(delete(child).where(child.case_recon_id == recon.id))
+    for req in db.scalars(select(InformationRequest)
+                          .where(InformationRequest.case_id == case_id)).all():
+        db.execute(delete(RequestItem).where(RequestItem.request_id == req.id))
+
+    for model in (
+        # the auditor's own writing
+        CaseInstruction, CaseAssessment, ReportFieldEdit, LetterDraft, ItemReview, CaseMessage,
+        AuditorDecision, AuditorFinding, AuditorCalculation,
+        # the evidence, and what was asked for
+        ReceivedDocument, GapFinding, InformationRequest, ZatcaDataset,
+        CorrespondenceMessage, CorrespondenceThread, TaxpayerResponse,
+        # what was concluded from it
+        HypothesisRegulatoryRef, PersistedHypothesis, InvestigationRun, CaseRecon, EventLog,
+    ):
         db.execute(delete(model).where(model.case_id == case_id))
 
 
@@ -1040,6 +1075,26 @@ def reconcile(case_id: str, db: Session = Depends(get_db)):
     """Qualify the e-invoice lines, sum what belongs to this box, and compare with the return."""
     try:
         return reconcile_case(db, case_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/cases/{case_id}/registers")
+def registers(case_id: str, db: Session = Depends(get_db)):
+    """The sales and purchase registers, each against its own box on the return.
+
+    Deliberately separate from `/reconcile`: that endpoint answers *which documents qualify*
+    for a box, and every figure in it has been through the rules. This one answers the question
+    an auditor opens with — what does the listing itself total, what does the return say, and
+    what is the gap — where no rule has acted on anything.
+    """
+    from .. import registers as register_service
+    from ..agents import zatca_service
+
+    c = _case_or_404(db, case_id)
+    comparison = zatca_service.comparison(db, c).to_dict()
+    try:
+        return register_service.build(db, case_id, zatca=comparison)
     except ValueError as e:
         raise HTTPException(404, str(e))
 
