@@ -131,10 +131,99 @@ def case_list(cases: list, open_case: str) -> str:
 <p class="sub">{len(cases)} open, ranked by what is worth looking at first</p></div>
 <div><button class="btn-ghost" id="new-case">New case</button></div></header>
 
-<div class="caselist">{''.join(rows)}</div>
-<p class="detail-note">Every case covers 2025-01-01 to 2025-03-31. Only
+<div class="caselist"><div id="local-cases"></div>{''.join(rows)}</div>
+<p class="detail-note">Every seeded case covers 2025-01-01 to 2025-03-31. Only
 <b>{e(open_case)}</b> carries engine output in this walkthrough — that is the row that opens.
+A case you add is kept in this browser only.
 </p>"""
+
+
+SECTORS = [
+    ("Wholesale trade", "4690", "Non-specialised wholesale trade"),
+    ("Retail trade", "4711", "Retail sale in non-specialised stores"),
+    ("Construction", "4100", "Construction of buildings"),
+    ("Transport & logistics", "4923", "Freight transport by road"),
+    ("Manufacturing", "2011", "Manufacture of basic chemicals"),
+    ("Food retail", "4721", "Retail sale of food in specialised stores"),
+    ("Professional services", "6920", "Accounting, bookkeeping and auditing"),
+    ("Medical equipment", "4649", "Wholesale of other household goods"),
+    ("Telecommunications", "6110", "Wired telecommunications activities"),
+    ("Hospitality", "5610", "Restaurants and mobile food service activities"),
+    ("Real estate", "6810", "Real estate activities with own or leased property"),
+    ("Information technology", "6201", "Computer programming activities"),
+]
+CREATION_REASONS = ("Risk Engine", "Whistleblowers report", "Report from OGAs",
+                    "Internal referral", "Other")
+
+
+def new_case_form() -> str:
+    """The Add case screen, ported rather than described.
+
+    This is the same form the application renders, with the same fields in the same order and
+    the same auto-generate — and it is the one thing in this file that *creates* something. A
+    static file has no database, so the case is written to this browser's `localStorage` and
+    appears at the top of the queue. That is a real boundary and it is stated on the screen:
+    the case is visible here and nowhere else, and only the seeded case carries engine output.
+    """
+    sectors = "".join(
+        f'<option value="{e(isic)}">{e(name)} &mdash; {e(isic)}</option>'
+        for name, isic, _ in SECTORS)
+    reasons = "".join(f"<option>{e(r)}</option>" for r in CREATION_REASONS)
+    return f"""
+<div class="casebar"><button class="backlink" id="nc-back">&#8592; All cases</button></div>
+<header class="page-head"><div>
+<p class="eyebrow">No live integration &mdash; this is how a case gets in</p>
+<h1>Add case</h1></div>
+<div><button class="linklike" id="nc-auto">&#9889; Auto-generate</button></div></header>
+
+<div class="panel"><div class="panel-head"><h2>Taxpayer information</h2></div>
+<div class="panel-body nc-grid">
+<input id="nc-name" placeholder="Taxpayer name">
+<input id="nc-vat" placeholder="Taxpayer TIN (VAT registration number)">
+<input id="nc-phone" placeholder="Contact phone">
+<input id="nc-email" placeholder="Contact e-mail">
+<input id="nc-address" class="nc-wide" placeholder="Contact address">
+<div class="nc-wide">
+<div class="nc-label">Sectors / economic activities</div>
+<div class="nc-row"><select id="nc-sector">{sectors}</select>
+<button class="btn-ghost" id="nc-add-act">+ Add</button></div>
+<div id="nc-acts" class="nc-acts"></div></div>
+<label class="nc-wide nc-toggle"><input type="checkbox" id="nc-audited">
+<span>Has this taxpayer been audited before?</span></label>
+<input id="nc-audited-note" class="nc-wide" placeholder="What was found last time?" hidden>
+</div></div>
+
+<div class="panel"><div class="panel-head"><h2>Audit case information</h2></div>
+<div class="panel-body nc-grid">
+<input id="nc-id" placeholder="Audit Case ID (leave blank to auto-generate)">
+<input id="nc-created" type="date">
+<select id="nc-reason" class="nc-wide">
+<option value="">Case Creation Reason&hellip;</option>{reasons}</select>
+<div class="nc-wide nc-label">Audit case tax period &mdash; from / to</div>
+<input id="nc-from" type="date"><input id="nc-to" type="date">
+<div class="nc-fixed nc-wide">
+<div><span class="k">Tax type</span>VAT</div>
+<div><span class="k">Place of conduct of audit</span>Desk audit</div>
+<div><span class="k">Address of audit location</span>Not applicable</div>
+</div>
+</div></div>
+
+<div class="panel"><div class="panel-head"><h2>Assigned audit team information</h2></div>
+<div class="panel-body nc-grid">
+<input id="nc-manager" placeholder="Audit manager">
+<input id="nc-supervisor" placeholder="Audit supervisor">
+<input id="nc-officer" class="nc-wide" placeholder="Audit officer">
+</div></div>
+
+<div class="nc-actions">
+<button class="btn" id="nc-create">Create case</button>
+<button class="linklike" id="nc-cancel">cancel</button>
+<span class="sub" id="nc-err"></span>
+</div>
+<p class="detail-note">In the application this writes a row every auditor on the deployment
+can see. Here there is no database, so the case is kept in this browser and is gone if you
+clear its storage &mdash; the one capability boundary a single file cannot cross. The form,
+the case-ID generation and the taxpayer fields are the real thing.</p>"""
 
 
 # ------------------------------------------------------------------ the three tabs
@@ -729,6 +818,37 @@ body{{margin:0;padding:0 0 60px}}
    need it said explicitly. The case card itself no longer collapses — the app's does not
    either — so the rule that used to gate its items on `.on` is gone with the handler. */
 [hidden]{{display:none!important}}
+/* ---- the Add case form ---------------------------------------------------------- */
+.nc-grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+@media(max-width:760px){{.nc-grid{{grid-template-columns:1fr}}}}
+.nc-wide{{grid-column:1/-1}}
+.nc-grid input,.nc-grid select{{font:inherit;font-size:13px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 12px;
+  width:100%;box-sizing:border-box}}
+.nc-grid input:focus,.nc-grid select:focus{{outline:none;border-color:var(--brand)}}
+.nc-label{{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+  font-weight:500;margin-bottom:6px}}
+.nc-row{{display:flex;gap:9px;align-items:center}}
+.nc-row select{{flex:1;min-width:0}}
+.nc-acts{{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}}
+.nc-act{{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;
+  padding:6px 10px;font-size:12px;background:var(--surface)}}
+.nc-act.primary{{border-color:var(--brand);background:var(--brand-tint)}}
+.nc-act code{{font-size:11px}}
+.nc-act button{{border:none;background:none;font:inherit;font-size:11.5px;color:var(--faint);
+  cursor:pointer;padding:0}}
+.nc-act button:hover{{color:var(--ink)}}
+.nc-toggle{{display:flex;align-items:center;gap:10px;font-size:13px;border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;background:var(--surface-2)}}
+.nc-toggle input{{width:auto}}
+.nc-fixed{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;
+  border:1px solid var(--line);border-radius:9px;padding:12px 14px;background:var(--surface-2);
+  font-size:13px}}
+.nc-fixed .k{{display:block;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;margin-bottom:3px}}
+.nc-actions{{display:flex;align-items:center;gap:14px}}
+#nc-err{{color:var(--high)}}
+.caserow.local{{background:var(--brand-tint)}}
 .panehead{{margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}}
 .panehead h1{{margin:0;font-size:20px}}
 .panehead p{{margin:3px 0 0;font-size:12.5px;color:var(--muted)}}
@@ -814,18 +934,20 @@ y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="13" y2="1
 </aside>
 <main class="main"><div class="wrap">
 
-<div class="demo-note"><b>A static walkthrough, not the application.</b> Every figure, finding,
-citation and gap on this page is the real output of the engine for the seeded demo case
-{e(CASE)}, captured when this file was generated. <b>What works here:</b> opening the case,
-moving between its modules, opening the evidence behind a finding, writing the case
-instructions, and editing the assessment, the report fields and the verdict letter — those are the auditor's own words, so a file with no backend can do the
-whole interaction. <b>What does not:</b> uploading, re-running the investigation and asking the
-assistant, which all need the engine; they say so when you click them rather than going quiet.
-Nothing you change here is saved anywhere. The regulations corpus behind the citations holds
+<div class="demo-note"><b>A walkthrough, not the deployment.</b> Every figure, finding,
+citation and gap here is the real output of the engine for the seeded case {e(CASE)},
+captured when this file was generated. <b>What works:</b> opening the case and moving between
+its modules, the evidence behind each finding, adding a case, writing the case instructions,
+editing the assessment, the report fields and the outcome letter, and asking the assistant —
+its answers are the engine's own, captured per action, and a typed question is routed the way
+the application routes it. <b>What does not:</b> uploading a spreadsheet and re-running the
+investigation, which need the engine; they say so rather than going quiet. A case you add is
+kept in your browser; nothing else is saved. The regulations corpus behind the citations holds
 {cov.get('article_count', 0)} articles, {len(cov.get('amended_since_english_edition', []))} of
 which have been amended since the English edition they are shown in.</div>
 
 <div class="view on" id="view-cases">{case_list(cases, CASE)}</div>
+<div class="view" id="view-newcase">{new_case_form()}</div>
 
 <div class="view" id="view-case">
 <div class="casehead"><div class="casehead-in">
@@ -869,9 +991,174 @@ function view(name) {{
 
 document.querySelectorAll('[data-open]').forEach(
   r => r.addEventListener('click', () => {{ view('case'); show('correspondence'); }}));
-document.getElementById('new-case').addEventListener('click', () => toast(
-  'In the application this opens the Add case form \u2014 taxpayer, TIN, period, activities '
-  + '\u2014 and writes a real case. A static file has no database to write it to.'));
+/* ------------------------------------------------------- Add case, for real
+   The same form the application renders, and it creates something. With no database the case
+   goes to this browser's localStorage and appears at the top of the queue — the one capability
+   boundary a single file cannot cross, and it is stated on the screen rather than implied. */
+const SECTORS = {json.dumps([list(x) for x in SECTORS])};
+const KEY = 'eaudit-demo-cases';
+const acts = [];
+
+const readLocal = () => {{
+  try {{ return JSON.parse(localStorage.getItem(KEY) || '[]'); }}
+  catch (e) {{ return []; }}
+}};
+const writeLocal = rows => {{
+  try {{ localStorage.setItem(KEY, JSON.stringify(rows)); }} catch (e) {{ /* private mode */ }}
+}};
+
+function nextCaseId(year) {{
+  const mine = readLocal().map(c => c.id);
+  let n = 1;
+  while (mine.includes('CASE-' + year + '-' + String(n).padStart(4, '0'))) n += 1;
+  return 'CASE-' + year + '-' + String(n).padStart(4, '0');
+}}
+
+function renderLocal() {{
+  const host = document.getElementById('local-cases');
+  host.innerHTML = '';
+  readLocal().forEach(c => {{
+    const row = document.createElement('div');
+    row.className = 'caserow local';
+    row.innerHTML =
+      '<span class="pbar pri-medium"></span>'
+      + '<div class="caserow-who"><div class="caserow-name"></div>'
+      + '<div class="caserow-sub"></div></div>'
+      + '<div class="caserow-id mono"></div><div class="caserow-reason"></div>'
+      + '<div class="caserow-when mono"></div>'
+      + '<div class="caserow-state"><span class="pill status">referred</span></div>';
+    row.querySelector('.caserow-name').textContent = c.name;
+    row.querySelector('.caserow-sub').textContent = (c.sector || 'Not stated') + ' \u00b7 ' + c.vat;
+    row.querySelector('.caserow-id').textContent = c.id;
+    row.querySelector('.caserow-reason').textContent = c.reason || '';
+    row.addEventListener('click', () => toast(
+      c.name + ' is stored in this browser only. It carries no engine output, so there is '
+      + 'nothing to open \u2014 in the application it opens like any other case.'));
+    host.append(row);
+  }});
+}}
+
+function renderActs() {{
+  const host = document.getElementById('nc-acts');
+  host.innerHTML = '';
+  acts.forEach(a => {{
+    const el = document.createElement('span');
+    el.className = 'nc-act' + (a.primary ? ' primary' : '');
+    const label = document.createElement('span');
+    label.textContent = a.description;
+    const code = document.createElement('code');
+    code.textContent = a.isic;
+    el.append(code, label);
+    if (!a.primary) {{
+      const mk = document.createElement('button');
+      mk.textContent = 'make primary';
+      mk.addEventListener('click', () => {{
+        acts.forEach(x => {{ x.primary = x.isic === a.isic; }});
+        renderActs();
+      }});
+      el.append(mk);
+    }} else {{
+      const tag = document.createElement('button');
+      tag.textContent = 'primary';
+      tag.disabled = true;
+      el.append(tag);
+    }}
+    const rm = document.createElement('button');
+    rm.textContent = '\u00d7';
+    rm.addEventListener('click', () => {{
+      acts.splice(acts.indexOf(a), 1);
+      if (acts.length && !acts.some(x => x.primary)) acts[0].primary = true;
+      renderActs();
+    }});
+    el.append(rm);
+    host.append(el);
+  }});
+}}
+
+const V = id => document.getElementById(id).value.trim();
+const setV = (id, v) => {{ document.getElementById(id).value = v; }};
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const digits = n => Array.from({{length: n}}, () => Math.floor(Math.random() * 10)).join('');
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+document.getElementById('new-case').addEventListener('click', () => {{
+  setV('nc-created', todayISO());
+  view('newcase');
+}});
+document.getElementById('nc-back').addEventListener('click', () => view('cases'));
+document.getElementById('nc-cancel').addEventListener('click', () => view('cases'));
+
+document.getElementById('nc-audited').addEventListener('change', ev => {{
+  document.getElementById('nc-audited-note').hidden = !ev.target.checked;
+}});
+
+document.getElementById('nc-add-act').addEventListener('click', () => {{
+  const isic = document.getElementById('nc-sector').value;
+  const s = SECTORS.find(x => x[1] === isic);
+  if (!s || acts.some(a => a.isic === isic)) return;
+  acts.push({{isic: s[1], description: s[2], sector: s[0], primary: acts.length === 0}});
+  renderActs();
+}});
+
+document.getElementById('nc-auto').addEventListener('click', () => {{
+  const A = ['Al-Rajhi','Al-Nahda','Al-Waha','Riyadh','Jeddah','Dammam','Qassim','Asir',
+             'Madinah','Taif','Khobar','Buraidah','Najran','Jazan','Yanbu','Dhahran'];
+  const B = ['Trading','Industrial','Commercial','Development','Services','Enterprises',
+             'Group','Holding','Contracting','Supplies','Systems','Solutions'];
+  const C = ['Co.','Est.','LLC','Company','Group'];
+  const N = ['Fahad Al-Otaibi','Noura Al-Harbi','Khalid Al-Ghamdi','Sara Al-Dosari',
+             'Abdullah Al-Qahtani','Maha Al-Shehri'];
+  const s = pick(SECTORS);
+  setV('nc-name', pick(A) + ' ' + pick(B) + ' ' + pick(C));
+  setV('nc-vat', '300' + digits(4) + '00' + digits(1) + '0003');
+  setV('nc-phone', '+9665' + digits(8));
+  setV('nc-email', 'finance@example-taxpayer.sa');
+  setV('nc-address', pick(A) + ' District, ' + pick(['Riyadh','Jeddah','Dammam'])
+       + ', Saudi Arabia');
+  acts.length = 0;
+  acts.push({{isic: s[1], description: s[2], sector: s[0], primary: true}});
+  document.getElementById('nc-sector').value = s[1];
+  renderActs();
+  setV('nc-from', '2025-01-01');
+  setV('nc-to', '2025-03-31');
+  setV('nc-created', todayISO());
+  document.getElementById('nc-reason').value = pick(
+    ['Risk Engine','Whistleblowers report','Report from OGAs','Internal referral','Other']);
+  setV('nc-manager', pick(N));
+  setV('nc-supervisor', pick(N));
+  setV('nc-officer', pick(N));
+  setV('nc-id', '');
+  document.getElementById('nc-err').textContent = '';
+}});
+
+document.getElementById('nc-create').addEventListener('click', () => {{
+  const err = document.getElementById('nc-err');
+  const name = V('nc-name'), vat = V('nc-vat'), from = V('nc-from'), to = V('nc-to');
+  if (!name || !vat) {{
+    err.textContent = 'Taxpayer name and TIN are required.'; return;
+  }}
+  if (!from || !to) {{ err.textContent = 'The tax period is required.'; return; }}
+  if (from > to) {{ err.textContent = 'The period start must not be after its end.'; return; }}
+  err.textContent = '';
+  const year = (V('nc-created') || todayISO()).slice(0, 4);
+  const id = V('nc-id') || nextCaseId(year);
+  const primary = acts.find(a => a.primary) || acts[0];
+  const rows = readLocal();
+  rows.unshift({{id: id, name: name, vat: vat,
+                sector: primary ? primary.sector : '',
+                reason: document.getElementById('nc-reason').value,
+                from: from, to: to}});
+  writeLocal(rows);
+  renderLocal();
+  ['nc-name','nc-vat','nc-phone','nc-email','nc-address','nc-id','nc-manager',
+   'nc-supervisor','nc-officer','nc-audited-note'].forEach(k => setV(k, ''));
+  acts.length = 0;
+  renderActs();
+  view('cases');
+  toast(id + ' created and added to the queue. In this file it lives in your browser only.');
+}});
+
+renderLocal();
 document.getElementById('back').addEventListener('click', () => view('cases'));
 document.querySelectorAll('.navlink[data-view="cases"]').forEach(
   n => n.addEventListener('click', () => view('cases')));
