@@ -632,15 +632,49 @@ def test_the_treatment_matrix_agrees_with_the_comparison_cards(api):
     assert total["declared_vs_reg"] == vat_of["S3"]
 
 
-def test_a_treatment_the_return_cannot_declare_is_empty_rather_than_zero(api):
-    """The return has no exempt box, so it declared nothing exempt — which is not the same as
-    declaring zero, and a matrix that drew it as 0 would turn a gap in the form into a figure."""
+def test_a_box_the_taxpayer_did_not_declare_is_empty_rather_than_zero(api):
+    """A box carrying no declaration is blank, not 0 — the two are different facts about a
+    taxpayer, and drawing the first as the second turns a gap in the form into a figure."""
     d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
-    rows = {r["treatment"]: r for r in d["workstreams"]["sales"]["matrix"]["rows"]}
+    rows = {r["code"]: r for r in d["workstreams"]["sales"]["matrix"]["rows"]}
+    assert rows["exempt_sales"]["declared_vat"] is None
     for r in rows.values():
         for key in ("declared_vat", "register_vat", "einvoice_vat"):
             assert r[key] is None or isinstance(r[key], (int, float))
-    assert "exempt" not in rows, "nothing on this case evidences an exempt supply"
+
+
+def test_a_box_nothing_can_evidence_is_marked_and_never_given_a_variance(api):
+    """Etimad, sales to citizens, exempt supplies and reverse-charge imports turn on facts the
+    registers do not carry. Comparing such a box against an absent population and calling the
+    result zero would report the whole declaration as a difference."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    for ws in ("sales", "purchases"):
+        for r in d["workstreams"][ws]["matrix"]["rows"]:
+            if not r.get("declared_only"):
+                continue
+            assert r["why_unevidenced"], f"{r['code']} is declared-only and does not say why"
+            assert r["register_vat"] is None and r["einvoice_vat"] is None
+            assert r["einvoice_vs_declared"] is None and r["declared_vs_reg"] is None
+
+    codes = {r["code"] for r in d["workstreams"]["purchases"]["matrix"]["rows"]}
+    assert {"import_customs_15", "import_customs_5",
+            "import_reverse_charge_15", "import_reverse_charge_5"} <= codes
+
+
+def test_the_matrix_foots_to_the_totals_the_datasets_actually_hold(api):
+    """Every riyal is on a row. A record charged at a rate the return has no box for belongs to
+    no line of the form, and without a row for it the e-invoice column read SAR 2,499,000
+    against a dataset holding 2,630,000 with nothing on screen saying where the rest went."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    w = d["workstreams"]["sales"]
+    total = w["matrix"]["total"]
+
+    kpi = {k["key"]: k["value"] for k in w["kpis"]}
+    assert total["register_vat"] == kpi["register_vat"]
+    assert total["einvoice_vat"] == kpi["einvoices_vat"]
+
+    assert w["matrix"]["unallocated_count"] == 1, "the 16.5%-rated e-invoice fits no box"
+    assert w["matrix"]["unallocated_value"] == 131_000.0
 
 
 def test_a_card_states_only_the_metrics_both_sides_carry(api):

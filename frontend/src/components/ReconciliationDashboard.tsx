@@ -208,54 +208,91 @@ function CompareCardView({ c, open, onOpen }: {
   );
 }
 
-// ------------------------------------------------------------------ the treatment matrix
-/** Every VAT treatment against every source, with the three variances beside it.
+// ------------------------------------------------------------------ the return, box by box
+const EVIDENCE_WORD: Record<string, string> = {
+  "records": "register & e-invoices",
+  "customs-import": "customs import declarations",
+  "customs-export": "customs export declarations",
+  "nothing": "nothing on this case",
+  "computed": "computed",
+};
+
+/** Every box the return declares, against whatever evidences it.
  *
- *  Level 2 as one table rather than three. Money moved from standard-rated to zero-rated nets
- *  to nothing in every total on the screen above it, and this is the only place it shows.
+ *  The rows are the **return's own boxes**, not our canonical treatments. Those are two
+ *  vocabularies and conflating them loses precisely what an auditor looks for: the return keeps
+ *  15% apart from 5%, imports cleared at customs apart from imports under reverse charge, and
+ *  domestic zero-rated apart from exports, and a row per treatment merges every one of those
+ *  pairs.
  *
- *  An empty declared cell means the return has no box for that treatment. That is not a
- *  declaration of zero, and drawing it as one would turn a gap in the form into an
- *  accusation. */
+ *  Three kinds of row, and the difference is the point. A box evidenced by the records carries
+ *  a real variance. A box evidenced by customs is compared on its **base** only, because a
+ *  declaration states a value in SAR and no tax. A **declared-only** box carries no variance at
+ *  all and says why: comparing it against an absent population would report the entire
+ *  declaration as a difference. */
 function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
+  const [showAr, setShowAr] = useState(false);
   if (!m.rows.length) return null;
-  const cell = (v: number | null) =>
+
+  const cell = (v: number | null, muted = false) =>
     v === null
-      ? <span className="muted" title="the return carries no box for this">&mdash;</span>
-      : <span className="num">{bare(v)}</span>;
-  const row = (r: MatrixRow, total = false) => (
-    <tr key={r.treatment} className={total ? "totalrow" : ""}>
-      <td>{r.label}</td>
-      <td className="r">{cell(r.declared_base)}</td>
-      <td className="r">{cell(r.declared_vat)}</td>
-      <td className="r">{cell(r.register_base)}</td>
-      <td className="r">{cell(r.register_vat)}</td>
-      <td className="r">{cell(r.einvoice_base)}</td>
-      <td className="r">{cell(r.einvoice_vat)}</td>
-      <td className="r"><Var v={r.reg_vs_einvoice} /></td>
-      <td className="r"><Var v={r.einvoice_vs_declared} /></td>
-      <td className="r"><Var v={r.declared_vs_reg} /></td>
-    </tr>
-  );
+      ? <span className="muted" title="not declared, which is not a declaration of zero">
+          &mdash;</span>
+      : <span className={"num" + (muted ? " muted" : "")}>{bare(v)}</span>;
+
+  const row = (r: MatrixRow, total = false) => {
+    const dim = r.declared_only;
+    return (
+      <tr key={r.code}
+          className={(total ? "totalrow" : "") + (dim ? " declared-only" : "")
+            + (r.unallocated ? " unalloc" : "")}>
+        <td>
+          <span className="bx">{showAr && r.label_ar ? r.label_ar : r.label}</span>
+          {!total && (
+            <i className="bx-ev" title={r.why_unevidenced || undefined}>
+              {EVIDENCE_WORD[r.evidenced_by] || r.evidenced_by}
+              {dim && " — declared only"}
+            </i>
+          )}
+        </td>
+        <td className="r">{cell(r.declared_base)}</td>
+        <td className="r">{cell(r.declared_adjustment, true)}</td>
+        <td className="r">{cell(r.declared_vat)}</td>
+        <td className="r">{cell(r.register_base)}</td>
+        <td className="r">{cell(r.register_vat)}</td>
+        <td className="r">{cell(r.einvoice_base)}</td>
+        <td className="r">{cell(r.einvoice_vat)}</td>
+        <td className="r"><Var v={r.reg_vs_einvoice} /></td>
+        <td className="r"><Var v={r.einvoice_vs_declared} /></td>
+        <td className="r"><Var v={r.declared_vs_reg} /></td>
+      </tr>
+    );
+  };
+
   return (
     <div className="panel">
       <div className="panel-head">
-        <h2>{name} by VAT treatment</h2>
-        <span className="sub">every treatment against every source · all amounts in SAR</span>
+        <h2>{name} — the return, box by box</h2>
+        <span className="sub">{m.rows.length} boxes &middot; all amounts in SAR</span>
+        <button className="linklike" style={{ marginLeft: "auto" }}
+                onClick={() => setShowAr((a) => !a)}>
+          {showAr ? "English" : "عربي"}
+        </button>
       </div>
       <div className="tablewrap">
         <table className="dtable mtable">
           <thead>
             <tr className="grouprow">
               <th />
-              <th colSpan={2} className="grp">VAT return &mdash; declared</th>
+              <th colSpan={3} className="grp">VAT return &mdash; declared</th>
               <th colSpan={2} className="grp">Register &mdash; the taxpayer&rsquo;s</th>
               <th colSpan={2} className="grp">E-invoices &mdash; the Authority&rsquo;s</th>
               <th colSpan={3} className="grp last">Variance, in VAT</th>
             </tr>
             <tr>
-              <th>Treatment</th>
-              <th className="r">Taxable</th><th className="r">VAT</th>
+              <th>Box</th>
+              <th className="r">Applied</th><th className="r">Adjustment</th>
+              <th className="r">VAT</th>
               <th className="r">Taxable</th><th className="r">VAT</th>
               <th className="r">Taxable</th><th className="r">VAT</th>
               <th className="r">Reg &harr; E-inv</th>
@@ -270,11 +307,14 @@ function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
         </table>
       </div>
       <div className="panel-note">
-        <span className="ct">empty &ne; zero</span> A blank declared cell means the return
-        carries no box for that treatment &mdash; not that the taxpayer declared nothing under
-        it.{m.note ? ` ${m.note}` : ""} The total row&rsquo;s variances are taken from the
-        totals, never summed down the column: a treatment one side cannot state drops out of
-        that sum, and the result then disagrees with the comparison above it.
+        <span className="ct">empty &ne; zero</span> A blank cell means the box was not declared,
+        or that side holds nothing for it &mdash; neither is a declaration of zero.
+        {!!m.declared_only_count && ` ${m.note}`}
+        {!!m.unallocated_count && (
+          <> <b>Records the return has no box for</b> carries {m.unallocated_count} record(s)
+          charged at a rate no box declares. It is a visible row rather than a silent loss:
+          without it the columns would not foot to the totals above.</>
+        )}
       </div>
     </div>
   );

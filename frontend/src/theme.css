@@ -1831,3 +1831,12 @@ h4.lvl{font-size:11px;font-weight:500;color:var(--soft);text-transform:uppercase
 .ovlargest>b{font-size:20px;font-weight:300;color:var(--low)}
 .ovlargest>span{font-size:11px;color:var(--muted)}
 .ovnote{margin:0;font-size:11px;color:var(--muted);line-height:1.5}
+/* One box per row, and what evidences it stated on the row rather than in a key elsewhere. */
+.mtable .bx{display:block}
+.mtable .bx-ev{display:block;font-style:normal;font-size:9.5px;color:var(--faint);margin-top:1px}
+/* A box nothing can evidence is dimmed, not hidden: it is part of the return whether or not
+   anything on the case can test it, and hiding it would misreport the declaration. */
+.mtable tr.declared-only td{background:var(--surface-2)}
+.mtable tr.declared-only .bx{color:var(--muted)}
+.mtable tr.unalloc td{background:var(--med-bg)}
+.mtable tr.unalloc .bx{color:var(--med)}

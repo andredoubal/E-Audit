@@ -27,6 +27,7 @@ from . import observations as obs
 from . import pairwise as P
 from . import status as S
 from . import tolerance as T
+from .. import vat_boxes as vb
 
 #: Which profiled dataset types stand in for each of the three sources.
 _REGISTER_TYPES = {SALE: (prof.SALES_REGISTER,), PURCHASE: (prof.PURCHASE_REGISTER,)}
@@ -55,6 +56,18 @@ def _return_boxes(db: Session, case: AuditCase) -> tuple[dict[str, float], bool]
     if ret is None:
         return {}, False
     return {b.box_code: round(float(b.vat_amount), 2) for b in ret.boxes}, True
+
+
+def _return_adjustments(db: Session, case: AuditCase) -> dict[str, float]:
+    """The taxpayer's own adjustment per box. The return carries its own column for it, and a
+    box whose declaration is an adjustment rather than a supply reads very differently."""
+    ret = db.scalar(select(VatReturn).where(
+        VatReturn.taxpayer_id == case.taxpayer_id,
+        VatReturn.period_from == case.period_from,
+        VatReturn.current_flag.is_(True)))
+    if ret is None:
+        return {}
+    return {b.box_code: round(float(b.adjustment or 0), 2) for b in ret.boxes}
 
 
 def _return_bases(db: Session, case: AuditCase) -> dict[str, float]:
@@ -262,6 +275,7 @@ def build_for(db: Session, case_id: str) -> dict:
     sources = _sources(db, case, profiles, rows_by_file)
     boxes, _on_file = _return_boxes(db, case)
     bases = _return_bases(db, case)
+    adjustments = _return_adjustments(db, case)
 
     comparisons: list[P.Comparison] = []
     for pairing in P.PAIRINGS:
@@ -296,7 +310,7 @@ def build_for(db: Session, case_id: str) -> dict:
                                      if c.pairing.workstream == ws],
                                     [e for e in exceptions if e.workstream == ws]),
                 "cards": _cards([c for c in comparisons if c.pairing.workstream == ws]),
-                "matrix": _matrix(sources[ws], boxes, bases),
+                "matrix": _matrix(sources[ws], boxes, bases, adjustments),
             }
             for ws in ("sales", "purchases")
         },
@@ -414,92 +428,141 @@ def _cards(comparisons: list[P.Comparison]) -> list[dict]:
     return out
 
 
-# ------------------------------------------------------------------ the treatment matrix
-#: Which return box declares each VAT treatment. `exports` is folded into zero-rated because
-#: that is where the record side puts it — `canonical/treatment.py` reads an export indicator
-#: as zero-rated — and a row the declaration fills but no record source can ever fill would
-#: read as a permanent unexplained difference rather than as the mapping it is.
-_BOX_TREATMENT = {
-    "sales": {STANDARD: (BOX_SALES,), ZERO_RATED: (BOX_ZERO_RATED_SALES, "exports")},
-    "purchases": {STANDARD: (BOX_PURCHASE,)},
-}
+# ------------------------------------------------------------------ the return, box by box
+def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float],
+            adjustments: dict[str, float]) -> dict:
+    """Every box the return declares, against whatever evidences it.
 
+    The rows are the **return's own boxes**, not our canonical treatments. Those are two
+    different vocabularies and conflating them loses exactly what an auditor is looking for: the
+    return keeps 15% apart from 5%, imports cleared at customs apart from imports under reverse
+    charge, and domestic zero-rated apart from exports, and a row per treatment silently merges
+    each of those pairs.
 
-def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float]) -> dict:
-    """Every VAT treatment against every source, with the three variances beside it.
+    Three kinds of row come out, and the difference between them is the point:
 
-    This is the level-2 comparison as one table rather than three. Totals that agree while a
-    single treatment inside them does not is the case this catches, and reading it needs the
-    treatments as rows with all three sources side by side — money moved from standard-rated to
-    zero-rated nets to nothing in every total on the screen above.
-
-    Declared figures exist only where the return has a box for that treatment. Where it has
-    none the cell is null, which is not zero: the taxpayer did not declare nothing exempt, the
-    return simply has no exempt box to declare it in.
+    - **Evidenced by the records** — the register and the extract, scoped to that box's rate and
+      treatment. A real comparison, with a real variance.
+    - **Evidenced by customs** — the import and export declarations. Those carry a value in SAR
+      and no tax at all, so the comparison is against the box's *base* and the VAT column is
+      left empty rather than filled with a figure customs never stated.
+    - **Declared only** — nothing on the case can evidence it. No variance is computed, and the
+      reason is carried on the row. Comparing such a box against nothing and calling the result
+      zero would manufacture a variance the size of the declaration.
     """
     reg, ein = s.register, s.einvoices
-    reg_t = reg.by_treatment("vat") if reg else {}
-    reg_b = reg.by_treatment("taxable") if reg else {}
-    ein_t = ein.by_treatment("vat") if ein else {}
-    ein_b = ein.by_treatment("taxable") if ein else {}
+    direction = SALE if s.workstream == "sales" else PURCHASE
 
-    def declared(treatment: str) -> tuple[float | None, float | None]:
-        codes = _BOX_TREATMENT.get(s.workstream, {}).get(treatment)
-        if not codes or not s.return_on_file:
-            return None, None
-        present = [c for c in codes if c in boxes or c in bases]
-        if not present:
-            return None, None
-        return (round(sum(bases.get(c, 0.0) for c in present), 2),
-                round(sum(boxes.get(c, 0.0) for c in present), 2))
+    def records_for(box) -> tuple[float | None, float | None, int | None,
+                                  float | None, float | None, int | None]:
+        """Register and e-invoice figures for one box: base, VAT and count on each side."""
+        def side(ds):
+            if ds is None:
+                return None, None, None
+            rows = [r for r in ds.records
+                    if vb.records_box(direction, r.vat_treatment, r.vat_rate) is box]
+            if not rows:
+                return None, None, 0
+            base = ([r.taxable_amount for r in rows if r.taxable_amount is not None]
+                    if "taxable" in ds.fields_available else [])
+            vat = ([r.vat_amount for r in rows if r.vat_amount is not None]
+                   if "vat" in ds.fields_available else [])
+            return (round(sum(base), 2) if base else None,
+                    round(sum(vat), 2) if vat else None, len(rows))
+        return side(reg) + side(ein)
 
     def diff(a: float | None, b: float | None) -> float | None:
         return None if a is None or b is None else round(a - b, 2)
 
     rows: list[dict] = []
-    seen = [t for t in TREATMENTS
-            if t in reg_t or t in ein_t or declared(t) != (None, None)]
-    for t in seen:
-        d_base, d_vat = declared(t)
-        r_vat = (reg_t.get(t) or {}).get("total")
-        r_base = (reg_b.get(t) or {}).get("total")
-        e_vat = (ein_t.get(t) or {}).get("total")
-        e_base = (ein_b.get(t) or {}).get("total")
+    for box in vb.for_workstream(s.workstream):
+        d_base = bases.get(box.code) if s.return_on_file else None
+        d_vat = boxes.get(box.code) if s.return_on_file else None
+        d_adj = adjustments.get(box.code) if s.return_on_file else None
+
+        r_base = r_vat = r_count = e_base = e_vat = e_count = None
+        if box.evidenced_by == vb.RECORDS:
+            r_base, r_vat, r_count, e_base, e_vat, e_count = records_for(box)
+
         rows.append({
-            "treatment": t, "label": TREATMENT_LABEL[t],
-            "declared_base": d_base, "declared_vat": d_vat,
-            "register_base": r_base, "register_vat": r_vat,
-            "einvoice_base": e_base, "einvoice_vat": e_vat,
-            "register_count": (reg_t.get(t) or {}).get("count"),
-            "einvoice_count": (ein_t.get(t) or {}).get("count"),
-            # The same three pairings the cards above carry, per treatment.
+            "code": box.code, "label": box.label, "label_ar": box.label_ar,
+            "rate": box.rate, "category": box.category,
+            "evidenced_by": box.evidenced_by, "declared_only": box.declared_only,
+            "why_unevidenced": box.why_unevidenced,
+            "declared_base": d_base, "declared_vat": d_vat, "declared_adjustment": d_adj,
+            "register_base": r_base, "register_vat": r_vat, "register_count": r_count,
+            "einvoice_base": e_base, "einvoice_vat": e_vat, "einvoice_count": e_count,
             "reg_vs_einvoice": diff(r_vat, e_vat),
             "einvoice_vs_declared": diff(e_vat, d_vat),
             "declared_vs_reg": diff(d_vat, r_vat),
+        })
+
+    # Anything the boxes cannot hold. A record charged at a rate the return has no box for —
+    # 16.5%, say — belongs to no line of the form, and without this row it simply disappears
+    # from the table: the e-invoice column read SAR 2,499,000 against a dataset holding
+    # 2,630,000, and nothing on the screen said where the difference went. A matrix an auditor
+    # cannot foot is a matrix they cannot use, so the residue is a visible row with its own
+    # explanation rather than a silent loss.
+    def unallocated(ds) -> tuple[float | None, float | None, int]:
+        if ds is None:
+            return None, None, 0
+        rows_ = [r for r in ds.records
+                 if vb.records_box(direction, r.vat_treatment, r.vat_rate) is None]
+        if not rows_:
+            return None, None, 0
+        base = ([r.taxable_amount for r in rows_ if r.taxable_amount is not None]
+                if "taxable" in ds.fields_available else [])
+        vat = ([r.vat_amount for r in rows_ if r.vat_amount is not None]
+               if "vat" in ds.fields_available else [])
+        return (round(sum(base), 2) if base else None,
+                round(sum(vat), 2) if vat else None, len(rows_))
+
+    ur_base, ur_vat, ur_count = unallocated(reg)
+    ue_base, ue_vat, ue_count = unallocated(ein)
+    if ur_count or ue_count:
+        rows.append({
+            "code": "unallocated", "label": "Records the return has no box for",
+            "label_ar": "", "rate": None, "category": "", "evidenced_by": vb.RECORDS,
+            "declared_only": False, "unallocated": True,
+            "why_unevidenced": "",
+            "declared_base": None, "declared_vat": None, "declared_adjustment": None,
+            "register_base": ur_base, "register_vat": ur_vat, "register_count": ur_count,
+            "einvoice_base": ue_base, "einvoice_vat": ue_vat, "einvoice_count": ue_count,
+            "reg_vs_einvoice": diff(ur_vat, ue_vat),
+            "einvoice_vs_declared": None, "declared_vs_reg": None,
         })
 
     def col(key: str) -> float | None:
         vals = [r[key] for r in rows if r[key] is not None]
         return round(sum(vals), 2) if vals else None
 
-    total = {"treatment": "total", "label": "Total"}
-    for key in ("declared_base", "declared_vat", "register_base", "register_vat",
-                "einvoice_base", "einvoice_vat"):
+    total = {"code": "total", "label": "Total", "label_ar": "الإجمالي",
+             "rate": None, "category": "", "evidenced_by": vb.COMPUTED,
+             "declared_only": False, "why_unevidenced": ""}
+    for key in ("declared_base", "declared_vat", "declared_adjustment",
+                "register_base", "register_vat", "einvoice_base", "einvoice_vat"):
         total[key] = col(key)
-    # The total's variances come from the totals, never from summing the column above them. A
-    # treatment one side cannot state drops out of that column, so the sum came to SAR 499,000
-    # where the pairing itself reports 630,000 — two figures for one difference, and the auditor
-    # would rightly trust neither. Where a source cannot be totalled at all there is no
-    # variance to state, and the cell stays empty.
+    total["register_count"] = reg.count if reg else None
+    total["einvoice_count"] = ein.count if ein else None
+    # From the totals, never summed down the column. A box one side cannot state drops out of
+    # that sum and the result then disagrees with the pairing above it.
     total["reg_vs_einvoice"] = diff(total["register_vat"], total["einvoice_vat"])
     total["einvoice_vs_declared"] = diff(total["einvoice_vat"], total["declared_vat"])
     total["declared_vs_reg"] = diff(total["declared_vat"], total["register_vat"])
-    total["register_count"] = reg.count if reg else None
-    total["einvoice_count"] = ein.count if ein else None
 
+    declared_only = [r for r in rows
+                     if r["declared_only"] and (r["declared_base"] or r["declared_vat"])]
+    unbox = round((ur_vat or 0.0) + (ue_vat or 0.0), 2)
     return {
         "rows": rows, "total": total,
-        "note": ("Exports are declared in their own box and counted here as zero-rated, which "
-                 "is where the record sources classify them."
-                 if s.workstream == "sales" and "exports" in bases else ""),
+        "declared_only_count": len(declared_only),
+        "declared_only_value": round(sum(abs(r["declared_vat"] or 0.0)
+                                         for r in declared_only), 2),
+        "unallocated_count": ur_count + ue_count,
+        "unallocated_value": unbox,
+        "note": ("Rows marked declared-only carry a figure the return states and nothing on the "
+                 "case can test. They are shown at their declared value with no variance, "
+                 "because comparing them against an absent population would report the whole "
+                 "declaration as a difference."
+                 if declared_only else ""),
     }

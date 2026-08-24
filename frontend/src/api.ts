@@ -1731,8 +1731,21 @@ export interface CompareCard {
 }
 
 export interface MatrixRow {
-  treatment: string;
+  /** the return's own box code — `total` and `unallocated` are the two synthetic rows */
+  code: string;
   label: string;
+  /** the Authority's own wording for the box */
+  label_ar: string;
+  rate: number | null;
+  category: string;
+  /** how the record side is established: records / customs-import / customs-export /
+   *  nothing / computed */
+  evidenced_by: string;
+  /** nothing on the case can evidence this box, so it carries no variance */
+  declared_only: boolean;
+  why_unevidenced: string;
+  unallocated?: boolean;
+  declared_adjustment: number | null;
   declared_base: number | null;
   declared_vat: number | null;
   register_base: number | null;
@@ -1750,7 +1763,11 @@ export interface WorkstreamDash {
   cards: CompareCard[];
   /** every treatment against every source; a null cell is "the return has no box for this",
    *  which is not a declaration of zero */
-  matrix: { rows: MatrixRow[]; total: MatrixRow; note: string };
+  matrix: {
+    rows: MatrixRow[]; total: MatrixRow; note: string;
+    declared_only_count: number; declared_only_value: number;
+    unallocated_count: number; unallocated_value: number;
+  };
   kpis: Kpi[];
   unavailable: { what: string; why: string }[];
   sources: {
