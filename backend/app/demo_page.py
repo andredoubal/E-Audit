@@ -341,7 +341,8 @@ whatever the next question turns out to be.</p></div></div>
 """
 
 
-def investigation(inv: dict, z: dict, summary: dict, asmt: dict, regs: dict) -> str:
+def investigation(inv: dict, z: dict, summary: dict, asmt: dict, regs: dict,
+                  evidence: dict, recon: dict, controls: dict) -> str:
     """The module in the order the work happens.
 
     Optional ZATCA data, then what the investigation found, then the evidence behind it, then
@@ -370,6 +371,143 @@ def investigation(inv: dict, z: dict, summary: dict, asmt: dict, regs: dict) -> 
 <p class="detail-note" style="margin-bottom:0">The taxpayer&rsquo;s own documents come from
 <b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
 internal invoice extract, which the listing is matched against.</p></div></section>"""
+
+    # ------------------------------------------------- the two workstreams, and the stages
+    # Sales and purchases as two audits. The cards carry what decides where attention goes, and
+    # the regulatory concerns are counted apart from the variances on purpose: a case can have
+    # one without the other, which is the whole point of the split.
+    def wstab(key: str, label: str, sub: str) -> str:
+        s = recon["workstreams"][key]
+        n = len([c for c in controls["controls"]
+                 if c["applies_to"] in (key, "both")
+                 and c["status"] == "applicable-potential-concern"])
+        return f"""<div class="wstab{' on' if key == 'sales' else ''}">
+<span class="wstab-head"><b>{e(label)}</b><small>{e(sub)}</small></span>
+<span class="wstab-stats">
+<span class="wstat"><b>{s['runnable']}<i>/{s['total']}</i></b><span>comparisons run</span></span>
+<span class="wstat{' hot' if s['unexplained_count'] else ''}"><b>{s['unexplained_count']}</b>
+<span>unexplained</span></span>
+<span class="wstat{' hot' if n else ''}"><b>{n}</b><span>regulatory concerns</span></span>
+</span>
+{f'<span class="wstab-foot">largest difference {sar(s["largest_unexplained"])}</span>'
+ if s['largest_unexplained'] else ''}</div>"""
+
+    wstabs = ('<div class="wstabs">'
+              + wstab("sales", "Sales", "Output VAT — what was supplied")
+              + wstab("purchases", "Purchases", "Input VAT — what was claimed")
+              + "</div>")
+
+    # Stage 0 — what arrived, read for what it is rather than for what it is called.
+    def evrow(p: dict) -> str:
+        flags = "".join(
+            f'<div class="evflag {f["severity"]}"><b>{e(f["detail"])}</b>'
+            + (f'<span class="sub">rows {", ".join(str(r) for r in f["rows"][:12])}</span>'
+               if f["rows"] else "")
+            + "</div>"
+            for f in p["quality_flags"])
+        roles = "".join(
+            f'<span class="evrole {r["confidence"]}"><b>{e(r["role"].replace("_", " "))}</b>'
+            f'<span>{e(r["column"])}</span></span>' for r in p["roles"])
+        return f"""<div class="evrow"><div class="evrow-head">
+<span class="evrow-what"><b>{e(p['dataset_label'])}</b><small>{e(p['filename'])}</small></span>
+<span class="evrow-meta">{p['record_count']} rows &middot; {p['column_count']} cols</span>
+<span class="pill {'pri-low' if p['confidence'] in ('high', 'confirmed') else 'pri-medium'}">
+{e(p['confidence'])}</span></div>
+<div class="evrow-body"><p class="detail-note" style="margin:0"><b>Why:</b> {e(p['why'])}</p>
+<div class="evroles">{roles}</div>{flags}</div></div>"""
+
+    ev_panel = f"""
+<section class="collapse" id="ev"><button class="collapse-head">
+<b>Evidence on file</b><span class="sub">{len(evidence['datasets'])} files read</span>
+<span class="collapse-action">Open</span><span id="ev-mark">&#9656;</span></button>
+<div class="collapse-body" id="ev-body" hidden>
+<div class="evlist">{''.join(evrow(p) for p in evidence['datasets'])}</div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> Each file is read for what it
+contains &mdash; which columns are present and what they hold &mdash; rather than for what it is
+called.</div></div></section>"""
+
+    # Stage 1 — every comparison the evidence supports, and every one it does not.
+    def rcrow(r: dict) -> str:
+        missing = r["status"] == "insufficient-evidence"
+        nums = ('<span class="rcrow-nums missing">not run</span>' if missing else
+                f'<span class="rcrow-nums"><span>{sar(r["value_a"])}</span>'
+                f'<span class="vs">vs</span><span>{sar(r["value_b"])}</span>'
+                f'<span class="delta {r["status"]}">'
+                f'{"+" if r["variance"] > 0 else "&minus;" if r["variance"] < 0 else ""}'
+                f'{sar(r["variance"])}</span></span>')
+        pill = {"reconciled": "pri-low", "reconciled-with-explained-difference": "pri-low",
+                "partially-reconciled": "pri-medium", "variance-identified": "pri-high"}.get(
+                    r["status"], "status")
+        extra = (f'<p class="detail-note" style="margin:0"><b>To run this, the case needs:</b> '
+                 f'{e("; ".join(r["needs"]))}.</p>' if missing else "")
+        return f"""<div class="rcrow {r['status']}"><div class="rcrow-head">
+<span class="rcrow-what"><b>{e(r['title'])}</b><small>{e(r['note'])}</small></span>
+{nums}<span class="pill {pill}">{e(r['status_label'])}</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">{e(r['explanation'])}</p>
+{extra}</div></div>"""
+
+    sales_recon = [r for r in recon["results"] if r["workstream"] == "sales"]
+    ran = [r for r in sales_recon if r["status"] != "insufficient-evidence"]
+    blocked = [r for r in sales_recon if r["status"] == "insufficient-evidence"]
+    s = recon["workstreams"]["sales"]
+    rc_panel = f"""
+<div class="panel"><div class="panel-head"><h2>Reconciliation</h2>
+<span class="sub">{s['runnable']} of {s['total']} comparisons could be run
+{f" &middot; {s['unexplained_count']} with an unexplained difference"
+ if s['unexplained_count'] else ""}</span></div>
+<div class="panel-body">
+<div class="rclist">{''.join(rcrow(r) for r in ran)}</div>
+<div class="rclist muted-list">{''.join(rcrow(r) for r in blocked)}</div>
+{f'<div class="panel-note"><span class="ct">&#8721; computed</span> {e(s["not_summed_because"])}'
+ f'</div>' if s['not_summed_because'] else ''}
+</div></div>"""
+
+    # Stage 2 — which provisions the evidence brings into scope, independent of any variance.
+    sales_controls = [c for c in controls["controls"]
+                      if c["applies_to"] in ("sales", "both")]
+    counts: dict[str, int] = {}
+    for c in sales_controls:
+        counts[c["status"]] = counts.get(c["status"], 0) + 1
+    short = {"applicable-potential-concern": ("Potential concern", "pri-high"),
+             "applicable-insufficient-evidence": ("Evidence missing", "pri-medium"),
+             "potentially-applicable": ("Needs your judgement", "pri-medium"),
+             "not-testable": ("Not testable", "status"),
+             "applicable-tested": ("Assessed, nothing arising", "pri-low"),
+             "not-applicable": ("Not applicable", "status")}
+    chips = "".join(
+        f'<span class="statechip {short[k][1]}"><b>{v}</b><span>{short[k][0]}</span></span>'
+        for k, v in sorted(counts.items(), key=lambda kv: -kv[1]) if k in short)
+
+    def rgrow(c: dict) -> str:
+        pill = short.get(c["status"], ("", "status"))[1]
+        cite = c["citation"]
+        superseded = ('<span class="pill pri-medium">wording superseded</span>'
+                      if cite.get("state") == "needs-validation" else "")
+        return f"""<div class="rgrow {c['status']}"><div class="rgrow-head">
+<span class="rgrow-what"><b>{e(c['title'])}</b>
+<small>{e(cite.get('label', ''))} &middot; {e(cite.get('title', ''))}</small></span>
+{superseded}<span class="pill {pill}">{e(c['status_label'])}</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">{e(c['detail'])}</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>{e(c['requirement'])}</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>{e(c['scope_reason'])}</p></div></div></div>"""
+
+    cov = controls["summary"]["coverage"]
+    rg_panel = f"""
+<section class="collapse" id="rg"><button class="collapse-head">
+<b>Regulatory coverage</b><span class="sub">{len(sales_controls)} controls screened</span>
+<span class="collapse-action">Open</span><span id="rg-mark">&#9656;</span></button>
+<div class="collapse-body" id="rg-body" hidden>
+<div class="callout warn"><b>This control set is an unreviewed draft.</b> It is an editorial
+reading of the articles it cites, not reviewed legal analysis, and it must be confirmed by a tax
+specialist before any of it supports a position taken with a taxpayer.</div>
+<div class="statebar">{chips}</div>
+<div class="rglist">{''.join(rgrow(c) for c in sales_controls)}</div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> Scope comes from the evidence
+and the return, not from whether anything differs &mdash; which is why a case whose numbers
+agree is still screened. The control set reaches <b>{cov['articles_covered']} of
+{cov['articles_total']}</b> articles.</div></div></section>"""
 
     # ------------------------------------------------- the return against the registers
     # Three numbers per box and no rule between them. The drill-down into the rows needs the
@@ -605,7 +743,11 @@ something is put, and cannot introduce a number. The assessment stays yours.</p>
 </div></div>"""
 
     return f"""{zsrc}
+{wstabs}
+{ev_panel}
+{rc_panel}
 {vregs}
+{rg_panel}
 {summary_panel}
 {detail}
 {assess}
@@ -837,6 +979,9 @@ def build() -> str:
     z = _get(f"/cases/{CASE}/zatca")
     summary = _get(f"/cases/{CASE}/investigation/summary")
     regs = _get(f"/cases/{CASE}/registers")
+    evidence = _get(f"/cases/{CASE}/evidence")
+    recon = _get(f"/cases/{CASE}/reconciliations")
+    controls = _get(f"/cases/{CASE}/regulatory-controls")
     asmt = _get(f"/cases/{CASE}/assessment")
     rep = _get(f"/cases/{CASE}/audit-report")
     mails = _get(f"/cases/{CASE}/emails").get("emails") or []
@@ -886,7 +1031,7 @@ def build() -> str:
     modules = {
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
-        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt, regs)),
+        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt, regs, evidence, recon, controls)),
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     panes = "".join(
@@ -1322,6 +1467,8 @@ function toggle(root, body, mark, action) {{
 }}
 toggle('zsrc', 'zsrc-body', 'zsrc-mark', 'zsrc');
 toggle('inv-detail', 'inv-detail-body', 'inv-detail-mark', 'collapse');
+toggle('ev', 'ev-body', 'ev-mark', 'collapse');
+toggle('rg', 'rg-body', 'rg-mark', 'collapse');
 
 /* The assessment is the auditor's own words, so this file can do the whole interaction. */
 const assessText = document.getElementById('assess-text');

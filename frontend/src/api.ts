@@ -1210,6 +1210,189 @@ export interface RegistersView {
   registers: Register[];
 }
 
+/* ---------------------------------------------------------------- stage 0: evidence
+ * What arrived, read for what it is rather than for what it is called. Everything below
+ * keys off this — which comparisons are possible, which controls are testable. */
+export interface DatasetRole {
+  role: string;
+  column: string;
+  side: string;
+  confidence: "high" | "medium" | "low";
+  why: string;
+  shape: string;
+}
+
+export interface QualityFlag {
+  code: string;
+  detail: string;
+  count: number;
+  column: string;
+  severity: "advisory" | "blocking";
+  rows: number[];
+}
+
+export interface DatasetProfile {
+  filename: string;
+  document_id: number;
+  provenance: "taxpayer" | "authority";
+  dataset_type: string;
+  dataset_label: string;
+  workstream: string;
+  confidence: "high" | "medium" | "low" | "confirmed";
+  why: string;
+  alternatives: string[];
+  record_count: number;
+  column_count: number;
+  columns: string[];
+  roles: DatasetRole[];
+  unmapped_columns: string[];
+  date_min: string | null;
+  date_max: string | null;
+  currencies: string[];
+  quality_flags: QualityFlag[];
+  transformations: { column: string; row_number: number; original: string;
+                     normalised: string; transformation: string; reason: string }[];
+  overridden: boolean;
+  /** What the profiler read, kept beside an auditor's correction so it stays reviewable. */
+  read_as?: { dataset_type: string; label: string; confidence: string; why: string };
+}
+
+export interface EvidenceState {
+  case_id: string;
+  period_from: string;
+  period_to: string;
+  datasets: DatasetProfile[];
+  by_workstream: { sales: string[]; purchases: string[] };
+  available_types: string[];
+  needs_attention: {
+    unclassified: string[];
+    low_confidence: string[];
+    blocking_quality: (QualityFlag & { filename: string })[];
+  };
+  known_types: { key: string; label: string; workstream: string }[];
+}
+
+export const getEvidence = (id: string) => getJSON<EvidenceState>(`/cases/${id}/evidence`);
+
+export const setDatasetType = (id: string, filename: string, datasetType: string,
+                               note = "", workstream = "") =>
+  putJSON<EvidenceState>(`/cases/${id}/evidence/override`,
+                         { filename, dataset_type: datasetType, workstream, note });
+
+/* ---------------------------------------------------------------- stage 1: reconciliation */
+export interface ReconContribution {
+  side: "a" | "b" | "both";
+  reference: string;
+  amount: number;
+  row_number: number | null;
+  note: string;
+}
+
+export interface ReconResult {
+  id: string;
+  title: string;
+  workstream: "sales" | "purchases";
+  metric: string;
+  metric_label: string;
+  status: string;
+  status_label: string;
+  attention: number;
+  value_a: number;
+  value_b: number;
+  variance: number;
+  variance_pct: number;
+  residual: number;
+  label_a: string;
+  label_b: string;
+  source_a: string;
+  source_b: string;
+  grain: "total" | "transaction";
+  note: string;
+  method: string;
+  explanation: string;
+  causes: { cause: string; label: string; amount: number; side: string; detail: string }[];
+  contributions: ReconContribution[];
+  tolerance: { name: string; allowance: number; note: string };
+  period: Record<string, any>;
+  conventions: { side: string; source: string; convention: string; note: string }[];
+  quality_notes: string[];
+  blocked_by: string[];
+  needs: string[];
+}
+
+export interface WorkstreamSummary {
+  total: number;
+  by_status: Record<string, number>;
+  runnable: number;
+  unexplained_count: number;
+  largest_unexplained: number;
+  largest_unexplained_from: string;
+  not_summed_because: string;
+  needs: string[];
+}
+
+export interface ReconState {
+  case_id: string;
+  period_from: string;
+  period_to: string;
+  return_on_file: boolean;
+  workstreams: { sales: WorkstreamSummary; purchases: WorkstreamSummary };
+  results: ReconResult[];
+}
+
+export const getReconciliations = (id: string) =>
+  getJSON<ReconState>(`/cases/${id}/reconciliations`);
+
+/* ---------------------------------------------------------------- stage 2: the regulations */
+export interface ControlAssessment {
+  control_id: string;
+  title: string;
+  topic: string;
+  applies_to: string;
+  article: number;
+  paragraph: string;
+  requirement: string;
+  conditions: string[];
+  exceptions: string[];
+  evidence_required: { dataset_types?: string[]; roles?: string[] };
+  testability: "deterministic" | "ai-assisted" | "manual";
+  related: number[];
+  source_note: string;
+  status: string;
+  status_label: string;
+  attention: number;
+  scope_reason: string;
+  detail: string;
+  outcome: { result?: string; detail?: string; count?: number; total?: number;
+             rows?: number[]; files?: string[] };
+  citation: { state: string; article: number; label?: string; title?: string;
+              chapter?: string; text?: string; english_current?: boolean;
+              last_amended_year?: number | null; note?: string };
+  missing_evidence: string[];
+}
+
+export interface RegulatoryState {
+  review_status: string;
+  review_note: string;
+  facts: {
+    dataset_types: string[]; roles_present: string[];
+    vat_treatments: string[]; boxes_filed: string[];
+    provenance: Record<string, string[]>;
+  };
+  summary: {
+    assessed: number;
+    by_status: Record<string, number>;
+    coverage: { controls: number; articles_total: number; articles_covered: number;
+                articles_uncovered: number; review_status: string; review_note: string;
+                by_testability: Record<string, number> };
+    superseded_citations: number;
+  };
+  controls: ControlAssessment[];
+}
+
+export const getRegulatoryControls = (id: string) =>
+  getJSON<RegulatoryState>(`/cases/${id}/regulatory-controls`);
+
 export const getRegisters = (id: string) =>
   getJSON<RegistersView>(`/cases/${id}/registers`);
 

@@ -10,6 +10,10 @@ import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
 import ZatcaSource from "../components/ZatcaSource";
 import VatRegisters from "../components/VatRegisters";
+import EvidencePanel from "../components/EvidencePanel";
+import ReconciliationPanel from "../components/ReconciliationPanel";
+import RegulatoryCoverage from "../components/RegulatoryCoverage";
+import WorkstreamTabs, { type Workstream } from "../components/WorkstreamTabs";
 import InvestigationSummary from "../components/InvestigationSummary";
 import AuditorAssessment from "../components/AuditorAssessment";
 import Collapsible from "../components/Collapsible";
@@ -163,8 +167,44 @@ function InvoiceTable({ invoices }: { invoices: Detail[] }) {
   );
 }
 
+/** The rows a comparison found on one side only, or recorded differently on each.
+ *
+ *  The only attribution the engine claims, and it claims it because it can: these are named
+ *  references carrying named amounts, joined across two populations. A total-grain comparison
+ *  reaches no such table, and says so instead of offering one. */
+function ContributionTable({ detail }: { detail: Detail }) {
+  const rows = (detail.contributions ?? []) as any[];
+  if (!rows.length) return <p className="muted">No rows are attributable to this difference.</p>;
+  return (
+    <>
+      <p className="detail-note">{detail.note}</p>
+      <div className="tablescroll">
+        <table className="inv-table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Where</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((c, n) => (
+              <tr key={(c.reference || "") + n}>
+                <td className="mono">{c.reference || "(no reference)"}</td>
+                <td>{c.note}</td>
+                <td className="mono" style={{ textAlign: "right" }}>{sar(c.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 function DetailBody({ detail, amount }: { detail?: Detail; amount?: number }) {
   if (!detail) return <p className="muted">No further detail.</p>;
+  if (detail.type === "recon-contributions") return <ContributionTable detail={detail} />;
   const kv = (rows: [string, ReactNode][]) => (
     <div className="kv">
       {rows.map(([k, v]) => (
@@ -378,6 +418,10 @@ export default function Investigation() {
   const [err, setErr] = useState<string | null>(null);
   const [rev, setRev] = useState(0);
   const [modal, setModal] = useState<{ title: string; detail?: Detail; amount?: number } | null>(null);
+  // Sales and purchases are separate audits — opposite risks, different evidence, different
+  // provisions — so the workstream is a property of the screen rather than a filter buried in
+  // a panel. Sales first because output VAT is where most cases start.
+  const [workstream, setWorkstream] = useState<Workstream>("sales");
 
   // Blanking the page is right when the *case* changes — the old case's figures must not sit
   // on screen under a new case's name. It is wrong on a refresh of the same case: `!d` falls
@@ -449,12 +493,32 @@ export default function Investigation() {
           thing uploaded here is the Authority's own extract, which answers to no request. */}
       <ZatcaSource id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
 
-      {/* The first question, first: what do the taxpayer's own registers total, what did they
-          declare, and what is the gap. Before the summary, because the summary is a reading of
-          this and an auditor who has not seen the two figures has nothing to read it against. */}
+      {/* Two workstreams, because they are two audits. The cards carry what decides where
+          attention goes — how much could be compared at all, how much of it is unexplained,
+          and how many regulatory concerns arose — and the last of those is counted apart from
+          the first two on purpose: a case can have one without the other. */}
+      <WorkstreamTabs id={id!} rev={rev} active={workstream} onSelect={setWorkstream} />
+
+      {/* Stage 0 — what arrived and what the engine made of it. Collapsed, because an auditor
+          wants the answer before the inputs; first, because every figure below rests on it and
+          a wrong reading has to be correctable without leaving the page. */}
+      <EvidencePanel id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
+
+      {/* Stage 1 — every comparison this evidence supports, and every one it does not. */}
+      <ReconciliationPanel id={id!} workstream={workstream} rev={rev}
+                           onDrill={(title, detail) => open(title, detail as Detail)} />
+
+      {/* The registers, kept as the plain three-figure reading of the box. It answers a
+          narrower question than the reconciliation above — the listing's own arithmetic
+          against the return, with the drill-down into every invoice — and an auditor opens
+          with it. */}
       <VatRegisters id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)}
                     onInvoices={(title, invoices, note) =>
                       open(title, { type: "invoice-list", invoices, note })} />
+
+      {/* Stage 2 — which provisions the evidence brings into scope. Independent of whether
+          anything differs, which is what makes "reconciled, and a concern remains" reachable. */}
+      <RegulatoryCoverage id={id!} workstream={workstream} rev={rev} />
 
       <InvestigationSummary id={id!} rev={rev} />
 

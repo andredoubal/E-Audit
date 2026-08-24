@@ -1121,6 +1121,97 @@ input.letter-input,select.letter-input{min-height:0}
 .rstep-mark{flex:none;font-size:11.5px;color:var(--faint)}
 .rstep-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
 
+/* ---- sales and purchases, as two workstreams ---------------------------------------
+   Two audits, not one screen with a filter: an under-declared sale and an over-claimed
+   purchase are opposite risks resting on different evidence. */
+.wstabs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.wstabs{grid-template-columns:1fr}}
+.wstab{text-align:left;font:inherit;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:13px;padding:15px 18px;cursor:pointer;
+  display:flex;flex-direction:column;gap:11px;transition:border-color .15s}
+.wstab:hover{border-color:var(--line-strong)}
+.wstab.on{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+.wstab-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.wstab-head>b{font-size:16px;font-weight:500}
+.wstab-head small{font-size:11.5px;color:var(--soft)}
+.wstab-stats{display:flex;gap:22px;flex-wrap:wrap}
+.wstat{display:flex;flex-direction:column;gap:1px}
+.wstat b{font-family:var(--mono);font-size:19px;font-weight:500;color:var(--muted)}
+.wstat b i{font-style:normal;font-size:13px;color:var(--faint)}
+.wstat span{font-size:11px;color:var(--soft)}
+.wstat.hot b{color:var(--high)}
+.wstab-foot{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+
+/* ---- stage 0: the evidence, read for what it is ------------------------------------ */
+.evlist,.rclist,.rglist{display:flex;flex-direction:column;gap:9px}
+.evrow,.rcrow,.rgrow{border:1px solid var(--line);border-radius:11px;background:var(--surface);
+  overflow:hidden}
+.evrow.uncertain{border-color:var(--med)}
+.evrow-head,.rcrow-head,.rgrow-head{display:flex;align-items:center;gap:12px;width:100%;
+  text-align:left;font:inherit;color:var(--ink);background:none;border:none;
+  padding:12px 15px;cursor:pointer}
+.evrow-head:hover,.rcrow-head:hover,.rgrow-head:hover{background:var(--surface-2)}
+.evrow-what,.rcrow-what,.rgrow-what{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.evrow-what>b,.rcrow-what>b,.rgrow-what>b{font-size:13.5px;font-weight:500}
+.evrow-what small,.rcrow-what small,.rgrow-what small{font-size:11.5px;color:var(--soft);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evrow-meta{font-family:var(--mono);font-size:11.5px;color:var(--faint);flex:none;
+  white-space:nowrap}
+.evrow-mark,.rcrow-mark,.rgrow-mark{flex:none;font-size:11.5px;color:var(--faint)}
+.evrow-body,.rcrow-body,.rgrow-body{padding:0 15px 15px;display:flex;flex-direction:column;
+  gap:11px;border-top:1px solid var(--divider)}
+.evrow-body>*:first-child,.rcrow-body>*:first-child,.rgrow-body>*:first-child{margin-top:12px}
+.evroles{display:flex;flex-wrap:wrap;gap:6px}
+.evrole{display:inline-flex;align-items:baseline;gap:6px;padding:3px 9px;border-radius:7px;
+  border:1px solid var(--line);background:var(--bg);font-size:11.5px}
+.evrole>b{font-weight:500;color:var(--ink)}
+.evrole>span{font-family:var(--mono);color:var(--soft)}
+.evrole.high{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}
+.evrole.low{border-color:var(--med);background:var(--med-bg)}
+.evflags{display:flex;flex-direction:column;gap:7px}
+.evflag{border-left:3px solid var(--med);background:var(--bg);border-radius:0 8px 8px 0;
+  padding:8px 12px;display:flex;flex-direction:column;gap:3px}
+.evflag.blocking{border-left-color:var(--high);background:var(--high-bg)}
+.evflag>b{font-size:12.5px;font-weight:400;color:var(--ink)}
+.evflag .sub{font-size:11px;color:var(--soft)}
+.evtrans summary,.rgcite summary{cursor:pointer;font-size:12.5px;color:var(--brand);
+  padding:4px 0}
+.evselect{font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface);color:var(--ink)}
+
+/* ---- stage 1: the comparisons ------------------------------------------------------ */
+.rcrow.variance-identified{border-left:3px solid var(--high)}
+.rcrow.partially-reconciled{border-left:3px solid var(--med)}
+.rcrow.reconciled,.rcrow\.reconciled-with-explained-difference{border-left:3px solid var(--low)}
+.rcrow-nums{display:flex;align-items:baseline;gap:9px;flex:none;font-family:var(--mono);
+  font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rcrow-nums .vs{font-family:var(--sans);font-size:11px;color:var(--faint)}
+.rcrow-nums.missing{font-family:var(--sans);font-size:12px;color:var(--faint);font-style:italic}
+.rcrow-nums .delta{font-size:13.5px;color:var(--ink)}
+.rcrow-nums .delta.variance-identified{color:var(--high)}
+.rcrow-nums .delta.partially-reconciled{color:var(--accent-text)}
+.rcrow-nums .delta.reconciled{color:var(--low)}
+.rcmeta{display:flex;flex-wrap:wrap;gap:8px 26px;font-size:11.5px;color:var(--muted)}
+.rcmeta .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--faint)}
+.rccauses{display:flex;flex-direction:column;gap:7px}
+.rccause{border-left:3px solid var(--brand);background:var(--bg);border-radius:0 8px 8px 0;
+  padding:9px 12px;display:flex;flex-direction:column;gap:3px}
+.rccause>b{font-size:12.5px;font-weight:500}
+.rccause>span{font-size:12px;line-height:1.55;color:var(--muted)}
+.muted-list{opacity:.72}
+
+/* ---- stage 2: the regulatory controls ---------------------------------------------- */
+.rgrow.applicable-potential-concern{border-left:3px solid var(--high)}
+.rgrow.applicable-insufficient-evidence,.rgrow.potentially-applicable{
+  border-left:3px solid var(--med)}
+.rgrow.applicable-tested{border-left:3px solid var(--low)}
+.rgblock{display:flex;flex-direction:column;gap:3px}
+.rgblock .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.rgblock p{margin:0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.rgblock ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.rgcite{border:1px solid var(--line);border-radius:9px;padding:8px 12px;background:var(--bg)}
+
 /* ---- the VAT return against the taxpayer's own invoice registers --------------------
    Three numbers per box and nothing between them. The earlier version of this was a bridge
    with a rule deduction on every second line; the rules are what made it arguable, and which
@@ -1724,6 +1815,73 @@ whatever the next question turns out to be.</p></div></div>
 <p class="detail-note" style="margin-bottom:0">The taxpayer&rsquo;s own documents come from
 <b>Taxpayer Correspondence</b> and are already in use here. This slot is for ZATCA&rsquo;s
 internal invoice extract, which the listing is matched against.</p></div></section>
+<div class="wstabs"><div class="wstab on">
+<span class="wstab-head"><b>Sales</b><small>Output VAT — what was supplied</small></span>
+<span class="wstab-stats">
+<span class="wstat"><b>2<i>/5</i></b><span>comparisons run</span></span>
+<span class="wstat hot"><b>2</b>
+<span>unexplained</span></span>
+<span class="wstat hot"><b>2</b><span>regulatory concerns</span></span>
+</span>
+<span class="wstab-foot">largest difference SAR 618,000</span></div><div class="wstab">
+<span class="wstab-head"><b>Purchases</b><small>Input VAT — what was claimed</small></span>
+<span class="wstab-stats">
+<span class="wstat"><b>0<i>/4</i></b><span>comparisons run</span></span>
+<span class="wstat"><b>0</b>
+<span>unexplained</span></span>
+<span class="wstat hot"><b>1</b><span>regulatory concerns</span></span>
+</span>
+</div></div>
+
+<section class="collapse" id="ev"><button class="collapse-head">
+<b>Evidence on file</b><span class="sub">2 files read</span>
+<span class="collapse-action">Open</span><span id="ev-mark">&#9656;</span></button>
+<div class="collapse-body" id="ev-body" hidden>
+<div class="evlist"><div class="evrow"><div class="evrow-head">
+<span class="evrow-what"><b>Sales register</b><small>Sales_Analysis_Q1_2025.xlsx</small></span>
+<span class="evrow-meta">22 rows &middot; 6 cols</span>
+<span class="pill pri-low">
+high</span></div>
+<div class="evrow-body"><p class="detail-note" style="margin:0"><b>Why:</b> rows carry a VAT amount and the file identifies counterparties as customers (customer_name)</p>
+<div class="evroles"><span class="evrole high"><b>issue date</b><span>invoice_date</span></span><span class="evrole high"><b>reference</b><span>invoice_number</span></span><span class="evrole high"><b>counterparty name</b><span>customer_name</span></span><span class="evrole high"><b>net amount</b><span>taxable_amount</span></span><span class="evrole high"><b>vat rate</b><span>vat_rate</span></span><span class="evrole high"><b>vat amount</b><span>vat_amount</span></span></div><div class="evflag advisory"><b>Rows with no value in &#x27;invoice_number&#x27;. Each one cannot be matched against another dataset.</b><span class="sub">rows 7, 13, 18</span></div><div class="evflag advisory"><b>The file states a total of 2,737,000.00 for &#x27;vat_amount&#x27;, but its own rows sum to 2,618,000.00 — a difference of 119,000.00.</b></div></div></div><div class="evrow"><div class="evrow-head">
+<span class="evrow-what"><b>E-invoice extract</b><small>ZATCA_Invoices_Q1_2025.xlsx</small></span>
+<span class="evrow-meta">22 rows &middot; 7 cols</span>
+<span class="pill pri-low">
+high</span></div>
+<div class="evrow-body"><p class="detail-note" style="margin:0"><b>Why:</b> rows carry invoices with a clearance status, which a taxpayer&#x27;s own listing does not have</p>
+<div class="evroles"><span class="evrole high"><b>issue date</b><span>invoice_date</span></span><span class="evrole high"><b>reference</b><span>invoice_number</span></span><span class="evrole high"><b>counterparty name</b><span>customer_name</span></span><span class="evrole high"><b>counterparty tax id</b><span>customer_vat_number</span></span><span class="evrole high"><b>net amount</b><span>taxable_amount</span></span><span class="evrole high"><b>vat amount</b><span>vat_amount</span></span><span class="evrole high"><b>status</b><span>status</span></span></div></div></div></div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> Each file is read for what it
+contains &mdash; which columns are present and what they hold &mdash; rather than for what it is
+called.</div></div></section>
+
+<div class="panel"><div class="panel-head"><h2>Reconciliation</h2>
+<span class="sub">2 of 5 comparisons could be run
+ &middot; 2 with an unexplained difference</span></div>
+<div class="panel-body">
+<div class="rclist"><div class="rcrow variance-identified"><div class="rcrow-head">
+<span class="rcrow-what"><b>Sales register against ZATCA&#x27;s e-invoice records</b><small>Invoice by invoice, against the Authority&#x27;s own record of the same period. Answers which documents each side holds that the other does not.</small></span>
+<span class="rcrow-nums"><span>SAR 2,618,000</span><span class="vs">vs</span><span>SAR 2,630,000</span><span class="delta variance-identified">&minus;SAR 12,000</span></span><span class="pill pri-high">Variance identified</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">Sales register totals SAR 2,618,000.00 for the period; E-invoice extract is SAR 2,630,000.00. The difference is SAR 12,000.00 (0.5% of the larger side). No deterministic cause accounts for it, so what it represents is a question for the investigation rather than something these figures settle. 3 reference(s) appear on one side only and 1 appear on both with different amounts, SAR 369,000.00 across them. The two totals differ by only SAR 12,000.00 because those rows partly offset each other, so the totals agreeing would not have meant the populations did.</p>
+</div></div><div class="rcrow variance-identified"><div class="rcrow-head">
+<span class="rcrow-what"><b>Sales register against the VAT return</b><small>What the taxpayer&#x27;s own sales listing totals, against the output VAT they declared for the period. No qualification rule acts on either side.</small></span>
+<span class="rcrow-nums"><span>SAR 2,618,000</span><span class="vs">vs</span><span>SAR 2,000,000</span><span class="delta variance-identified">+SAR 618,000</span></span><span class="pill pri-high">Variance identified</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">Sales register totals SAR 2,618,000.00 for the period; Output VAT declared is SAR 2,000,000.00. The difference is SAR 618,000.00 (23.6% of the larger side). No deterministic cause accounts for it, so what it represents is a question for the investigation rather than something these figures settle. A difference against a single total cannot be attributed to particular rows, so none is claimed here.</p>
+</div></div></div>
+<div class="rclist muted-list"><div class="rcrow insufficient-evidence"><div class="rcrow-head">
+<span class="rcrow-what"><b>Credit notes against the sales register</b><small>Whether the notes issued are reflected in the register they adjust. Establishes the size of the adjustment, not whether it was due.</small></span>
+<span class="rcrow-nums missing">not run</span><span class="pill status">Insufficient evidence</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">This comparison could not be run: no credit and debit note listing is on file. That is a missing document rather than a difference, so no variance is reported against it.</p>
+<p class="detail-note" style="margin:0"><b>To run this, the case needs:</b> Credit and debit note listing.</p></div></div><div class="rcrow insufficient-evidence"><div class="rcrow-head">
+<span class="rcrow-what"><b>Point-of-sale takings against the sales register</b><small>Independent evidence of takings against what was recorded as sales. A difference either way is a question about completeness of the register.</small></span>
+<span class="rcrow-nums missing">not run</span><span class="pill status">Insufficient evidence</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">This comparison could not be run: no point-of-sale report is on file; Sales_Analysis_Q1_2025.xlsx does not carry gross amount. That is a missing document rather than a difference, so no variance is reported against it.</p>
+<p class="detail-note" style="margin:0"><b>To run this, the case needs:</b> Point-of-sale report; gross amount in sales register.</p></div></div><div class="rcrow insufficient-evidence"><div class="rcrow-head">
+<span class="rcrow-what"><b>Sales register against the general ledger</b><small>Whether the sales listing agrees with what was posted to the accounts. One invoice may span several ledger lines, so this is an aggregate comparison.</small></span>
+<span class="rcrow-nums missing">not run</span><span class="pill status">Insufficient evidence</span></div>
+<div class="rcrow-body"><p class="detail-note" style="margin:0">This comparison could not be run: no general ledger is on file. That is a missing document rather than a difference, so no variance is reported against it.</p>
+<p class="detail-note" style="margin:0"><b>To run this, the case needs:</b> General ledger.</p></div></div></div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> Several comparisons can rest on the same file, so adding their differences would report money twice. The largest single difference is shown instead.</div>
+</div></div>
 
 <div class="panel vregs"><div class="panel-head">
 <h2>The VAT return, against the invoice registers</h2>
@@ -1750,6 +1908,60 @@ the listing itself states, summed row by row &mdash; no rule has acted on it, an
 readable VAT amount is skipped rather than counted as zero. Opening the rows behind a figure
 needs the engine, so in this walkthrough the counts are shown and the tables are not.</div>
 </div></div>
+
+<section class="collapse" id="rg"><button class="collapse-head">
+<b>Regulatory coverage</b><span class="sub">5 controls screened</span>
+<span class="collapse-action">Open</span><span id="rg-mark">&#9656;</span></button>
+<div class="collapse-body" id="rg-body" hidden>
+<div class="callout warn"><b>This control set is an unreviewed draft.</b> It is an editorial
+reading of the articles it cites, not reviewed legal analysis, and it must be confirmed by a tax
+specialist before any of it supports a position taken with a taxpayer.</div>
+<div class="statebar"><span class="statechip pri-high"><b>2</b><span>Potential concern</span></span><span class="statechip status"><b>2</b><span>Not applicable</span></span><span class="statechip pri-medium"><b>1</b><span>Evidence missing</span></span></div>
+<div class="rglist"><div class="rgrow applicable-potential-concern"><div class="rgrow-head">
+<span class="rgrow-what"><b>Tax invoice content</b>
+<small>Article 53 &middot; TAX INVOICES</small></span>
+<span class="pill pri-high">Potential concern</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">Rows in the listing do not show every particular the provision requires: reference (3 row(s)). The listing is the taxpayer&#x27;s account of what was issued, so this is a question about those documents rather than evidence that the invoices themselves lacked the particulars.</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>A tax invoice must carry, as a minimum, the date of issue, a sequential number identifying it, the supplier&#x27;s and customer&#x27;s details including the customer&#x27;s VAT registration number where they are a taxable person, the taxable amount, the rate applied and the amount of VAT charged.</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>the case carries a einvoice extract, sales register</p></div></div></div><div class="rgrow applicable-potential-concern"><div class="rgrow-head">
+<span class="rgrow-what"><b>Records sufficient to establish the tax due</b>
+<small>Article 66 &middot; RECORDS</small></span>
+<span class="pill pri-high">Potential concern</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">The records are usable, with defects that bear on what can be established from them. Sales_Analysis_Q1_2025.xlsx: Rows with no value in &#x27;invoice_number&#x27;. Each one cannot be matched against another dataset.; Sales_Analysis_Q1_2025.xlsx: The file states a total of 2,737,000.00 for &#x27;vat_amount&#x27;, but its own rows sum to 2,618,000.00 — a difference of 119,000.00.</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>A taxable person must keep the invoices, books, records and accounting documents required by the Law and these Regulations, in a form that allows the tax due to be established.</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>applies to every case</p></div></div></div><div class="rgrow applicable-insufficient-evidence"><div class="rgrow-head">
+<span class="rgrow-what"><b>Supplies allocated to the correct tax period</b>
+<small>Article 20 &middot; DATE OF SUPPLY &amp; TAX DUE DATE IN SPECIFIC CIRCUMSTANCES</small></span>
+<span class="pill pri-medium">Applicable — evidence missing</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">In scope, but the evidence needed to assess it is not on the case: supply date.</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>The date of supply determines the tax period a supply falls into, and for continuous supplies, advance payments and other specific circumstances it is not simply the invoice date.</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>the case carries a sales register</p></div></div></div><div class="rgrow not-applicable"><div class="rgrow-head">
+<span class="rgrow-what"><b>Credit and debit notes reference the invoice they adjust</b>
+<small>Article 54 &middot; CREDIT AND DEBIT NOTES</small></span>
+<span class="pill status">Not applicable</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">Not in scope for this case — no credit note listing is on the case.</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>A credit or debit note must be issued where the tax charged on a tax invoice exceeds or falls short of the true value of the supply, and must carry a reference to the tax invoice it adjusts.</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>no credit note listing is on the case</p></div></div></div><div class="rgrow not-applicable"><div class="rgrow-head">
+<span class="rgrow-what"><b>Evidence supporting zero-rated exports</b>
+<small>Article 32 &middot; EXPORTS OF GOODS FROM THE KINGDOM</small></span>
+<span class="pill status">Not applicable</span></div>
+<div class="rgrow-body"><p class="detail-note" style="margin:0">Not in scope for this case — no zero-rated supplies appear in the evidence.</p>
+<div class="rgblock"><span class="k">What the provision requires</span>
+<p>To apply the zero rate to an export of goods from the Kingdom, the supplier must retain evidence that the goods were transported out of Council territory.</p></div>
+<div class="rgblock"><span class="k">Why it is in scope here</span>
+<p>no zero-rated supplies appear in the evidence</p></div></div></div></div>
+<div class="panel-note"><span class="ct">&#8721; computed</span> Scope comes from the evidence
+and the return, not from whether anything differs &mdash; which is why a case whose numbers
+agree is still screened. The control set reaches <b>9 of
+79</b> articles.</div></div></section>
 
 <div class="panel"><div class="panel-head"><h2>Investigation summary</h2>
 <span class="pill status">&#8721; Adjudicated (no AI)</span></div>
@@ -2180,7 +2392,7 @@ Authority&rsquo;s name.</p></div></div></div>
 <p>The assistant runs the application&rsquo;s own checks. Every figure in an answer was
 computed before the sentence was written.</p></div>
 </aside>
-<script id="asst-data" type="application/json">{"cues": [["outstanding", ["missing", "outstanding", "still need", "not supplied", "gaps", "gap"]], ["draft_chase", ["chase", "draft the email", "follow up", "follow-up", "write the email", "remind"]], ["run_investigation", ["re-run", "rerun", "run the investigation", "re-test", "retest", "investigate again"]], ["revise_assessment", ["assessment", "treat this as", "treat it as", "rewrite it", "reword", "redraft"]], ["findings", ["finding", "established", "exposure", "accepted", "conclusion", "assess"]], ["zatca", ["zatca", "authority's records", "invoice match", "unmatched", "reconcil"]], ["status", ["where are we", "where is this", "status", "summary", "what has happened", "catch me up"]]], "answers": {"explain": {"text": "For CASE-2025-0481, the records on file support SAR 2,618,000 of output VAT against SAR 2,000,000 declared \u2014 a difference of SAR 618,000, of which SAR 618,000 is not yet accounted for.\n\nI can only do a fixed set of things on a case: where is this case?, what is still missing?, draft the chase, re-run the investigation, what has been established?, compare with zatca's records, revise the assessment. Ask for one of those, or work the tabs directly.", "tag": "explain", "did": ""}, "status": {"text": "Round 1 of correspondence on CASE-2025-0481. 1 document(s) received; 0 of 3 requested item(s) fully answered. 4 item(s) still outstanding \u2014 Detailed sales analysis (incomplete), Reconciliation of the return to the ledger (missing), Credit and debit note listing (missing)", "tag": "status", "did": ""}, "outstanding": {"text": "3 item(s) still outstanding.\n\n\u2022 Detailed sales analysis \u2014 incomplete: The 'Customer VAT number' column was requested but is not in the file.\n\u2022 Reconciliation of the return to the ledger \u2014 missing\n\u2022 Credit and debit note listing \u2014 missing", "tag": "outstanding", "did": ""}, "draft_chase": {"text": "Al-Faisaliah Trading Co.\nVAT registration number 300012345600003\n\nSubject: Outstanding information \u2014 VAT period 01 January 2025 to 31 March 2025\n\nDear Sir or Madam,\n\nThank you for the information supplied. On review, the following remains outstanding or does not meet the terms of the original request. Items already supplied in full are not repeated here.\n\n1. Detailed sales analysis\n   - The 'Customer VAT number' column was requested but is not in the file. (header row of xlsx)\n   - The 'Description' column was requested but is not in the file. (header row of xlsx)\n   - 'Invoice number' must be completed on every row, but is empty in 3 of 22 rows. (rows 7, 13, 18)\n   - The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 \u2014 39 days are not covered. (latest dated row)\n   - The stated total for 'VAT amount' is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 \u2014 a difference of SAR 119,000.00. (totals row vs 22 data rows)\n\n2. Reconciliation of the return to the ledger\n   - Nothing was supplied for 'Reconciliation of the return to the ledger'.\n\n3. Credit and debit note listing\n   - Nothing was supplied for 'Credit and debit note listing'.\n\nPlease supply the outstanding items by 16 August 2026.\n\nYours faithfully,\nZakat, Tax and Customs Authority\nVAT Audit", "tag": "draft_chase", "did": "drafted the chase for the outstanding items"}, "run_investigation": {"text": "Re-ran the investigation. 12 hypotheses on the case, 3 already ruled on by you and 3 accepted. Nothing is a finding until you accept it on the Investigation tab.", "tag": "run_investigation", "did": "recorded investigation run 20"}, "findings": {"text": "3 finding(s) you have accepted, coming to SAR 618,000 of adjustment and SAR 357,000 of documentation risk.\n\n\u2022 Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. \u2014 SAR 618,000\n\u2022 Sales that were not disclosed in the VAT returns. \u2014 SAR 618,000\n\u2022 Failure to meet all the requirements of a valid tax invoice. \u2014 SAR 357,000", "tag": "findings", "did": ""}, "zatca": {"text": "19 invoice(s) appear in both the listing and ZATCA's records. 3 invoice(s) in ZATCA's records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.", "tag": "zatca", "did": ""}, "revise_assessment": {"text": "I could not rewrite the assessment \u2014 no model is reachable, so the assessment on the Investigation tab is the engine's own draft and yours to edit directly. Nothing has been changed.", "tag": "revise_assessment", "did": ""}}, "labels": {"explain": "Explain", "status": "Where is this case?", "outstanding": "What is still missing?", "draft_chase": "Draft the chase", "run_investigation": "Re-run the investigation", "findings": "What has been established?", "zatca": "Compare with ZATCA's records", "revise_assessment": "Revise the assessment"}}</script><script>
+<script id="asst-data" type="application/json">{"cues": [["outstanding", ["missing", "outstanding", "still need", "not supplied", "gaps", "gap"]], ["draft_chase", ["chase", "draft the email", "follow up", "follow-up", "write the email", "remind"]], ["run_investigation", ["re-run", "rerun", "run the investigation", "re-test", "retest", "investigate again"]], ["revise_assessment", ["assessment", "treat this as", "treat it as", "rewrite it", "reword", "redraft"]], ["findings", ["finding", "established", "exposure", "accepted", "conclusion", "assess"]], ["zatca", ["zatca", "authority's records", "invoice match", "unmatched", "reconcil"]], ["status", ["where are we", "where is this", "status", "summary", "what has happened", "catch me up"]]], "answers": {"explain": {"text": "For CASE-2025-0481, the records on file support SAR 2,618,000 of output VAT against SAR 2,000,000 declared \u2014 a difference of SAR 618,000, of which SAR 618,000 is not yet accounted for.\n\nI can only do a fixed set of things on a case: where is this case?, what is still missing?, draft the chase, re-run the investigation, what has been established?, compare with zatca's records, revise the assessment. Ask for one of those, or work the tabs directly.", "tag": "explain", "did": ""}, "status": {"text": "Round 1 of correspondence on CASE-2025-0481. 1 document(s) received; 0 of 3 requested item(s) fully answered. 4 item(s) still outstanding \u2014 Detailed sales analysis (incomplete), Reconciliation of the return to the ledger (missing), Credit and debit note listing (missing)", "tag": "status", "did": ""}, "outstanding": {"text": "3 item(s) still outstanding.\n\n\u2022 Detailed sales analysis \u2014 incomplete: The 'Customer VAT number' column was requested but is not in the file.\n\u2022 Reconciliation of the return to the ledger \u2014 missing\n\u2022 Credit and debit note listing \u2014 missing", "tag": "outstanding", "did": ""}, "draft_chase": {"text": "Al-Faisaliah Trading Co.\nVAT registration number 300012345600003\n\nSubject: Outstanding information \u2014 VAT period 01 January 2025 to 31 March 2025\n\nDear Sir or Madam,\n\nThank you for the information supplied. On review, the following remains outstanding or does not meet the terms of the original request. Items already supplied in full are not repeated here.\n\n1. Detailed sales analysis\n   - The 'Customer VAT number' column was requested but is not in the file. (header row of xlsx)\n   - The 'Description' column was requested but is not in the file. (header row of xlsx)\n   - 'Invoice number' must be completed on every row, but is empty in 3 of 22 rows. (rows 7, 13, 18)\n   - The file stops at 20 Feb 2025 but the period requested runs to 31 Mar 2025 \u2014 39 days are not covered. (latest dated row)\n   - The stated total for 'VAT amount' is SAR 2,737,000.00, but the rows sum to SAR 2,618,000.00 \u2014 a difference of SAR 119,000.00. (totals row vs 22 data rows)\n\n2. Reconciliation of the return to the ledger\n   - Nothing was supplied for 'Reconciliation of the return to the ledger'.\n\n3. Credit and debit note listing\n   - Nothing was supplied for 'Credit and debit note listing'.\n\nPlease supply the outstanding items by 16 August 2026.\n\nYours faithfully,\nZakat, Tax and Customs Authority\nVAT Audit", "tag": "draft_chase", "did": "drafted the chase for the outstanding items"}, "run_investigation": {"text": "Re-ran the investigation. 12 hypotheses on the case, 3 already ruled on by you and 3 accepted. Nothing is a finding until you accept it on the Investigation tab.", "tag": "run_investigation", "did": "recorded investigation run 23"}, "findings": {"text": "3 finding(s) you have accepted, coming to SAR 618,000 of adjustment and SAR 357,000 of documentation risk.\n\n\u2022 Sales based on the data provided by the taxpayer are higher than the sales reported in the VAT return. \u2014 SAR 618,000\n\u2022 Sales that were not disclosed in the VAT returns. \u2014 SAR 618,000\n\u2022 Failure to meet all the requirements of a valid tax invoice. \u2014 SAR 357,000", "tag": "findings", "did": ""}, "zatca": {"text": "19 invoice(s) appear in both the listing and ZATCA's records. 3 invoice(s) in ZATCA's records are not in the listing, carrying SAR 357,000 of VAT. 1 matched invoice(s) carry a different VAT amount on each side.", "tag": "zatca", "did": ""}, "revise_assessment": {"text": "I could not rewrite the assessment \u2014 no model is reachable, so the assessment on the Investigation tab is the engine's own draft and yours to edit directly. Nothing has been changed.", "tag": "revise_assessment", "did": ""}}, "labels": {"explain": "Explain", "status": "Where is this case?", "outstanding": "What is still missing?", "draft_chase": "Draft the chase", "run_investigation": "Re-run the investigation", "findings": "What has been established?", "zatca": "Compare with ZATCA's records", "revise_assessment": "Revise the assessment"}}</script><script>
 /* The modules are reachable from the rail and from the header tabs. Both are the same
    selector, so the two cannot get out of step. */
 const tabs = document.querySelectorAll('[data-tab]');
@@ -2439,6 +2651,8 @@ function toggle(root, body, mark, action) {
 }
 toggle('zsrc', 'zsrc-body', 'zsrc-mark', 'zsrc');
 toggle('inv-detail', 'inv-detail-body', 'inv-detail-mark', 'collapse');
+toggle('ev', 'ev-body', 'ev-mark', 'collapse');
+toggle('rg', 'rg-body', 'rg-mark', 'collapse');
 
 /* The assessment is the auditor's own words, so this file can do the whole interaction. */
 const assessText = document.getElementById('assess-text');
