@@ -1079,6 +1079,60 @@ def reconcile(case_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, str(e))
 
 
+@router.get("/cases/{case_id}/evidence")
+def evidence(case_id: str, db: Session = Depends(get_db)):
+    """Stage 0 — what arrived, read for what it is rather than for what it is called.
+
+    Everything downstream keys off this: which reconciliations can run, which regulatory
+    controls are testable, which box a listing belongs to. It replaces deciding those from
+    the filename, which worked on files named the way the demo names them and silently
+    misread everything else.
+    """
+    from ..evidence import service as evidence_service
+
+    _case_or_404(db, case_id)
+    try:
+        return evidence_service.state(db, case_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+class DatasetOverrideIn(BaseModel):
+    filename: str
+    #: Empty type and workstream together clear the override and restore the profiler's reading.
+    dataset_type: str = ""
+    workstream: str = ""
+    note: str = ""
+
+
+@router.put("/cases/{case_id}/evidence/override")
+def override_dataset(case_id: str, body: DatasetOverrideIn, db: Session = Depends(get_db)):
+    """The auditor's own reading of what a file is.
+
+    A classifier that cannot be overruled is worse than the filename matching it replaced: a
+    filename at least behaves predictably. So the correction is a first-class action, it is
+    recorded with what the profiler had said, and every consumer reads it in preference.
+    """
+    from ..evidence import profile as prof
+    from ..evidence import service as evidence_service
+
+    _case_or_404(db, case_id)
+    if body.dataset_type and body.dataset_type not in prof.LABEL:
+        raise HTTPException(422, f"unknown dataset type '{body.dataset_type}'")
+    if body.workstream and body.workstream not in ("sales", "purchases", "both", "unknown"):
+        raise HTTPException(422, "workstream must be sales, purchases, both or unknown")
+    if not any(p["filename"] == body.filename for p in evidence_service.profiles(db, case_id)):
+        raise HTTPException(404, f"no document named '{body.filename}' on this case")
+
+    evidence_service.set_override(db, case_id, filename=body.filename,
+                                  dataset_type=body.dataset_type,
+                                  workstream=body.workstream, note=body.note)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="dataset-reclassified",
+                    payload={"file": body.filename, "as": body.dataset_type or "(cleared)"}))
+    db.commit()
+    return evidence_service.state(db, case_id)
+
+
 @router.get("/cases/{case_id}/registers")
 def registers(case_id: str, db: Session = Depends(get_db)):
     """The sales and purchase registers, each against its own box on the return.
