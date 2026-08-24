@@ -71,6 +71,16 @@ class Definition:
     note: str = ""
     #: Extra roles both dataset sides must carry beyond the metric's own role.
     needs_roles: tuple[str, ...] = ()
+    #: The pairwise comparison (`recon/pairwise.py`) that now owns this question, if any.
+    #:
+    #: Four of these predate the six pairings and ask exactly what a pairing asks — the same
+    #: two sources, the same metric. They are kept because they are declared, tested and read
+    #: by the workstream counts, and removing a definition would change what those count. But
+    #: they are not shown twice: the dashboard states the pairing, and the panel below it shows
+    #: only what the six do not reach — POS takings, the ledger, credit notes, customs. Two
+    #: panels reporting one difference in slightly different words is how an auditor comes to
+    #: distrust both.
+    superseded_by: str = ""
 
     def sides(self) -> tuple[Side, Side]:
         return self.a, self.b
@@ -92,6 +102,7 @@ DEFINITIONS: tuple[Definition, ...] = (
         workstream=SALES, metric=VAT,
         a=_dataset(P.SALES_REGISTER, "Sales register"),
         b=_box(BOX_SALES, "Output VAT declared"),
+        superseded_by="S3",
         note="What the taxpayer's own sales listing totals, against the output VAT they "
              "declared for the period. No qualification rule acts on either side."),
     Definition(
@@ -100,6 +111,7 @@ DEFINITIONS: tuple[Definition, ...] = (
         a=_dataset(P.SALES_REGISTER, "Sales register"),
         b=_dataset(P.EINVOICE_EXTRACT, "E-invoice extract"),
         needs_roles=(R.REFERENCE,),
+        superseded_by="S1",
         note="Invoice by invoice, against the Authority's own record of the same period. "
              "Answers which documents each side holds that the other does not."),
     Definition(
@@ -130,6 +142,7 @@ DEFINITIONS: tuple[Definition, ...] = (
         workstream=PURCHASES, metric=VAT,
         a=_dataset(P.PURCHASE_REGISTER, "Purchases register"),
         b=_box(BOX_PURCHASE, "Input VAT claimed"),
+        superseded_by="P3",
         note="What the purchases listing supports, against the input VAT claimed. This "
              "compares amounts only — whether that input tax is deductible is a separate "
              "question the numbers cannot answer."),
@@ -140,6 +153,7 @@ DEFINITIONS: tuple[Definition, ...] = (
         a=_dataset(P.PURCHASE_REGISTER, "Purchases register"),
         b=_dataset(P.EINVOICE_EXTRACT, "E-invoice extract"),
         needs_roles=(R.REFERENCE,),
+        superseded_by="P1",
         note="Supplier invoice by supplier invoice, against the Authority's record of the "
              "same documents."),
     Definition(

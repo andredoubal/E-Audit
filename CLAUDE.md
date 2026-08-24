@@ -183,6 +183,16 @@ backend/app/
                        #   completeness.py requested vs received, deterministically
                        #   threads.py      the correspondence trail + the loop back
                        #   service.py      drives the rounds; recomputes gaps each pass
+  canonical/           # one shape for every dataset, before anything is compared:
+                       #   model.py        Record/Dataset; absent is never zero
+                       #   treatment.py    standard / zero-rated / exempt / unclassified
+                       #   build.py        profiled columns -> canonical records, with lineage
+  recon/               # the comparison layer:
+                       #   pairwise.py     the six pairings, at three levels
+                       #   observations.py what the figures show, and the exceptions from it
+                       #   dashboard.py    the whole deterministic picture, per workstream
+                       #   registry.py     the declarative comparison set (POS, ledger, customs)
+                       #   status.py       the closed vocabulary + the neutrality guard
   pipeline/            # predicates.py (Python ⇄ SQL algebra) + rules.py + run.py
                        #   source.py       lines from an uploaded listing, not the feed
                        #   reconciliation.py  declarative matching against ZATCA's records
@@ -215,9 +225,14 @@ backend/app/
   seed/                # scenarios.py + dossier_seed.py + corpus.py + casework_seed.py
 frontend/src/
   pages/               # Cases, Correspondence, Investigation, Report, Dossier, Rules
-  components/          # sidebar + open-case group, optional ZATCA upload, the summary
-                       # cards, the auditor's assessment, hypothesis derivations, findings,
-                       # approve/challenge, funnel, calculations, step emails, report fields
+  components/          # sidebar + open-case group, the summary cards, the auditor's
+                       # assessment, hypothesis derivations, findings, approve/challenge,
+                       # funnel, calculations, step emails, report fields, and the
+                       # investigation's four tabs:
+                       #   InvestigationTabs.tsx        the four layers of the chain
+                       #   DataTab.tsx                  what arrived, and what it is
+                       #   ReconciliationDashboard.tsx  six pairings at three levels
+                       #   AuditorFindingsTab.tsx       what you have decided
   api.ts, ai/          # typed API + SSE streaming helpers + the assistant event bus
 docs/                  # VAT Mistakes Rulebook (66 rules) + rendered page
 portal.html            # standalone no-backend build of the workbench (see below)
@@ -276,91 +291,125 @@ Teal, not a new green: teal is already what the engine found and what you confir
 on off the back of your own rulings is exactly that. Orange would say *merely clickable*, which
 is the one thing this control is not.
 
-### Investigation: summary first, evidence on demand
+### Investigation: four tabs, one chain, and the chain only runs one way
 
-`pages/Investigation.tsx` answers four questions in order, and refuses to answer them all at once.
+`pages/Investigation.tsx` + `InvestigationTabs.tsx`. The module used to be one long page. It now
+has four sub-tabs, and they are not a filter over the same content — each is a **layer**, and the
+layers are ordered because each one is answerable to the one before it:
 
-**1 · What else can I give it?** `ZatcaSource.tsx` — one compact row, collapsed, marked
-**Optional**. It is the *only* upload in this module, because everything the taxpayer sent
-already arrived on an enquiry in Taxpayer Correspondence and is read from there. A second
-dropzone for the taxpayer's listing meant the same file could be filed twice against two
-different rounds, and it implied the investigation was waiting for something it already had.
-ZATCA's own extract is internal, answers to no request, and so has nowhere else to live.
+```
+DATA → CALCULATION → OBSERVATION → HYPOTHESIS → REGULATORY → AI FINDING → AUDITOR FINDING → REPORT
+ tab 1        tab 2                      tab 3                                  tab 4
+```
 
-**1b · What do the registers say against the return?** `registers.py` + `VatRegisters.tsx` —
-the first question an auditor asks, so it is the first thing on the page. One card for sales,
-one for purchases, each with **three numbers and no rule between them**: the VAT the listing
-itself states summed row by row, the figure declared in that box of the return, and the gap.
+> **Python establishes what happened. The AI investigates why it may have happened and what
+> regulations may apply. The auditor decides what the final finding is.**
 
-An earlier version of this screen was a *bridge* — reconstructed total, minus a clearance-lag
-rule, minus netted credit notes, arriving at declared. The rule lines are what made it
-unreadable and what made it arguable, and they answer a different question anyway: which
-documents **qualify** for a box is settled by the funnel, further down. Reading a listing's own
-arithmetic is not a qualification judgement and must not borrow one, so nothing here is set
-aside, deferred or explained away. This is also why it does not contradict *no pre-qualification
-total*: the objection there is to a figure that exists only so a waterfall can be drawn from it,
-and there is no waterfall here.
+Keeping them on separate tabs is the whole design. On one page an observation and a finding sit
+in the same column and read as the same kind of claim — which is exactly the conflation that
+puts an unreviewed model sentence under the Authority's letterhead.
 
-Three rules hold it up:
+**1 · Data & E-Invoices** (`DataTab.tsx`). Every dataset on the case in one table — file, what it
+was read as, the period it covers, records, how confident the reading is, what is wrong with it —
+plus the ZATCA e-invoice upload and a data-quality panel. It is first because a dataset read
+wrongly corrupts every figure in the three tabs after it *in a way no reconciliation can detect*:
+by then the reading has already been made. Two rules earn their place here. **A period is partial
+only when the gap is an absence rather than a start date** — a register whose first invoice is the
+6th is not missing five days, so a stretch is named only past 14 days, with the day count given so
+the auditor judges it rather than taking the flag's word; on the demo case that leaves exactly one
+flag, *nothing in the last 39 days*, which is the real one. And **what could not be measured names
+its workstream**: the two are merged in this panel while the sentences are written per workstream,
+so "no e-invoice extract for this side has been loaded" sitting under a table listing one loaded
+was a panel contradicting the panel above it.
 
-- **No listing is not a register of zero.** Subtracting an absent listing from a declared figure
-  reports the whole box as a discrepancy — SAR 150,000 "over-claimed" because nobody has
-  uploaded the purchases analysis yet. `comparable` is false, the difference is not computed,
-  and the card says a document is missing. Same rule the ZATCA matcher enforces: one side is not
-  a comparison.
-- **Nothing is attributed to an invoice unless the attribution is real.** A difference against
-  one declared figure cannot be pinned on particular rows. *Where the difference comes from*
-  is therefore assembled only from what the engine already settled — invoices ZATCA holds that
-  the listing omits, rows whose VAT could not be read, a stated total that does not foot to its
-  own rows, coverage short of the period — and only the first of those hands over invoices,
-  because only it can. An insight with nothing behind it is not written at all, because a panel
-  that always finds four reasons teaches an auditor to stop reading it.
-- **The loop back is the existing loop.** *Ask the taxpayer* on an insight opens a round with
-  `origin="investigation-request"` carrying the insight as its subject, and lands the auditor on
-  Correspondence with the round head reading *Raised by the investigation — <what it is about>*.
-  A round raised from the investigation that filed itself as an opening request told the auditor
-  the wrong story about their own case.
+**2 · Reconciliation** (`ReconciliationDashboard.tsx` over `recon/dashboard.py`). Six pairwise
+comparisons at three levels, per workstream, plus the qualification funnels, the registers and the
+ZATCA matcher. See *The six comparisons* below.
 
-A file can be dropped here, and it is filed onto the **open correspondence round** rather than
-into a store of its own — which is how this keeps the rule that Correspondence is the one source
-of taxpayer documents while still letting the auditor put the sheet in where they are looking at
-it. Which box a file belongs to is decided by its own columns (`source.pick_listing`), not by
-where it was dropped.
+**3 · AI Findings**. What the evidence *might* mean, still proposed: `InvestigationSummary`, the
+regulatory coverage, every hypothesis with why it was raised and how it was settled — and the
+ruling controls. The ruling sits with what it rules on: an auditor reads a matter and decides on
+it in the same place, and sending them to another tab to record what they have just concluded is
+how a decision gets postponed and then forgotten.
 
-**2 · What did it find?** `InvestigationSummary.tsx` over `agents/summary.py` — a handful of
-cards, not twelve hypotheses. Two rules make a card:
+**4 · Auditor Findings** (`AuditorFindingsTab.tsx`). The only tab the audit report reads. Two
+kinds of row sit here and are never merged — AI findings the auditor confirmed, carrying the agent
+that proposed them and their confidence band, and findings the auditor wrote themselves
+(`POST/PATCH/DELETE /cases/{id}/auditor-findings`) — so a reader can tell a confirmed machine
+proposal from an auditor's own observation. Clearing a statement is refused rather than stored: a
+finding with nothing written on it is a row that reaches the report saying nothing. Below the
+rows sit the assessment itself and the handoff to the report.
 
-- **One card per basis.** A listing above the return reads four ways off one test over one
-  file. Four cards would state the same money four times, which is the defect `exposure()`
-  exists to stop; so the excess is stated once, the alternative readings are named under a
-  disclosure, and the amount is the basis's, never a sum across readings. The headline reading
-  is the one that carries an adjustment, for the same reason `exposure()` excludes
-  documentation risk on evidence already producing one.
-- **An observation is not a determination.** `observed` is the adjudicator's own sentence about
-  what was measured; `reading` is the vocabulary statement it *would* report as **if the auditor
-  accepts it**. The badge says which of three kinds it is — Observed, Not settled, Records
-  defect — and the colour says *kind*, not severity, because an observation styled as an alert
-  is the exact conflation the split exists to prevent. Nothing here is phrased at the call site:
-  the title is `Outcome.short`, the reading is `Outcome.statement`, the observation is the
-  engine's `explanation`.
+`AuditorAssessment` takes a `part` prop (`matters` / `assessment` / `both`) because its two halves
+now live on different tabs while still reading the same two endpoints — a ruling on tab 3 changes
+the confirmed count in the header on tab 4.
 
-Refuted hypotheses are counted in the bar and carry no card — they are part of the file and are
-not a matter to put to anyone. Records defects from the ZATCA matcher (unusable identifiers,
-repeated numbers, numbering gaps) appear only when a dataset was actually compared, claim no
-amount, and belong to no agent.
+### The six comparisons, at three levels
 
-**3 · What is it resting on?** Everything that used to be at the top now sits under
-**Detailed investigation & evidence** (`Collapsible.tsx`), closed by default: every hypothesis
-with why it was raised and how it was settled, the funnel, the three-way comparison, the
-evidence panels, the citations, the auditor's own arithmetic, the taxpayer response. The ZATCA
-reconciliation lives here too and opens on its rollup — *19 matched · 3 on one side only · 1
-figures disagree* — with the individual invoices behind a click on a category. With no dataset
-loaded `ZatcaPanel` renders **nothing at all**, rather than a panel reporting a comparison that
-was never run.
+`canonical/` + `recon/pairwise.py` + `recon/observations.py` + `recon/dashboard.py`.
 
-**4 · What do I conclude?** See below. The order is deliberate: the evidence is not less
-important than the summary, it is what the summary is answerable to — and putting it first put
-it between the auditor and the answer.
+**Everything is canonicalised first.** `canonical/build.py` turns any profiled dataset into
+`Record`s carrying row-level lineage (`source_file`, `source_row`, `record_id`), a written
+reference *and* a normalised matching key, a VAT treatment and a transaction type. Four
+availability states — VALUE / UNAVAILABLE / UNREADABLE / NOT_APPLICABLE — keep the distinction the
+whole layer exists to hold: **a column the file does not carry is not a column of zeroes**, so
+`Dataset.total()` returns `None` rather than `0.0`, and a cell that cannot be parsed is skipped
+and counted rather than summed as nothing. A rate that is neither 15% nor 0% is `UNCLASSIFIED` and
+stays a visible row in the breakdown — folding it into standard-rated would put it in a box it was
+never shown to belong to.
+
+**Three sources per workstream, so three pairings each.** Register ↔ e-invoices, e-invoices ↔
+return, return ↔ register — S1/S2/S3 and P1/P2/P3. Which *pair* disagrees is the only thing that
+changes what the auditor does next, so each pairing carries the question it answers. Each runs at
+**L1** overall, **L2** by VAT treatment (the level that catches totals broadly agreeing while one
+treatment inside them does not) and **L3** by transaction, which lands on its own rollup — *3 on
+one side only · 1 VAT mismatch · 18 exact match* — with the rows behind a click.
+
+Five things here exist because the obvious version is wrong:
+
+- **One side is not a comparison.** A pairing with a source missing is reported as not run,
+  naming what is absent, rather than run against whatever happens to be on the case. An e-invoice
+  extract whose side cannot be established from its own columns is left unassigned and published
+  in `unusable_einvoices`: an extract of sales invoices used as the purchases population produced
+  a comparison against the input box with a variance the size of the whole file.
+- **The status is judged on gross disagreement, not the net.** Totals that agree while records
+  inside them disagree is a real result — an omission on one side offset by an overstatement on
+  the other — so the sentence says *"the totals agree, though records within them do not"* rather
+  than *"the two agree"* beside a variance badge. The engine also writes the note explaining why
+  a status differs from what the headline suggests (*"the two totals differ by only SAR 12,000,
+  but SAR 726,000 of records disagree"*), and the card renders **that** rather than composing a
+  reason of its own for a verdict Python reached.
+- **One basis is one matter, and nothing is summed across bases.** An exception measured in VAT
+  and again in the taxable amount beneath it is one disagreement read twice; kept apart they were
+  investigated twice, reported twice and added together. `Exception_.basis` is
+  `pairing|kind|category` — metric-independent — and `_fold()` keeps the VAT reading as the
+  headline with the other under `also_measured`. The dashboard therefore publishes
+  **`largest_exception`, never a total**: on the demo case summing them reported SAR 15.8m against
+  a real sales excess of SAR 618k. `not_summed_because` says so on the screen.
+- **"Largest" is ranked within one metric.** A taxable amount is about six and a half times the
+  VAT on it, so ranking the two together handed "largest" to whichever exception happened to be
+  measured in the base — a bigger number about less money.
+- **Every sentence passes `status.assert_neutral` before it leaves Python.** *"14 e-invoices
+  totalling SAR 420,000 could not be matched to the sales register"* is an observation; *"the
+  taxpayer understated sales because invoices were omitted"* is a conclusion about a person. Only
+  the first kind is generated here, and no model writes any of it — which is what makes this
+  section quotable in a letter.
+
+**Observations and exceptions are recomputed, not stored.** Decisions, auditor findings and
+calculations are rows — they are things a person did, and they must survive. An exception is a
+pure function of the files on the case and the rules over them, exactly like the lifecycle and
+the ZATCA comparison, so storing it would create a second truth to reconcile every time a
+dataset reading is corrected. The stable part is the **basis**, not the row: it is derived the
+same way on every run, so an auditor decision or a finding keyed on it survives a re-run without
+anything being migrated.
+
+**The older comparison registry is not deleted, it is scoped.** Four of `recon/registry.py`'s nine
+definitions ask exactly what a pairing asks — same two sources, same metric — so they carry
+`superseded_by` naming it, and the panel below the dashboard shows only what the six do not reach:
+point-of-sale takings, the ledger, credit notes, customs. Two panels reporting one difference in
+slightly different words is how an auditor comes to distrust both. The definitions stay because
+they are declared, tested, and read by the workstream counts.
+
 
 ### The assessment is one document, not a decision per hypothesis
 
@@ -968,6 +1017,12 @@ JS port is validated field-by-field against the Python engine's output (currentl
 > nature (there is nothing to upload and no dataset to load), so the split the port has
 > always kept — port what the user can change, embed what they cannot — puts them on the
 > embed side or out of scope entirely.
+>
+> **And the same again for the four-tab Investigation.** The canonical layer, the six pairwise
+> comparisons at three levels, the exception folding, the data-quality tab and the auditor's own
+> findings are not in `portal.html`. This one is squarely on the embed side by the port's own
+> rule: the comparisons are a pure function of files the auditor cannot change without an
+> upload, and uploading is the one thing a static file cannot do.
 
 **Manual case creation ("Add Case") is ported, but not the same feature.** `portal.html`
 has no database, so a case created there is written to that browser's `localStorage`
@@ -1030,10 +1085,10 @@ Open http://localhost:5174.
   brands.
 - Frontend build check: `npm run build` (runs `tsc --noEmit` + Vite build).
 - Backend syntax check: `python -m compileall -q app`.
-- Guard tests: `pytest backend/tests` (500 at last count). Three layers, and they answer
+- Guard tests: `pytest backend/tests` (706 at last count). Three layers, and they answer
   different questions — keep them apart:
-  - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, …) — is this piece
-    right, on a fixture built to isolate it?
+  - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, `test_canonical.py`,
+    `test_pairwise.py`, …) — is this piece right, on a fixture built to isolate it?
   - **SIT** (`test_sit_agents.py`) — do all four agents behave over realistic KSA VAT material?
     Every scenario asserts what must *not* be raised as well as what must.
   - **UAT** (`test_uat_journey.py`, `test_uat_edge_cases.py`) — can an auditor do the job, over

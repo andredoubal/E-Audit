@@ -79,6 +79,9 @@ class Result:
     quality_notes: list[str] = field(default_factory=list)
     blocked_by: list[str] = field(default_factory=list)
     needs: list[str] = field(default_factory=list)
+    #: The pairwise comparison that now owns this question, when one does. Published so the UI
+    #: can show the dashboard's answer and not a second, differently-worded copy of it.
+    superseded_by: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -97,6 +100,7 @@ class Result:
             "period": self.period, "conventions": self.conventions,
             "quality_notes": self.quality_notes,
             "blocked_by": self.blocked_by, "needs": self.needs,
+            "superseded_by": self.superseded_by,
         }
 
 
@@ -109,6 +113,7 @@ def _not_run(p: Plan) -> Result:
     return Result(definition_id=d.id, title=d.title, workstream=d.workstream, metric=d.metric,
                   status=S.INSUFFICIENT, label_a=d.a.describe(), label_b=d.b.describe(),
                   grain=d.grain, note=d.note, explanation=explanation,
+                  superseded_by=d.superseded_by,
                   blocked_by=list(p.blocked_by), needs=list(p.needs),
                   method="not run — one or both sides are absent")
 
@@ -331,6 +336,7 @@ def run(plan: Plan, *, profiles: dict[str, dict], rows_by_file: dict[str, list],
         variance_pct=variance_pct, residual=judged_residual,
         label_a=a.label, label_b=b.label, source_a=a.filename, source_b=b.filename,
         grain=d.grain, note=d.note, method=method, explanation=explanation,
+        superseded_by=d.superseded_by,
         causes=causes,
         contributions=[c.to_dict() for c in contributions[:200]],
         tolerance=tol.to_dict(larger=larger, rows=rows),

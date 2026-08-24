@@ -763,6 +763,68 @@ def list_auditor_findings(case_id: str, db: Session = Depends(get_db)):
                                 .order_by(AuditorFinding.seq)).all()]
 
 
+class AuditorFindingPatch(BaseModel):
+    statement: str | None = None
+    outcome_code: str | None = None
+    amount: float | None = None
+    note: str | None = None
+    seq: int | None = None
+
+
+@router.patch("/cases/{case_id}/auditor-findings/{seq}")
+def edit_auditor_finding(case_id: str, seq: int, body: AuditorFindingPatch,
+                         db: Session = Depends(get_db)):
+    """Amend a finding the auditor wrote.
+
+    Only the fields sent are touched, so an amount can be corrected without retyping the
+    statement. Clearing the statement is refused rather than stored: a finding with nothing
+    written on it is a row that will reach the audit report saying nothing.
+    """
+    _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorFinding).where(AuditorFinding.case_id == case_id,
+                                                 AuditorFinding.seq == seq))
+    if row is None:
+        raise HTTPException(404, "finding not found")
+    if body.statement is not None:
+        statement = body.statement.strip()
+        if not statement:
+            raise HTTPException(422, "statement cannot be emptied — remove the finding instead")
+        row.statement = statement
+    if body.outcome_code is not None:
+        row.outcome_code = body.outcome_code.strip()
+    if body.amount is not None:
+        row.amount = round(float(body.amount), 2)
+    if body.note is not None:
+        row.note = body.note.strip()
+    if body.seq is not None and body.seq != seq:
+        row.seq = body.seq
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-edited",
+                    payload={"seq": seq}))
+    db.commit()
+    return {"seq": row.seq, "statement": row.statement, "amount": float(row.amount or 0),
+            "outcome_code": row.outcome_code, "note": row.note, "basis": row.basis}
+
+
+@router.delete("/cases/{case_id}/auditor-findings/{seq}")
+def remove_auditor_finding(case_id: str, seq: int, db: Session = Depends(get_db)):
+    """Withdraw a finding the auditor wrote.
+
+    Deleted rather than flagged: unlike a hypothesis — which is part of the file whatever its
+    verdict, because what was investigated matters — this row exists only because the auditor
+    typed it, so withdrawing it leaves nothing to record. The event log keeps that it happened.
+    """
+    _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorFinding).where(AuditorFinding.case_id == case_id,
+                                                 AuditorFinding.seq == seq))
+    if row is None:
+        raise HTTPException(404, "finding not found")
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-removed",
+                    payload={"seq": seq, "statement": row.statement[:200]}))
+    db.delete(row)
+    db.commit()
+    return {"removed": seq}
+
+
 class RulePatch(BaseModel):
     enabled: bool
 
@@ -1149,6 +1211,23 @@ def reconciliations(case_id: str, workstream: str = "", db: Session = Depends(ge
         raise HTTPException(422, "workstream must be sales or purchases")
     try:
         return recon_service.state(db, case_id, workstream=workstream)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/cases/{case_id}/dashboard")
+def reconciliation_dashboard(case_id: str, db: Session = Depends(get_db)):
+    """The reconciliation dashboard: three sources, six comparisons, three levels.
+
+    Every figure here is computed in Python and reproducible without credentials — no model is
+    called from this path or anything it imports. That is what makes the dashboard testable
+    independently of the AI layer, which is the point of the separation.
+    """
+    from ..recon import dashboard as recon_dashboard
+
+    _case_or_404(db, case_id)
+    try:
+        return recon_dashboard.build_for(db, case_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
 

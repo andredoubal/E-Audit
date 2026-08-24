@@ -8,14 +8,17 @@ import ZatcaPanel from "../components/ZatcaPanel";
 import FindingsPanel from "../components/FindingsPanel";
 import CalculationPanel from "../components/CalculationPanel";
 import CaseTabs from "../components/CaseTabs";
-import ZatcaSource from "../components/ZatcaSource";
+import AuditorAssessment from "../components/AuditorAssessment";
 import VatRegisters from "../components/VatRegisters";
-import EvidencePanel from "../components/EvidencePanel";
+import InvestigationTabs, { type InvTab } from "../components/InvestigationTabs";
+import DataTab from "../components/DataTab";
+import ReconciliationDashboard from "../components/ReconciliationDashboard";
+import AuditorFindingsTab from "../components/AuditorFindingsTab";
+import { getDashboard, type ReconDashboard } from "../api";
 import ReconciliationPanel from "../components/ReconciliationPanel";
 import RegulatoryCoverage from "../components/RegulatoryCoverage";
 import WorkstreamTabs, { type Workstream } from "../components/WorkstreamTabs";
 import InvestigationSummary from "../components/InvestigationSummary";
-import AuditorAssessment from "../components/AuditorAssessment";
 import Collapsible from "../components/Collapsible";
 import CaseContextPanel from "../components/CaseContextPanel";
 import TaxpayerResponsePanel from "../components/TaxpayerResponsePanel";
@@ -422,6 +425,13 @@ export default function Investigation() {
   // provisions — so the workstream is a property of the screen rather than a filter buried in
   // a panel. Sales first because output VAT is where most cases start.
   const [workstream, setWorkstream] = useState<Workstream>("sales");
+  // The four layers of the chain, and which one you are looking at. Landing on the first is
+  // deliberate: a dataset read wrongly corrupts every figure in the three tabs after it, in a
+  // way no reconciliation can detect, because by then the reading has already been made.
+  const [tab, setTab] = useState<InvTab>("data");
+  const [dash, setDash] = useState<ReconDashboard | null>(null);
+  const [inv, setInv] = useState<{ hypotheses: { decision: { decision: string } | null;
+                                                 status: string; outcome_code: string }[] } | null>(null);
 
   // Blanking the page is right when the *case* changes — the old case's figures must not sit
   // on screen under a new case's name. It is wrong on a refresh of the same case: `!d` falls
@@ -441,6 +451,11 @@ export default function Investigation() {
       })
       .then((j) => { if (live) { setD(j); setErr(null); } })
       .catch((e) => { if (live) setErr(String(e)); });
+    getDashboard(id).then((j) => { if (live) setDash(j); }).catch(() => {});
+    fetch(`/api/cases/${id}/investigation`)
+      .then((r) => r.json())
+      .then((j) => { if (live) setInv(j); })
+      .catch(() => {});
     return () => { live = false; };
   }, [id, rev]);
 
@@ -460,8 +475,26 @@ export default function Investigation() {
     );
 
   const open = (title: string, detail?: Detail, amount?: number) => setModal({ title, detail, amount });
+  const bump = () => setRev((r) => r + 1);
   const cstate = d.combined?.state ?? d.state;
   const inputFinding = d.combined?.input_state === "potential-finding";
+
+  // Badges are absent rather than zero. A tab that always carries a number teaches the eye
+  // that the number means nothing.
+  const exceptionCount = dash
+    ? dash.exceptions.filter((e) => e.kind !== "comparison-not-possible").length
+    : undefined;
+  const hyps = inv?.hypotheses ?? [];
+  const undecided = hyps.filter((h) => !h.decision && h.status !== "refuted" && h.outcome_code);
+  const confirmed = hyps.filter((h) => h.decision?.decision === "accepted");
+  const counts = {
+    ...(exceptionCount ? { reconciliation: { n: exceptionCount, hot: exceptionCount > 0,
+                                             title: "exceptions the figures raise" } } : {}),
+    ...(undecided.length ? { ai: { n: undecided.length, hot: true,
+                                   title: "matters awaiting your decision" } } : {}),
+    ...(confirmed.length ? { auditor: { n: confirmed.length,
+                                        title: "findings you have confirmed" } } : {}),
+  };
 
   return (
     <>
@@ -487,163 +520,163 @@ export default function Investigation() {
         )}
       </div>
 
-      {/* The page answers four questions, in this order: what else can I give it, what did it
-          find, what is that resting on, and what do I conclude. Everything the taxpayer sent
-          is already on the case from Taxpayer Correspondence and is read from there — the one
-          thing uploaded here is the Authority's own extract, which answers to no request. */}
-      <ZatcaSource id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
+      <InvestigationTabs active={tab} onSelect={setTab} counts={counts} />
 
-      {/* Two workstreams, because they are two audits. The cards carry what decides where
-          attention goes — how much could be compared at all, how much of it is unexplained,
-          and how many regulatory concerns arose — and the last of those is counted apart from
-          the first two on purpose: a case can have one without the other. */}
-      <WorkstreamTabs id={id!} rev={rev} active={workstream} onSelect={setWorkstream} />
+      {/* ---------------------------------------------------------------- 1 · what arrived */}
+      {tab === "data" && <DataTab id={id!} rev={rev} onChanged={bump} />}
 
-      {/* Stage 0 — what arrived and what the engine made of it. Collapsed, because an auditor
-          wants the answer before the inputs; first, because every figure below rests on it and
-          a wrong reading has to be correctable without leaving the page. */}
-      <EvidencePanel id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
+      {/* ---------------------------------------------------- 2 · what the arithmetic shows */}
+      {tab === "reconciliation" && (
+        <>
+          <ReconciliationDashboard id={id!} rev={rev} />
 
-      {/* Stage 1 — every comparison this evidence supports, and every one it does not. */}
-      <ReconciliationPanel id={id!} workstream={workstream} rev={rev}
-                           onDrill={(title, detail) => open(title, detail as Detail)} />
+          {/* The registers, kept as the plain three-figure reading of the box: what the
+              listing itself states, what was declared, and the gap — with no qualification
+              rule between them, because reading a listing's own arithmetic is not a
+              qualification judgement and must not borrow one. */}
+          <VatRegisters id={id!} rev={rev} onChanged={bump}
+                        onInvoices={(title, invoices, note) =>
+                          open(title, { type: "invoice-list", invoices, note })} />
 
-      {/* The registers, kept as the plain three-figure reading of the box. It answers a
-          narrower question than the reconciliation above — the listing's own arithmetic
-          against the return, with the drill-down into every invoice — and an auditor opens
-          with it. */}
-      <VatRegisters id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)}
-                    onInvoices={(title, invoices, note) =>
-                      open(title, { type: "invoice-list", invoices, note })} />
+          <WorkstreamTabs id={id!} rev={rev} active={workstream} onSelect={setWorkstream} />
 
-      {/* Stage 2 — which provisions the evidence brings into scope. Independent of whether
-          anything differs, which is what makes "reconciled, and a concern remains" reachable. */}
-      <RegulatoryCoverage id={id!} workstream={workstream} rev={rev} />
+          {/* The declarative comparison registry — every comparison this evidence supports,
+              and every one it does not. */}
+          <ReconciliationPanel id={id!} workstream={workstream} rev={rev}
+                               onDrill={(title, detail) => open(title, detail as Detail)} />
 
-      <InvestigationSummary id={id!} rev={rev} />
-
-      <Collapsible
-        title="Detailed investigation & evidence"
-        note="every hypothesis, why it was raised, the figures behind it, the law it rests on, and the source records"
-      >
-      <InvestigationPanel id={id} rev={rev} />
-      <FindingsPanel id={id} rev={rev} />
-      <div className="tiles">
-        <div className="tile">
-          <div className="tn">{d.counted_lines}</div>
-          <div className="tl">Documents that qualify</div>
-          <div className="tnote">of {d.population_lines} on file</div>
-        </div>
-        <div className="tile">
-          <div className="tn">{sar(d.expected_vat)}</div>
-          <div className="tl">Expected output VAT</div>
-          <div className="tnote">what qualifies, summed</div>
-        </div>
-        <div className="tile">
-          <div className="tn">{sar(d.declared)}</div>
-          <div className="tl">Declared output VAT</div>
-          <div className="tnote">as filed</div>
-        </div>
-        <div className="tile">
-          <div className="tn" style={{ color: d.unexplained !== 0 ? "var(--high)" : "var(--low)" }}>
-            {d.unexplained < 0 ? "−" : ""}
-            {sar(d.unexplained)}
+          {/* Qualification: which documents belong in a box at all. A separate question from
+              the six pairings above — those compare populations, this decides membership —
+              and the funnel is a partition of the population, never a bridge. */}
+          <div className="panel">
+            <div className="panel-head">
+              <h2>Which documents belong in {d.box}</h2>
+              <button
+                className="linklike"
+                onClick={() => open("E-invoices on file", { type: "invoice-list", invoices: d.evidence_invoices, count: d.invoices_considered, note: "Every sale e-invoice held for this taxpayer, before any rule is applied." })}
+              >
+                {d.invoices_considered} e-invoices on file ›
+              </button>
+            </div>
+            {d.population_source === "document" && (
+              <div className={"provenance" + (d.population_complete ? "" : " warn")}>
+                <span className="ct">source</span>
+                Built from <b>{d.population_document}</b> — the listing the taxpayer supplied, not
+                the Authority&rsquo;s e-invoice feed.
+                {!d.population_complete && <div className="prov-caveat">{d.population_caveat}</div>}
+              </div>
+            )}
+            <Funnel d={d} open={open} />
+            <Compare d={d} open={open} />
+            <Evidence d={d} open={open} />
+            <div className="panel-note">
+              <span className="ct">∑ computed</span> The rules decide which documents belong in this box and this period;
+              the qualifying ones are then summed. Nothing is totalled and later adjusted, so there is no figure here
+              &ldquo;before&rdquo; the rules. Click any line for the documents behind it.
+            </div>
           </div>
-          <div className="tl">{d.evidence_total ? "Still unexplained" : "Difference"}</div>
-          <div className="tnote">{d.band}</div>
-        </div>
-      </div>
 
-      <AiNarration id={id} rev={rev} />
+          {d.purchase && (
+            <div className="panel">
+              <div className="panel-head">
+                <h2>Which documents belong in standard-rated purchases</h2>
+                <span
+                  className={"pill " + (STATE_CLASS[d.purchase.state] || "status")}
+                  style={{ fontSize: 12, padding: "5px 12px" }}
+                >
+                  {STATE_LABEL[d.purchase.state] || d.purchase.state}
+                </span>
+              </div>
+              <Funnel d={d.purchase} open={open} />
+              <Compare d={d.purchase} open={open} />
+              <Evidence d={d.purchase} open={open} />
+              <div className="panel-note">
+                <span className="ct">∑ computed</span> The same order on the purchases side. Here an over-claim — declaring
+                more input VAT than the qualifying invoices support — is the revenue risk, so a negative difference is the
+                one to look at.
+              </div>
+            </div>
+          )}
 
-      <div className="panel">
-        <div className="panel-head">
-          <h2>Which documents belong in {d.box}</h2>
-          <button
-            className="linklike"
-            onClick={() => open("E-invoices on file", { type: "invoice-list", invoices: d.evidence_invoices, count: d.invoices_considered, note: "Every sale e-invoice held for this taxpayer, before any rule is applied." })}
+          {d.zero_rated && (
+            <div className="panel">
+              <div className="panel-head">
+                <h2>Which documents belong in zero-rated domestic sales</h2>
+                <span
+                  className={"pill " + (STATE_CLASS[d.zero_rated.state] || "status")}
+                  style={{ fontSize: 12, padding: "5px 12px" }}
+                >
+                  {STATE_LABEL[d.zero_rated.state] || d.zero_rated.state}
+                </span>
+              </div>
+              <Funnel d={d.zero_rated} open={open} />
+              <Compare d={d.zero_rated} open={open} />
+              <Evidence d={d.zero_rated} open={open} />
+              <div className="panel-note">
+                <span className="ct">∑ computed</span> A second box, qualified the same way — scoped
+                to zero-rated (0%) lines instead of standard-rated. No timing or credit-note rules
+                are wired for this box yet, so this is a first, direct comparison of declared against
+                what the records on file support.
+              </div>
+            </div>
+          )}
+
+          {/* The Authority's own invoice records, matched deterministically. Renders nothing
+              at all with no dataset loaded, rather than reporting a comparison never run. */}
+          <ZatcaPanel id={id!} rev={rev} />
+
+          {/* The auditor's own arithmetic, checked by Python against the uploaded documents.
+              A calculation, so it belongs with the calculations. */}
+          <CalculationPanel id={id} onChanged={bump} />
+        </>
+      )}
+
+      {/* --------------------------------------------- 3 · what it might mean, still proposed */}
+      {tab === "ai" && (
+        <>
+          <div className="notice">
+            Everything on this tab is <b>proposed</b>. An agent raises a hypothesis in
+            exploratory language and the engine settles it deterministically over the rows —
+            but nothing here is a conclusion of the audit until you confirm it on the next tab,
+            and nothing unconfirmed reaches the audit report.
+          </div>
+
+          <WorkstreamTabs id={id!} rev={rev} active={workstream} onSelect={setWorkstream} />
+
+          <InvestigationSummary id={id!} rev={rev} />
+
+          {/* The ruling sits with what it rules on. An auditor reads a matter and decides on
+              it in the same place; sending them to another tab to record what they have just
+              concluded is how a decision gets postponed and then forgotten. What they confirm
+              here appears on the next tab, which is the only one the audit report reads. */}
+          <AuditorAssessment id={id!} rev={rev} onChanged={bump} part="matters" />
+
+          {/* Which provisions the evidence brings into scope — independent of whether anything
+              differs, which is what makes "reconciled, and a concern remains" reachable. */}
+          <RegulatoryCoverage id={id!} workstream={workstream} rev={rev} />
+
+          <Collapsible
+            title="Every hypothesis, and how it was settled"
+            note="why it was raised, the figures behind it, the law it rests on, and the source records"
           >
-            {d.invoices_considered} e-invoices on file ›
-          </button>
-        </div>
-        {d.population_source === "document" && (
-          <div className={"provenance" + (d.population_complete ? "" : " warn")}>
-            <span className="ct">source</span>
-            Built from <b>{d.population_document}</b> — the listing the taxpayer supplied, not
-            the Authority&rsquo;s e-invoice feed.
-            {!d.population_complete && <div className="prov-caveat">{d.population_caveat}</div>}
-          </div>
-        )}
-        <Funnel d={d} open={open} />
-        <Compare d={d} open={open} />
-        <Evidence d={d} open={open} />
-        <div className="panel-note">
-          <span className="ct">∑ computed</span> The rules decide which documents belong in this box and this period;
-          the qualifying ones are then summed. Nothing is totalled and later adjusted, so there is no figure here
-          &ldquo;before&rdquo; the rules. Click any line for the documents behind it.
-        </div>
-      </div>
-
-      {d.purchase && (
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Which documents belong in standard-rated purchases</h2>
-            <span
-              className={"pill " + (STATE_CLASS[d.purchase.state] || "status")}
-              style={{ fontSize: 12, padding: "5px 12px" }}
-            >
-              {STATE_LABEL[d.purchase.state] || d.purchase.state}
-            </span>
-          </div>
-          <Funnel d={d.purchase} open={open} />
-          <Compare d={d.purchase} open={open} />
-          <Evidence d={d.purchase} open={open} />
-          <div className="panel-note">
-            <span className="ct">∑ computed</span> The same order on the purchases side. Here an over-claim — declaring
-            more input VAT than the qualifying invoices support — is the revenue risk, so a negative difference is the
-            one to look at.
-          </div>
-        </div>
+            <InvestigationPanel id={id} rev={rev} />
+            <FindingsPanel id={id} rev={rev} />
+            <AiNarration id={id} rev={rev} />
+            <NextBestAction id={id} rev={rev} />
+            <TaxpayerResponsePanel
+              id={id}
+              difference={d.unexplained}
+              priorPeriodDeclared={d.prior_period_correction_declared}
+              onChanged={bump}
+            />
+            <CaseContextPanel id={id!} />
+            <TaxpayerBrief id={id} />
+          </Collapsible>
+        </>
       )}
 
-      {d.zero_rated && (
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Which documents belong in zero-rated domestic sales</h2>
-            <span
-              className={"pill " + (STATE_CLASS[d.zero_rated.state] || "status")}
-              style={{ fontSize: 12, padding: "5px 12px" }}
-            >
-              {STATE_LABEL[d.zero_rated.state] || d.zero_rated.state}
-            </span>
-          </div>
-          <Funnel d={d.zero_rated} open={open} />
-          <Compare d={d.zero_rated} open={open} />
-          <Evidence d={d.zero_rated} open={open} />
-          <div className="panel-note">
-            <span className="ct">∑ computed</span> A second box, qualified the same way — scoped
-            to zero-rated (0%) lines instead of standard-rated. No timing or credit-note rules
-            are wired for this box yet, so this is a first, direct comparison of declared against
-            what the records on file support.
-          </div>
-        </div>
-      )}
-
-      <ZatcaPanel id={id!} rev={rev} />
-      <CalculationPanel id={id} onChanged={() => setRev((r) => r + 1)} />
-      <NextBestAction id={id} rev={rev} />
-      <TaxpayerResponsePanel
-        id={id}
-        difference={d.unexplained}
-        priorPeriodDeclared={d.prior_period_correction_declared}
-        onChanged={() => setRev((r) => r + 1)}
-      />
-      <CaseContextPanel id={id!} />
-      <TaxpayerBrief id={id} />
-      </Collapsible>
-
-      <AuditorAssessment id={id!} rev={rev} onChanged={() => setRev((r) => r + 1)} />
-
+      {/* -------------------------------------------------- 4 · what the auditor has decided */}
+      {tab === "auditor" && <AuditorFindingsTab id={id!} rev={rev} onChanged={bump} />}
 
       {modal && (
         <Modal title={modal.title} onClose={() => setModal(null)}>

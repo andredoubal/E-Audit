@@ -128,10 +128,21 @@ function Matter({ c, busy, onRule }: {
  *  One section, at the end, rather than a decision control on every card. The draft states no
  *  figure the engine did not compute; from there it is a document, and what the auditor writes
  *  replaces what the engine wrote with the original kept beside it. */
-export default function AuditorAssessment({ id, rev, onChanged }: {
+/** Which half of the assessment to render.
+ *
+ *  The two do different jobs and now live on different tabs. Ruling on a matter is part of
+ *  reading what the AI proposed, so the matters list sits with the AI findings; the assessment
+ *  itself is the auditor's own conclusion over the whole investigation, so it sits with the
+ *  findings they have confirmed. They still share one component because they read the same
+ *  two endpoints and a ruling changes both — the confirmed count in the assessment's header is
+ *  the count of what was ruled on next door. */
+export type AssessPart = "matters" | "assessment" | "both";
+
+export default function AuditorAssessment({ id, rev, onChanged, part = "both" }: {
   id: string;
   rev?: number;
   onChanged?: () => void;
+  part?: AssessPart;
 }) {
   const [d, setD] = useState<AssessmentView | null>(null);
   const [sum, setSum] = useState<InvestigationSummary | null>(null);
@@ -211,7 +222,9 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
     <>
     <div className="panel assess">
       <div className="panel-head">
-        <h3 className="display">Your assessment</h3>
+        <h3 className="display">
+          {part === "matters" ? "Your ruling on each matter" : "Your assessment"}
+        </h3>
         <span className="sub">only what you confirm reaches the report</span>
         <span className="sub num" style={{ marginLeft: "auto" }}>
           {confirmed.length
@@ -223,7 +236,7 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
       <div className="panel-body">
         {err && <div className="callout warn">{err}</div>}
 
-        {!!matters.length && (
+        {part !== "assessment" && !!matters.length && (
           <div className="matters">
             {matters.map((c) => (
               <Matter key={c.key} c={c} busy={busy} onRule={rule} />
@@ -231,6 +244,7 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
           </div>
         )}
 
+        {part !== "matters" && <>
         <div className="assess-doc">
           <div className="assess-doc-head">
             <b>The assessment</b>
@@ -295,14 +309,16 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
             number. The assessment stays yours: whatever comes back, you edit it here.
           </p>
         </div>
+        </>}
       </div>
     </div>
 
-    {/* The end of the module. The confirming happened above, matter by matter; this says what
-        those rulings come to and takes the auditor to the report they produce. Nothing is
-        confirmed *by* this button — which is why it states the count even when it is nought,
-        rather than moving on quietly and letting the report be the one to break the news. */}
-    <ModuleHandoff
+    {/* The end of the module, and so only on the tab that ends it. The confirming happened on
+        the matters; this says what those rulings come to and takes the auditor to the report
+        they produce. Nothing is confirmed *by* this button — which is why it states the count
+        even when it is nought, rather than moving on quietly and letting the report be the one
+        to break the news. */}
+    {part === "both" && <ModuleHandoff
       label="Confirm and draft audit report"
       to={`/cases/${id}/report`}
       carries={confirmed.length
@@ -315,7 +331,7 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
         : "The report will record that no finding was established, which is the honest reading"
           + " of an investigation nobody has ruled on. Confirm a matter above to carry it"
           + " through."}
-    />
+    />}
     </>
   );
 }

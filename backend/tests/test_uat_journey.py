@@ -543,3 +543,71 @@ def test_an_unanswered_field_is_visible_in_the_download_not_dropped(api):
     for marker in (audit_report.NOT_HELD, audit_report.FOR_AUDITOR):
         if any(f["value"] == marker for f in outstanding):
             assert marker in body, f"{marker!r} was dropped from the download"
+
+
+# ============================================================ the reconciliation dashboard
+def test_the_dashboard_publishes_six_pairings_and_says_which_it_could_not_run(api):
+    """Three sources per workstream disagree in three ways, and *which pair* disagrees is the
+    only thing that changes what the auditor does next. A pairing with a side missing is
+    reported as not run — never run against whatever happens to be on the case."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+
+    codes = {c["code"] for c in d["comparisons"]}
+    assert codes == {"S1", "S2", "S3", "P1", "P2", "P3"}
+
+    for c in d["comparisons"]:
+        assert c["question"], f"{c['code']} does not say what a difference there would mean"
+        if not c["runnable"]:
+            assert c["blocked_by"], f"{c['code']} is not run and does not say why"
+            assert c["variance"] is None, "a missing document is not a difference"
+
+
+def test_no_dashboard_figure_is_a_sum_across_exceptions_resting_on_the_same_records(api):
+    """The defect this guards: three comparisons over the same two files disagree about the
+    same money three times, and each is measured again in taxable amount underneath its VAT.
+    Adding those reported SAR 15.8m on a case whose sales excess is SAR 618k."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    summary = d["workstreams"]["sales"]["summary"]
+
+    assert "exception_value" not in summary, "a total across bases must not be published"
+    material = [e for e in d["exceptions"]
+                if e["kind"] != "comparison-not-possible" and e["variance"]]
+    assert summary["largest_exception"] == max(abs(e["variance"]) for e in material
+                                               if e["metric"] == "vat")
+    assert summary["not_summed_because"], "why it is not a total has to be on the record"
+
+    bases = [e["basis"] for e in d["exceptions"]]
+    assert len(bases) == len(set(bases)), "one basis is one matter, and appears once"
+
+
+def test_the_same_matter_measured_twice_is_one_exception_with_the_second_reading_on_it(api):
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    folded = [e for e in d["exceptions"] if e["also_measured"]]
+    assert folded, "the seeded case measures VAT and taxable amount, so some fold"
+    for e in folded:
+        assert e["metric"] == "vat", "VAT is the money, so it states the matter"
+        assert all(a["metric"] != "vat" for a in e["also_measured"])
+
+
+# ============================================================ the auditor's own findings
+def test_an_auditor_finding_can_be_written_amended_and_withdrawn(api):
+    """The roster covers what it has tests for. Anything else still has to be recordable — and
+    correctable, since a finding nobody can fix is one the auditor works around."""
+    added = _json(api.post(f"/api/cases/{CLEAN}/auditor-findings",
+                           json={"statement": "Ledger postings were not sighted.",
+                                 "amount": 1000.0}))
+    seq = added["seq"]
+
+    amended = _json(api.patch(f"/api/cases/{CLEAN}/auditor-findings/{seq}",
+                              json={"amount": 2500.0}))
+    assert amended["amount"] == 2500.0
+    assert amended["statement"] == "Ledger postings were not sighted.", \
+        "a field not sent is a field not touched"
+
+    blanked = api.patch(f"/api/cases/{CLEAN}/auditor-findings/{seq}", json={"statement": "  "})
+    assert blanked.status_code == 422, "a finding saying nothing must not reach the report"
+
+    _json(api.delete(f"/api/cases/{CLEAN}/auditor-findings/{seq}"))
+    assert not [f for f in _json(api.get(f"/api/cases/{CLEAN}/auditor-findings"))
+                if f["seq"] == seq]
+    assert api.delete(f"/api/cases/{CLEAN}/auditor-findings/{seq}").status_code == 404

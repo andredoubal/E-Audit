@@ -163,7 +163,11 @@ export default function ReconciliationPanel({ id, workstream, rev, onDrill }: {
 
   if (!d) return null;
 
-  const mine = d.results.filter((r) => r.workstream === workstream);
+  // Only what the six pairwise comparisons do not already answer. Four of these definitions
+  // ask exactly what a pairing asks — the same two sources, the same metric — and the
+  // dashboard above states those. Showing both would report one difference twice in slightly
+  // different words, which is how an auditor comes to distrust both panels.
+  const mine = d.results.filter((r) => r.workstream === workstream && !r.superseded_by);
   const ran = mine.filter((r) => r.status !== "insufficient-evidence");
   const blocked = mine.filter((r) => r.status === "insufficient-evidence");
   const s = d.workstreams[workstream];
@@ -171,9 +175,9 @@ export default function ReconciliationPanel({ id, workstream, rev, onDrill }: {
   return (
     <div className="panel">
       <div className="panel-head">
-        <h2>Reconciliation</h2>
+        <h2>Supporting reconciliations</h2>
         <span className="sub">
-          {s.runnable} of {s.total} comparisons could be run
+          {ran.length} of {mine.length} could be run
           {s.unexplained_count ? ` · ${s.unexplained_count} with an unexplained difference` : ""}
         </span>
         {!!s.largest_unexplained && (
@@ -188,14 +192,17 @@ export default function ReconciliationPanel({ id, workstream, rev, onDrill }: {
 
         {!ran.length && !blocked.length ? (
           <p className="detail-note" style={{ margin: 0 }}>
-            No comparison is defined for this workstream yet.
+            Every comparison defined for this workstream is one of the six above. There is no
+            further supporting reconciliation — point-of-sale takings, the ledger, credit notes
+            or customs records — defined for it.
           </p>
         ) : (
           <>
             {!ran.length ? (
               <p className="detail-note" style={{ margin: 0 }}>
-                Nothing on this case can be compared on the {workstream} side yet. What is
-                missing is listed below — and that list is what to ask the taxpayer for.
+                None of the supporting reconciliations can be run on the {workstream} side
+                yet — they need documents beyond the register, the e-invoices and the return.
+                What is missing is listed below, and that list is what to ask the taxpayer for.
               </p>
             ) : (
               <div className="rclist">

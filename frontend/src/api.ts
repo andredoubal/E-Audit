@@ -1290,6 +1290,8 @@ export interface ReconContribution {
 
 export interface ReconResult {
   id: string;
+  /** the pairwise comparison that now owns this question, if one does */
+  superseded_by?: string;
   title: string;
   workstream: "sales" | "purchases";
   metric: string;
@@ -1573,3 +1575,160 @@ export interface RegulatoryCoverage {
 
 export const getRegulatoryCoverage = () =>
   getJSON<RegulatoryCoverage>("/regulatory/coverage");
+
+// ---------------------------------------------------------------- reconciliation dashboard
+/** One side of a comparison. `present: false` means the source is not on the case at all —
+ *  which is not the same as a total of zero, and is why `total` is nullable. */
+export interface CompareSide {
+  source: "return" | "register" | "e-invoices";
+  label: string;
+  origin: string;
+  total: number | null;
+  count: number | null;
+  counted: number | null;
+  present: boolean;
+}
+
+export interface TreatmentRow {
+  treatment: string;
+  label: string;
+  a_total: number | null;
+  b_total: number | null;
+  a_count: number;
+  b_count: number;
+  variance: number | null;
+  variance_pct: number | null;
+  status: string;
+  status_label: string;
+}
+
+export interface MatchRow {
+  status: string;
+  status_label: string;
+  reference: string;
+  a_records: string[];
+  b_records: string[];
+  a_amount: number | null;
+  b_amount: number | null;
+  delta: number | null;
+  detail: string;
+}
+
+export interface Comparison {
+  code: string;
+  workstream: "sales" | "purchases";
+  title: string;
+  question: string;
+  metric: string;
+  metric_label: string;
+  a: CompareSide;
+  b: CompareSide;
+  runnable: boolean;
+  blocked_by: string[];
+  needs: string[];
+  variance: number | null;
+  variance_pct: number | null;
+  status: string;
+  status_label: string;
+  attention: number;
+  tolerance: { name: string; absolute: number; percentage: number; note: string; allowance: number };
+  treatments: TreatmentRow[];
+  matches: MatchRow[];
+  /** What the engine wants said about this comparison — e.g. that the totals nearly agree
+   *  while the records inside them do not, because they offset each other. Engine-authored,
+   *  neutrality-checked, and the reason a status can differ from what the headline suggests. */
+  notes: string[];
+}
+
+export interface ReconObservation {
+  id: string;
+  workstream: string;
+  pairing: string;
+  text: string;
+  amount: number | null;
+  count: number | null;
+  records: string[];
+  source_files: string[];
+}
+
+export interface ReconException {
+  id: string;
+  workstream: string;
+  pairing: string;
+  reconciliation: string;
+  category: string;
+  kind: string;
+  metric: string;
+  /** one comparison, one shape of disagreement, one set of records — two exceptions sharing
+   *  a basis are one matter and are never added together */
+  basis: string;
+  a_label: string;
+  b_label: string;
+  a_value: number | null;
+  b_value: number | null;
+  variance: number | null;
+  variance_pct: number | null;
+  affected_count: number;
+  records: string[];
+  source_files: string[];
+  observation: string;
+  /** the same matter measured in another metric, not a second matter */
+  also_measured: {
+    metric: string; metric_label: string;
+    a_value: number | null; b_value: number | null;
+    variance: number | null; variance_pct: number | null; observation: string;
+  }[];
+}
+
+export interface Kpi {
+  key: string;
+  label: string;
+  value: number;
+  unit: "sar" | "count";
+  note: string;
+  source: string;
+}
+
+export interface DatasetSummary {
+  source_dataset: string;
+  source_file: string;
+  direction: string;
+  count: number;
+  fields_available: string[];
+  unreadable_rows: Record<string, number[]>;
+  unreadable_counts: Record<string, number>;
+  notes: string[];
+}
+
+export interface WorkstreamDash {
+  kpis: Kpi[];
+  unavailable: { what: string; why: string }[];
+  sources: {
+    return_on_file: boolean;
+    register: DatasetSummary | null;
+    einvoices: DatasetSummary | null;
+  };
+  summary: {
+    comparisons_total: number;
+    comparisons_run: number;
+    with_variance: number;
+    exceptions: number;
+    largest_exception: number;
+    largest_exception_is: string;
+    not_summed_because: string;
+    needs: string[];
+  };
+}
+
+export interface ReconDashboard {
+  case_id: string;
+  period_from: string;
+  period_to: string;
+  workstreams: Record<"sales" | "purchases", WorkstreamDash>;
+  comparisons: Comparison[];
+  observations: ReconObservation[];
+  exceptions: ReconException[];
+}
+
+export const getDashboard = (id: string) =>
+  getJSON<ReconDashboard>(`/cases/${id}/dashboard`);

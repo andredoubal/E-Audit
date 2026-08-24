@@ -342,13 +342,19 @@ whatever the next question turns out to be.</p></div></div>
 
 
 def investigation(inv: dict, z: dict, summary: dict, asmt: dict, regs: dict,
-                  evidence: dict, recon: dict, controls: dict) -> str:
-    """The module in the order the work happens.
+                  evidence: dict, recon: dict, controls: dict, dash: dict) -> str:
+    """The module as four tabs, which are four layers of one chain rather than four filters.
 
-    Optional ZATCA data, then what the investigation found, then the evidence behind it, then
-    the auditor's own assessment. The evidence layer is everything that used to be at the top:
-    it is not less important, it is what the summary is answerable to, and it is one click away
-    rather than the first thing between the auditor and the answer.
+        DATA -> CALCULATION -> OBSERVATION -> HYPOTHESIS -> AI FINDING -> AUDITOR FINDING
+
+    Tab 1 is what arrived. Tab 2 is what the arithmetic shows, with no explanation attached.
+    Tab 3 is what the AI proposes those figures might mean, still proposed. Tab 4 is what the
+    auditor has decided, and it is the only one the audit report reads. On one page an
+    observation and a finding sit in the same column and read as the same kind of claim, which
+    is the conflation the split exists to prevent.
+
+    The tabs work in this file: switching them is show/hide, which needs no engine. Everything
+    inside them is the engine's own output, captured when this page was generated.
     """
     ds = z.get("dataset") or {}
     zhead = (f'<b>{e(ds["filename"])}</b> <span class="sub">{z.get("zatca_count", 0)} invoices'
@@ -446,13 +452,17 @@ called.</div></div></section>"""
 <div class="rcrow-body"><p class="detail-note" style="margin:0">{e(r['explanation'])}</p>
 {extra}</div></div>"""
 
-    sales_recon = [r for r in recon["results"] if r["workstream"] == "sales"]
+    # Only what the six pairwise comparisons above do not already answer. Four of these
+    # definitions ask exactly what a pairing asks, and reporting one difference twice in
+    # slightly different words is how an auditor comes to distrust both panels.
+    sales_recon = [r for r in recon["results"]
+                   if r["workstream"] == "sales" and not r.get("superseded_by")]
     ran = [r for r in sales_recon if r["status"] != "insufficient-evidence"]
     blocked = [r for r in sales_recon if r["status"] == "insufficient-evidence"]
     s = recon["workstreams"]["sales"]
     rc_panel = f"""
-<div class="panel"><div class="panel-head"><h2>Reconciliation</h2>
-<span class="sub">{s['runnable']} of {s['total']} comparisons could be run
+<div class="panel"><div class="panel-head"><h2>Supporting reconciliations</h2>
+<span class="sub">{len(ran)} of {len(sales_recon)} could be run
 {f" &middot; {s['unexplained_count']} with an unexplained difference"
  if s['unexplained_count'] else ""}</span></div>
 <div class="panel-body">
@@ -722,13 +732,24 @@ figures. The audit conclusion is the auditor's: only what you accept reaches the
         "Drop the matters where the evidence is insufficient.",
         "Say it in plainer language for a taxpayer with no adviser."))
 
-    assess = f"""
-<div class="panel assess"><div class="panel-head"><h2>Your assessment</h2>
+    # The ruling sits with what it rules on, so the matters go on the AI Findings tab and the
+    # assessment itself on Auditor Findings — the same split the application makes with
+    # `AuditorAssessment`'s `part` prop. Sending an auditor to another tab to record what they
+    # have just concluded is how a decision gets postponed and then forgotten.
+    rulings = f"""
+<div class="panel assess"><div class="panel-head"><h2>Your ruling on each matter</h2>
 <span class="pill {"pri-low" if confirmed else "status"}">
 {f"{confirmed} confirmed — carried into the report" if confirmed else "nothing confirmed yet"}
 </span></div><div class="panel-body">
 <div class="matters"><div class="matters-head">Which of these you are taking forward. Only what
 you confirm reaches the audit report and the letter to the taxpayer.</div>{matters}</div>
+</div></div>"""
+
+    assess = f"""
+<div class="panel assess"><div class="panel-head"><h2>Your assessment</h2>
+<span class="pill {"pri-low" if confirmed else "status"}">
+{f"{confirmed} confirmed — carried into the report" if confirmed else "nothing confirmed yet"}
+</span></div><div class="panel-body">
 <div class="assess-doc"><div class="assess-doc-head"><b>The assessment</b>
 <span class="sub">drafted from the investigation &mdash; yours to edit</span></div>
 <pre class="assess-text" id="assess-text">{e(asmt.get("text", ""))}</pre>
@@ -742,14 +763,207 @@ figures the engine computed, checked the same way &mdash; an instruction can cha
 something is put, and cannot introduce a number. The assessment stays yours.</p></div>
 </div></div>"""
 
-    return f"""{zsrc}
-{wstabs}
-{ev_panel}
-{rc_panel}
+
+    # ---------------------------------------------------------------- 1 · what arrived
+    used_as = {}
+    for ws, w in dash["workstreams"].items():
+        for src in (w["sources"]["register"], w["sources"]["einvoices"]):
+            if src:
+                used_as[src["source_file"]] = ws
+
+    def _cover(d: dict) -> str:
+        """A file's own dates against the period. A stretch is only named past 14 days: a
+        register whose first invoice is the 6th is not missing five days, it is a register."""
+        if not d.get("date_min") or not d.get("date_max"):
+            return ""
+        from datetime import date as _d
+        p0, p1 = _d.fromisoformat(evidence["period_from"]), _d.fromisoformat(evidence["period_to"])
+        lo, hi = _d.fromisoformat(d["date_min"][:10]), _d.fromisoformat(d["date_max"][:10])
+        if hi < p0 or lo > p1:
+            return '<div class="xs hot">entirely outside the case period</div>'
+        ends = []
+        if (lo - p0).days > 14:
+            ends.append(f"the first {(lo - p0).days} days of the period carry nothing")
+        if (p1 - hi).days > 14:
+            ends.append(f"nothing in the last {(p1 - hi).days} days")
+        return (f'<div class="xs hot">covers part of the period &mdash; {", ".join(ends)}</div>'
+                if ends else "")
+
+    CONF = {"confirmed": ("pri-low", "confirmed by you"), "high": ("pri-low", "read with confidence"),
+            "medium": ("pri-medium", "read, worth checking"), "low": ("pri-high", "uncertain")}
+
+    def dsrow(d: dict) -> str:
+        pill, word = CONF.get(d["confidence"], ("status", d["confidence"]))
+        blocking = [f for f in d["quality_flags"] if f["severity"] == "blocking"]
+        advisory = [f for f in d["quality_flags"] if f["severity"] != "blocking"]
+        issues = ("".join(f'<span class="pill sm pri-high">{len(blocking)} blocking</span>'
+                          for _ in [1] if blocking)
+                  + "".join(f'<span class="pill sm pri-medium">{len(advisory)} advisory</span>'
+                            for _ in [1] if advisory)
+                  or '<span class="muted">none</span>')
+        ws = used_as.get(d["filename"])
+        dates = (f'{e(d["date_min"])} &rarr; {e(d["date_max"])}' if d.get("date_min")
+                 else '<span class="muted">no dates read</span>')
+        return f"""<tr><td><b class="mono xs">{e(d["filename"])}</b>
+<div class="xs muted">{"the Authority&rsquo;s own extract" if d["provenance"] == "authority"
+                       else "filed by the taxpayer"}</div></td>
+<td>{e(d["dataset_label"])}<div class="xs muted">{f"used on {ws}" if ws
+     else "not used in a comparison"}</div></td>
+<td class="mono xs">{dates}{_cover(d)}</td>
+<td class="r num">{d["record_count"]}</td>
+<td><span class="pill sm {pill}">{word}</span></td>
+<td class="xs">{issues}</td></tr>"""
+
+    unavail = "".join(
+        f'<li><span class="pill sm">{ws}</span> <b>{e(u["what"])}</b> &mdash; {e(u["why"])}</li>'
+        for ws, w in dash["workstreams"].items() for u in w["unavailable"])
+    unread = "".join(
+        f'<li><b class="mono xs">{e(src["source_file"])}</b> &mdash; {len(rows)} row(s) carry no '
+        f'readable {field.replace("_", " ")}. They contribute nothing to a total rather than '
+        f'being summed as zero.</li>'
+        for w in dash["workstreams"].values()
+        for src in (w["sources"]["register"], w["sources"]["einvoices"]) if src
+        for field, rows in src["unreadable_rows"].items() if rows)
+
+    data_tab = f"""{zsrc}
+<div class="panel"><div class="panel-head"><h2>Datasets on this case</h2>
+<span class="sub num">{len(evidence["datasets"])} file(s) &middot;
+{sum(d["record_count"] for d in evidence["datasets"])} records</span></div>
+<div class="tablewrap"><table class="dtable"><thead><tr><th>File</th><th>Read as</th>
+<th>Period covered</th><th class="r">Records</th><th>Reading</th><th>Issues</th></tr></thead>
+<tbody>{"".join(dsrow(d) for d in evidence["datasets"])}</tbody></table></div>
+<div class="panel-note"><span class="ct">read, not assumed</span> What each file <i>is</i> was
+read from its own columns and values, never from its name &mdash; a filename may fill a gap but
+it never settles a contradiction.</div></div>
+
+<div class="panel"><div class="panel-head"><h2>Data quality</h2></div>
+<div class="quality">
+{f'<div class="qgroup"><span class="ct">skipped, not zero</span><ul>{unread}</ul></div>' if unread else ""}
+{f'<div class="qgroup"><span class="ct">not measured</span><ul>{unavail}</ul></div>' if unavail else ""}
+</div></div>
+{ev_panel}"""
+
+    # ---------------------------------------------------------------- 2 · what the figures show
+    ST = {"reconciled": "pri-low", "reconciled-with-explained-difference": "pri-low",
+          "partially-reconciled": "pri-medium", "variance-identified": "pri-high",
+          "insufficient-evidence": "status"}
+
+    def cmpcard(c: dict) -> str:
+        if not c["runnable"]:
+            return f"""<div class="cmp cmp-blocked"><div class="cmp-head">
+<span class="cmp-code num">{c["code"]}</span><span class="cmp-title"><b>{e(c["title"])}</b>
+<small>{e(c["question"])}</small></span><span class="pill status">Not run</span></div>
+<p class="cmp-blockedwhy">Could not be compared &mdash; {e("; ".join(c["blocked_by"]))}.
+Reported rather than run against whatever happens to be on the case: one side is not a
+comparison.</p></div>"""
+        treat = "".join(
+            f"""<tr class="{"hot" if t["status"] == "variance-identified" else ""}">
+<td>{e(t["label"])}</td><td class="r num">{sar(t["a_total"])} <i class="xs">({t["a_count"]})</i></td>
+<td class="r num">{sar(t["b_total"])} <i class="xs">({t["b_count"]})</i></td>
+<td class="r num">{sar(t["variance"])}</td>
+<td><span class="pill sm {ST.get(t["status"], "status")}">{e(t["status_label"])}</span></td></tr>"""
+            for t in c["treatments"])
+        counts: dict = {}
+        for m in c["matches"]:
+            counts.setdefault(m["status_label"], 0)
+            counts[m["status_label"]] += 1
+        chips = "".join(f'<span class="l3-chip"><b class="num">{n}</b>'
+                        f'<span>{e(lbl.lower())}</span></span>'
+                        for lbl, n in counts.items())
+        notes = "".join(f'<p class="cmp-note">{e(n)}</p>' for n in c.get("notes", []))
+        return f"""<div class="cmp open"><div class="cmp-head">
+<span class="cmp-code num">{c["code"]}</span><span class="cmp-title"><b>{e(c["title"])}</b>
+<small>{e(c["question"])}</small></span><span class="cmp-figs">
+<span class="cmp-fig"><i>{e(c["a"]["label"])}</i><b class="num">{sar(c["a"]["total"])}</b></span>
+<span class="cmp-fig"><i>{e(c["b"]["label"])}</i><b class="num">{sar(c["b"]["total"])}</b></span>
+<span class="cmp-fig{" hot" if c["variance"] else ""}"><i>Difference</i>
+<b class="num">{sar(c["variance"])}</b></span></span>
+<span class="pill {ST.get(c["status"], "status")}">{e(c["status_label"])}</span></div>
+<div class="cmp-body"><p class="detail-note" style="margin-top:0">Measured in
+<b>{e(c["metric_label"])}</b>. Tolerance for this comparison is
+{sar(c["tolerance"]["allowance"])} &mdash; {e(c["tolerance"]["note"])}.</p>{notes}
+{f'<h4 class="lvl">By VAT treatment</h4><div class="tablewrap"><table class="dtable"><thead><tr>'
+ f'<th>Treatment</th><th class="r">{e(c["a"]["label"])}</th><th class="r">{e(c["b"]["label"])}</th>'
+ f'<th class="r">Difference</th><th>Status</th></tr></thead><tbody>{treat}</tbody></table></div>'
+ if treat else ""}
+{f'<h4 class="lvl">By transaction</h4><div class="l3-rollup">{chips}</div>' if chips else ""}
+</div></div>"""
+
+    def wsdash(key: str, name: str) -> str:
+        w = dash["workstreams"][key]
+        sm = w["summary"]
+        kpis = "".join(
+            f"""<div class="kpi"><div class="kpi-n num">{sar(k["value"]) if k["unit"] == "sar"
+                else k["value"]}</div><div class="kpi-l">{e(k["label"])}</div>
+<div class="kpi-s">{e(k["source"])}</div></div>""" for k in w["kpis"])
+        head = (f"""<div class="headline"><div>
+<div class="headline-n num">{sar(sm["largest_exception"])}</div>
+<div class="headline-l">Largest single exception &mdash; {e(sm["largest_exception_is"])}</div>
+</div><p class="headline-note">{e(sm["not_summed_because"])}</p></div>"""
+                if sm["largest_exception"] else "")
+        cards = "".join(cmpcard(c) for c in dash["comparisons"] if c["workstream"] == key)
+        return f"""<div class="panel"><div class="panel-head"><h2>{e(name)}</h2>
+<span class="sub num">{sm["comparisons_run"]} of {sm["comparisons_total"]} comparisons run
+{f"&middot; {sm['with_variance']} with a variance" if sm["with_variance"] else ""}</span></div>
+{f'<div class="kpis">{kpis}</div>' if kpis else ""}{head}
+<div class="cmps">{cards}</div></div>"""
+
+    obs_rows = "".join(
+        f'<li><span class="obs-id mono xs">{o["id"]}</span><span class="obs-t">{e(o["text"])}</span>'
+        f'<span class="obs-src mono xs">{e(" &middot; ".join(o["source_files"]))}</span></li>'
+        for o in dash["observations"])
+    exc_rows = "".join(
+        f"""<tr><td class="mono xs">{x["id"]}</td><td>{e(x["reconciliation"])}</td>
+<td>{e(x["category"])}</td><td class="r num">{x["affected_count"] or "&mdash;"}</td>
+<td class="r num">{sar(x["variance"])} <i class="xs">{x["metric"]}</i></td>
+<td class="xs">{e("; ".join(f'{sar(a["variance"])} of {a["metric_label"].lower()}'
+                           for a in x["also_measured"])) or "&mdash;"}</td></tr>"""
+        for x in dash["exceptions"] if x["kind"] != "comparison-not-possible")
+
+    recon_tab = f"""{wsdash("sales", "Sales — output VAT")}
+{wsdash("purchases", "Purchases — input VAT")}
+<div class="panel"><div class="panel-head"><h2>Reconciliation observations</h2>
+<span class="sub">{len(dash["observations"])} &mdash; descriptive, computed, no explanation
+attached</span></div><ul class="obslist">{obs_rows}</ul>
+<div class="panel-note"><span class="ct">&#8721; computed</span> These are counts and sums over
+the records on file. They say what differs, never why &mdash; that is the next tab, and it is
+proposed rather than concluded.</div></div>
+<div class="panel"><div class="panel-head"><h2>Exceptions</h2></div>
+<div class="tablewrap"><table class="dtable"><thead><tr><th>Ref</th><th>Reconciliation</th>
+<th>Category</th><th class="r">Records</th><th class="r">Value</th>
+<th>Also measured as</th></tr></thead><tbody>{exc_rows}</tbody></table></div>
+<div class="panel-note"><span class="ct">counted once</span> An exception measured in VAT and
+again in the taxable amount beneath it is <b>one</b> matter read twice, so it is one row with
+the second reading beside it. Exceptions are never added together: several rest on the same
+records, and summing them produces a figure corresponding to nothing.</div></div>
 {vregs}
-{rg_panel}
+{wstabs}
+{rc_panel}"""
+
+    invtabs = "".join(
+        f'<button class="invtab{" on" if k == "data" else ""}" data-invtab="{k}">'
+        f'<span class="invtab-n num">{i + 1}</span><span class="invtab-text"><b>{lbl}</b>'
+        f'<small>{sub}</small></span></button>'
+        for i, (k, lbl, sub) in enumerate((
+            ("data", "Data &amp; E-Invoices", "what arrived, and what it is"),
+            ("recon", "Reconciliation", "what the figures show"),
+            ("ai", "AI Findings", "proposed, not concluded"),
+            ("auditor", "Auditor Findings", "what you have decided"))))
+
+    return f"""<div class="invtabs">{invtabs}</div>
+<div class="invpane" id="inv-data">{data_tab}</div>
+<div class="invpane" id="inv-recon" hidden>{recon_tab}</div>
+<div class="invpane" id="inv-ai" hidden>
+<div class="notice">Everything on this tab is <b>proposed</b>. An agent raises a hypothesis in
+exploratory language and the engine settles it deterministically over the rows &mdash; but
+nothing here is a conclusion of the audit until you confirm it on the next tab, and nothing
+unconfirmed reaches the audit report.</div>
 {summary_panel}
+{rulings}
+{rg_panel}
 {detail}
+</div>
+<div class="invpane" id="inv-auditor" hidden>
 {assess}
 {handoff("Confirm and draft audit report", "report",
          f"{confirmed} matter{'' if confirmed == 1 else 's'} confirmed · {sar(confirmed_total)}"
@@ -759,6 +973,7 @@ something is put, and cannot introduce a number. The assessment stays yours.</p>
          if confirmed else
          "The report will record that no finding was established, which is the honest reading "
          "of an investigation nobody has ruled on. Confirm a matter above to carry it through.")}
+</div>
 """
 
 
@@ -982,6 +1197,7 @@ def build() -> str:
     evidence = _get(f"/cases/{CASE}/evidence")
     recon = _get(f"/cases/{CASE}/reconciliations")
     controls = _get(f"/cases/{CASE}/regulatory-controls")
+    dash = _get(f"/cases/{CASE}/dashboard")
     asmt = _get(f"/cases/{CASE}/assessment")
     rep = _get(f"/cases/{CASE}/audit-report")
     mails = _get(f"/cases/{CASE}/emails").get("emails") or []
@@ -1031,7 +1247,7 @@ def build() -> str:
     modules = {
         "correspondence": ("Taxpayer Correspondence", "What we asked, what arrived",
                            correspondence(loop, threads)),
-        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt, regs, evidence, recon, controls)),
+        "investigation": ("Investigation", "What the evidence shows", investigation(inv, z, summary, asmt, regs, evidence, recon, controls, dash)),
         "report": ("Audit Report", "What you concluded", report(rep, inv, verdict)),
     }
     panes = "".join(
@@ -1218,6 +1434,17 @@ function show(k) {{
   window.scrollTo(0, 0);
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+
+/* The investigation's four sub-tabs. Switching them is show/hide, which needs no engine — so
+   unlike uploading or re-running, this works in the file exactly as it works in the app. */
+const invtabs = document.querySelectorAll('[data-invtab]');
+invtabs.forEach(t => t.addEventListener('click', () => {{
+  const k = t.dataset.invtab;
+  invtabs.forEach(o => o.classList.toggle('on', o === t));
+  document.querySelectorAll('.invpane').forEach(
+    p => p.hidden = p.id !== 'inv-' + k);
+  window.scrollTo(0, 0);
+}}));
 
 const navcase = document.getElementById('navcase');
 function view(name) {{
