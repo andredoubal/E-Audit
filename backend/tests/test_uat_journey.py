@@ -611,3 +611,44 @@ def test_an_auditor_finding_can_be_written_amended_and_withdrawn(api):
     assert not [f for f in _json(api.get(f"/api/cases/{CLEAN}/auditor-findings"))
                 if f["seq"] == seq]
     assert api.delete(f"/api/cases/{CLEAN}/auditor-findings/{seq}").status_code == 404
+
+
+def test_the_treatment_matrix_agrees_with_the_comparison_cards(api):
+    """One difference, one figure.
+
+    The matrix totals its variance columns and the cards state the same three pairings, so the
+    two must land on the same number. Summing the variance column instead came to SAR 499,000
+    where the pairing itself reports 630,000 — a treatment one side cannot state drops out of
+    that sum — and an auditor shown both would rightly trust neither.
+    """
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    w = d["workstreams"]["sales"]
+    total = w["matrix"]["total"]
+    vat_of = {c["code"]: next((r["variance"] for r in c["rows"] if r["metric"] == "vat"), None)
+              for c in w["cards"]}
+
+    assert total["reg_vs_einvoice"] == vat_of["S1"]
+    assert total["einvoice_vs_declared"] == vat_of["S2"]
+    assert total["declared_vs_reg"] == vat_of["S3"]
+
+
+def test_a_treatment_the_return_cannot_declare_is_empty_rather_than_zero(api):
+    """The return has no exempt box, so it declared nothing exempt — which is not the same as
+    declaring zero, and a matrix that drew it as 0 would turn a gap in the form into a figure."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    rows = {r["treatment"]: r for r in d["workstreams"]["sales"]["matrix"]["rows"]}
+    for r in rows.values():
+        for key in ("declared_vat", "register_vat", "einvoice_vat"):
+            assert r[key] is None or isinstance(r[key], (int, float))
+    assert "exempt" not in rows, "nothing on this case evidences an exempt supply"
+
+
+def test_a_card_states_only_the_metrics_both_sides_carry(api):
+    """A metric one side does not hold is left off rather than shown as zero, and a pairing
+    against the return has no invoice count — a return declares totals, not documents."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    by_code = {c["code"]: c for c in d["workstreams"]["sales"]["cards"]}
+
+    assert {r["metric"] for r in by_code["S1"]["rows"]} == {"taxable", "vat", "count"}
+    for code in ("S2", "S3"):
+        assert "count" not in {r["metric"] for r in by_code[code]["rows"]}

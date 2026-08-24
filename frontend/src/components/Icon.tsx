@@ -85,3 +85,87 @@ export function Book({ size = 17 }: { size?: number }) {
     </svg>
   );
 }
+
+/* ---- the reconciliation dashboard's source and category marks.
+   Line icons in the same 24-grid and the same weight as the rest: on a KPI card the icon says
+   *what kind of thing* the figure is — a filed return, a taxpayer listing, the Authority's
+   extract — so three cards carrying similar amounts are still told apart at a glance. */
+export function FileReturn({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="16.5" x2="13" y2="16.5" />
+    </svg>
+  );
+}
+
+export function Ledger({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <line x1="8" y1="7.5" x2="16" y2="7.5" /><line x1="8" y1="12" x2="16" y2="12" />
+      <line x1="8" y1="16.5" x2="12" y2="16.5" />
+    </svg>
+  );
+}
+
+export function Stamp({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <path d="M9 3h6l-1 6h3a2 2 0 0 1 2 2v3H5v-3a2 2 0 0 1 2-2h3z" />
+      <rect x="5" y="17" width="14" height="4" rx="1" />
+    </svg>
+  );
+}
+
+export function Hash({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <line x1="9" y1="4" x2="7.5" y2="20" /><line x1="16.5" y1="4" x2="15" y2="20" />
+      <line x1="4" y1="9.5" x2="20" y2="9.5" /><line x1="4" y1="15" x2="20" y2="15" />
+    </svg>
+  );
+}
+
+export function Minus({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <circle cx="12" cy="12" r="8.5" /><line x1="8.5" y1="12" x2="15.5" y2="12" />
+    </svg>
+  );
+}
+
+export function Tag({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <path d="M11 3H4v7l10 10 7-7z" /><circle cx="7.7" cy="6.7" r="1.2" />
+    </svg>
+  );
+}
+
+export function Shield({ size = 16 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <path d="M12 3l7 3v5.5c0 4.3-2.9 7.8-7 9.5-4.1-1.7-7-5.2-7-9.5V6z" />
+    </svg>
+  );
+}
+
+export function Warn({ size = 15 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <path d="M12 4l8.5 15h-17z" />
+      <line x1="12" y1="10" x2="12" y2="14" /><line x1="12" y1="16.6" x2="12" y2="16.7" />
+    </svg>
+  );
+}
+
+export function Info({ size = 15 }: { size?: number }) {
+  return (
+    <svg {...BASE} width={size} height={size} aria-hidden>
+      <circle cx="12" cy="12" r="8.5" />
+      <line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.8" x2="12" y2="7.9" />
+    </svg>
+  );
+}

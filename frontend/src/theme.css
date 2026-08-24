@@ -1711,3 +1711,123 @@ h4.lvl{font-size:11px;font-weight:500;color:var(--soft);text-transform:uppercase
 .ch-cover{padding:16px 18px;border-bottom:1px solid var(--divider)}
 .ch-cover:last-child{border-bottom:none}
 .ch-cover-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+
+/* ============================================================ the reconciliation dashboard
+   Dense on purpose. An auditor reading a reconciliation is comparing figures across sources,
+   and a layout that makes them scroll between the two halves of a comparison makes them hold
+   numbers in their head — which is where transcription errors come from. */
+.dashtabs{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);
+  padding:0 2px}
+.dashtab{font:inherit;font-size:12.5px;font-weight:500;color:var(--muted);background:none;
+  border:none;border-bottom:2px solid transparent;padding:9px 13px;cursor:pointer;
+  margin-bottom:-1px;transition:color .15s,border-color .15s}
+.dashtab:hover{color:var(--ink)}
+.dashtab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.dashtabs-meta{margin-left:auto;font-size:11px;color:var(--faint);padding-right:6px}
+
+.dashhead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;padding:4px 2px}
+.dashhead h2{font-size:15px;font-weight:500;margin:0}
+
+/* ---- the KPI row: an icon says what kind of thing the figure is, so three cards carrying
+   similar amounts are still told apart at a glance. */
+.kpics{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px}
+.kpic{display:flex;gap:11px;align-items:flex-start;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.kpic-ic{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:var(--surface-2);color:var(--soft);border:1px solid var(--line)}
+.kpic-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpic-t{font-size:11px;color:var(--soft);line-height:1.3}
+.kpic-n{font-size:17px;font-weight:300;letter-spacing:-.01em}
+.kpic-s{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:baseline}
+.kpic-s>b{font-weight:400;color:var(--ink)}
+.kpic-src{font-size:10px;color:var(--faint);font-family:var(--mono);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- the three pairings, side by side */
+.ccards{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}
+.ccard{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px 15px;display:flex;flex-direction:column;gap:8px}
+.ccard.on{border-color:var(--accent)}
+.ccard.blocked{background:var(--surface-2)}
+.ccard-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.ccard-head>b{font-size:12.5px;font-weight:500}
+.ccard-q{margin:0;font-size:11px;color:var(--soft);line-height:1.45}
+.ccard-blocked{margin:0;font-size:11.5px;color:var(--muted);line-height:1.5}
+.ccard-foot{display:flex;justify-content:flex-end}
+
+.ctable{width:100%;border-collapse:collapse;font-size:12px}
+.ctable th{text-align:left;font-weight:500;font-size:10.5px;color:var(--soft);
+  padding:5px 5px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ctable td{padding:6px 5px;border-bottom:1px solid var(--divider);white-space:nowrap}
+.ctable td:first-child{white-space:normal;font-size:11.5px;color:var(--muted)}
+.ctable tr:last-child td{border-bottom:none}
+.ctable th.r,.ctable td.r{text-align:right}
+
+/* Direction, not judgement: nothing at this level has established that a difference is an
+   error, so the arrow says which way it runs and the colour says how far from agreement. */
+.var{display:inline-flex;align-items:baseline;gap:3px;justify-content:flex-end;
+  white-space:nowrap;font-size:12px}
+/* Colour is the engine's status, never the sign: the same under-declaration is positive in one
+   pairing and negative in the next, and colouring by sign painted one fact two ways. */
+.var.off{color:var(--high)}
+.var.part{color:var(--med)}
+.var.ok{color:var(--low)}
+.var.zero{color:var(--faint)}
+.var>i{font-style:normal;font-size:9px}
+.var>em{font-style:normal;font-size:10px;opacity:.7}
+
+.cstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
+.cbox{display:flex;flex-direction:column;gap:1px;padding:7px 8px;border-radius:8px;
+  background:var(--surface-2);border:1px solid var(--line)}
+.cbox>b{font-size:14px;font-weight:400}
+.cbox>span{font-size:9.5px;color:var(--soft);line-height:1.25}
+.cbox.good{background:var(--low-bg);border-color:transparent}
+.cbox.good>b{color:var(--low)}
+
+.drill{background:var(--surface);border:1px solid var(--accent);border-radius:12px;
+  padding:16px 18px}
+.drill-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  margin-bottom:10px}
+.drill-head>b{font-size:13px;font-weight:500}
+
+/* ---- the matrix and the observation rail, side by side */
+.dashgrid{display:grid;grid-template-columns:minmax(0,2.6fr) minmax(250px,.95fr);gap:12px;
+  align-items:start}
+@media (max-width:1150px){.dashgrid{grid-template-columns:1fr}}
+.mtable{font-size:11px}
+.mtable td{white-space:nowrap;padding:7px 7px}
+.mtable th{padding:6px 7px}
+.mtable th.grp{text-align:center;font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--soft);border-bottom:1px solid var(--line);
+  border-left:1px solid var(--line);padding-bottom:5px}
+.mtable th.grp.last{border-left:1px solid var(--line-strong)}
+.mtable .grouprow th{padding-top:9px}
+.mtable tr.totalrow td{border-top:1px solid var(--line-strong);font-weight:500;
+  background:var(--surface-2)}
+
+.obsrail{list-style:none;margin:0;padding:4px 0}
+.obsrail li{display:flex;gap:9px;align-items:flex-start;padding:9px 18px;font-size:11.5px;
+  line-height:1.5;border-bottom:1px solid var(--divider);color:var(--muted)}
+.obsrail li:last-child{border-bottom:none}
+.obsrail li.warn{color:var(--ink)}
+.obsrail-ic{flex:none;color:var(--faint);margin-top:1px}
+.obsrail li.warn .obsrail-ic{color:var(--med)}
+
+/* ---- the overview: the two workstreams against each other */
+.ovgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.ovcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.ovcard-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ovcard-head>b{font-size:14px;font-weight:500}
+.ovstats{display:flex;gap:26px;flex-wrap:wrap}
+.ovstat{display:flex;flex-direction:column;gap:1px}
+.ovstat>b{font-size:19px;font-weight:300}
+.ovstat>b>i{font-style:normal;font-size:12px;color:var(--faint)}
+.ovstat>span{font-size:11px;color:var(--soft)}
+.ovstat.hot>b{color:var(--high)}
+.ovlargest{display:flex;flex-direction:column;gap:2px;padding:11px 13px;border-radius:10px;
+  background:var(--low-bg)}
+.ovlargest>b{font-size:20px;font-weight:300;color:var(--low)}
+.ovlargest>span{font-size:11px;color:var(--muted)}
+.ovnote{margin:0;font-size:11px;color:var(--muted);line-height:1.5}

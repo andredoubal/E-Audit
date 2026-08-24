@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..canonical import build as canon
 from ..canonical.model import (CREDIT_NOTE, DEBIT_NOTE, Dataset, EXEMPT, PURCHASE, SALE,
-                               TREATMENT_LABEL, ZERO_RATED)
+                               STANDARD, TREATMENT_LABEL, TREATMENTS, ZERO_RATED)
 from ..evidence import profile as prof
 from ..evidence import service as evidence_service
 from ..models import AuditCase, VatReturn
@@ -260,6 +260,8 @@ def build_for(db: Session, case_id: str) -> dict:
     profiles = evidence_service.profiles(db, case_id)
     rows_by_file = evidence_service.rows_by_file(db, case_id)
     sources = _sources(db, case, profiles, rows_by_file)
+    boxes, _on_file = _return_boxes(db, case)
+    bases = _return_bases(db, case)
 
     comparisons: list[P.Comparison] = []
     for pairing in P.PAIRINGS:
@@ -293,6 +295,8 @@ def build_for(db: Session, case_id: str) -> dict:
                 "summary": _summary([c for c in comparisons
                                      if c.pairing.workstream == ws],
                                     [e for e in exceptions if e.workstream == ws]),
+                "cards": _cards([c for c in comparisons if c.pairing.workstream == ws]),
+                "matrix": _matrix(sources[ws], boxes, bases),
             }
             for ws in ("sales", "purchases")
         },
@@ -328,4 +332,174 @@ def _summary(comparisons: list[P.Comparison], exceptions: list[obs.Exception_]) 
                                "so they are not added together. Each is stated on its own."
                                if len(material) > 1 else ""),
         "needs": sorted({n for c in comparisons for n in c.needs}),
+    }
+
+
+# ------------------------------------------------------------------ the comparison cards
+#: The metrics a card states, in the order an auditor reads them.
+_CARD_METRICS = (("taxable", "Taxable amount"), ("vat", "VAT"))
+
+#: Which match statuses are worth their own box on a card's stat strip, and what to call them.
+_STRIP = (
+    ("matched", "Matched invoices", (P.EXACT,)),
+    ("unmatched_a", "Unmatched (first source)", (P.A_ONLY,)),
+    ("unmatched_b", "Unmatched (second source)", (P.B_ONLY,)),
+    ("value", "Value or VAT differs", (P.VALUE_MISMATCH, P.VAT_MISMATCH)),
+    ("timing", "Different period", (P.PERIOD_MISMATCH, P.DATE_MISMATCH)),
+    ("treatment", "Treatment differs", (P.TREATMENT_MISMATCH,)),
+    ("duplicate", "Duplicates", (P.DUPLICATE,)),
+    ("no_id", "No identifier", (P.NO_IDENTIFIER,)),
+)
+
+
+def _cards(comparisons: list[P.Comparison]) -> list[dict]:
+    """One card per pairing, stating every metric it could be measured in.
+
+    The comparisons are computed per metric — VAT and taxable amount are separate runs, because
+    a difference in base with matching VAT is a rate question and a different finding. An
+    auditor reads them together, so they are grouped here rather than in the UI: which metrics a
+    pairing carries is a property of the evidence, and the screen should not have to work it out.
+
+    A metric row is present only where both sides carry it. An absent row is left out rather
+    than shown as zero — the distinction the canonical layer exists to keep.
+    """
+    by_code: dict[str, list[P.Comparison]] = {}
+    for c in comparisons:
+        by_code.setdefault(c.pairing.code, []).append(c)
+
+    out: list[dict] = []
+    for code, group in by_code.items():
+        first = group[0]
+        rows: list[dict] = []
+        for metric, label in _CARD_METRICS:
+            c = next((x for x in group if x.metric == metric), None)
+            if c is None or c.a.total is None or c.b.total is None:
+                continue
+            rows.append({
+                "metric": metric, "label": label,
+                "a": c.a.total, "b": c.b.total,
+                "variance": c.variance, "variance_pct": c.variance_pct,
+                "status": c.status, "status_label": S.LABEL[c.status],
+            })
+
+        # The record count is a comparison in its own right: two sources can agree on value
+        # while holding a different number of documents, which is an offsetting pair rather
+        # than agreement. Stated only where both sides actually count records — the VAT return
+        # declares totals, not documents, so a pairing against it has no count row.
+        if first.a.count is not None and first.b.count is not None:
+            rows.append({
+                "metric": "count", "label": "Invoice count",
+                "a": first.a.count, "b": first.b.count,
+                "variance": first.a.count - first.b.count,
+                "variance_pct": (round((first.a.count - first.b.count) / first.b.count, 4)
+                                 if first.b.count else None),
+                "status": "", "status_label": "",
+            })
+
+        counts = first.match_counts or {}
+        strip = [{"key": key, "label": label,
+                  "count": sum(counts.get(st, 0) for st in statuses)}
+                 for key, label, statuses in _STRIP
+                 if sum(counts.get(st, 0) for st in statuses)]
+
+        out.append({
+            "code": code, "title": first.pairing.title, "question": first.pairing.question,
+            "workstream": first.pairing.workstream,
+            "a_label": first.a.label, "b_label": first.b.label,
+            "a_origin": first.a.origin, "b_origin": first.b.origin,
+            "runnable": first.runnable, "blocked_by": first.blocked_by,
+            "status": first.status, "status_label": S.LABEL[first.status],
+            "rows": rows, "strip": strip,
+        })
+    return out
+
+
+# ------------------------------------------------------------------ the treatment matrix
+#: Which return box declares each VAT treatment. `exports` is folded into zero-rated because
+#: that is where the record side puts it — `canonical/treatment.py` reads an export indicator
+#: as zero-rated — and a row the declaration fills but no record source can ever fill would
+#: read as a permanent unexplained difference rather than as the mapping it is.
+_BOX_TREATMENT = {
+    "sales": {STANDARD: (BOX_SALES,), ZERO_RATED: (BOX_ZERO_RATED_SALES, "exports")},
+    "purchases": {STANDARD: (BOX_PURCHASE,)},
+}
+
+
+def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float]) -> dict:
+    """Every VAT treatment against every source, with the three variances beside it.
+
+    This is the level-2 comparison as one table rather than three. Totals that agree while a
+    single treatment inside them does not is the case this catches, and reading it needs the
+    treatments as rows with all three sources side by side — money moved from standard-rated to
+    zero-rated nets to nothing in every total on the screen above.
+
+    Declared figures exist only where the return has a box for that treatment. Where it has
+    none the cell is null, which is not zero: the taxpayer did not declare nothing exempt, the
+    return simply has no exempt box to declare it in.
+    """
+    reg, ein = s.register, s.einvoices
+    reg_t = reg.by_treatment("vat") if reg else {}
+    reg_b = reg.by_treatment("taxable") if reg else {}
+    ein_t = ein.by_treatment("vat") if ein else {}
+    ein_b = ein.by_treatment("taxable") if ein else {}
+
+    def declared(treatment: str) -> tuple[float | None, float | None]:
+        codes = _BOX_TREATMENT.get(s.workstream, {}).get(treatment)
+        if not codes or not s.return_on_file:
+            return None, None
+        present = [c for c in codes if c in boxes or c in bases]
+        if not present:
+            return None, None
+        return (round(sum(bases.get(c, 0.0) for c in present), 2),
+                round(sum(boxes.get(c, 0.0) for c in present), 2))
+
+    def diff(a: float | None, b: float | None) -> float | None:
+        return None if a is None or b is None else round(a - b, 2)
+
+    rows: list[dict] = []
+    seen = [t for t in TREATMENTS
+            if t in reg_t or t in ein_t or declared(t) != (None, None)]
+    for t in seen:
+        d_base, d_vat = declared(t)
+        r_vat = (reg_t.get(t) or {}).get("total")
+        r_base = (reg_b.get(t) or {}).get("total")
+        e_vat = (ein_t.get(t) or {}).get("total")
+        e_base = (ein_b.get(t) or {}).get("total")
+        rows.append({
+            "treatment": t, "label": TREATMENT_LABEL[t],
+            "declared_base": d_base, "declared_vat": d_vat,
+            "register_base": r_base, "register_vat": r_vat,
+            "einvoice_base": e_base, "einvoice_vat": e_vat,
+            "register_count": (reg_t.get(t) or {}).get("count"),
+            "einvoice_count": (ein_t.get(t) or {}).get("count"),
+            # The same three pairings the cards above carry, per treatment.
+            "reg_vs_einvoice": diff(r_vat, e_vat),
+            "einvoice_vs_declared": diff(e_vat, d_vat),
+            "declared_vs_reg": diff(d_vat, r_vat),
+        })
+
+    def col(key: str) -> float | None:
+        vals = [r[key] for r in rows if r[key] is not None]
+        return round(sum(vals), 2) if vals else None
+
+    total = {"treatment": "total", "label": "Total"}
+    for key in ("declared_base", "declared_vat", "register_base", "register_vat",
+                "einvoice_base", "einvoice_vat"):
+        total[key] = col(key)
+    # The total's variances come from the totals, never from summing the column above them. A
+    # treatment one side cannot state drops out of that column, so the sum came to SAR 499,000
+    # where the pairing itself reports 630,000 — two figures for one difference, and the auditor
+    # would rightly trust neither. Where a source cannot be totalled at all there is no
+    # variance to state, and the cell stays empty.
+    total["reg_vs_einvoice"] = diff(total["register_vat"], total["einvoice_vat"])
+    total["einvoice_vs_declared"] = diff(total["einvoice_vat"], total["declared_vat"])
+    total["declared_vs_reg"] = diff(total["declared_vat"], total["register_vat"])
+    total["register_count"] = reg.count if reg else None
+    total["einvoice_count"] = ein.count if ein else None
+
+    return {
+        "rows": rows, "total": total,
+        "note": ("Exports are declared in their own box and counted here as zero-rated, which "
+                 "is where the record sources classify them."
+                 if s.workstream == "sales" and "exports" in bases else ""),
     }

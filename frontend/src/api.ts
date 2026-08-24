@@ -1705,7 +1705,52 @@ export interface DatasetSummary {
   notes: string[];
 }
 
+/** One pairing as a card: every metric it could be measured in, and what the transaction
+ *  level came to. Grouped in Python, because which metrics a pairing carries is a property of
+ *  the evidence rather than something the screen should work out. */
+export interface CompareCard {
+  code: string;
+  title: string;
+  question: string;
+  workstream: string;
+  a_label: string;
+  b_label: string;
+  a_origin: string;
+  b_origin: string;
+  runnable: boolean;
+  blocked_by: string[];
+  status: string;
+  status_label: string;
+  rows: {
+    metric: string; label: string;
+    a: number; b: number;
+    variance: number | null; variance_pct: number | null;
+    status: string; status_label: string;
+  }[];
+  strip: { key: string; label: string; count: number }[];
+}
+
+export interface MatrixRow {
+  treatment: string;
+  label: string;
+  declared_base: number | null;
+  declared_vat: number | null;
+  register_base: number | null;
+  register_vat: number | null;
+  einvoice_base: number | null;
+  einvoice_vat: number | null;
+  register_count: number | null;
+  einvoice_count: number | null;
+  reg_vs_einvoice: number | null;
+  einvoice_vs_declared: number | null;
+  declared_vs_reg: number | null;
+}
+
 export interface WorkstreamDash {
+  cards: CompareCard[];
+  /** every treatment against every source; a null cell is "the return has no box for this",
+   *  which is not a declaration of zero */
+  matrix: { rows: MatrixRow[]; total: MatrixRow; note: string };
   kpis: Kpi[];
   unavailable: { what: string; why: string }[];
   sources: {
