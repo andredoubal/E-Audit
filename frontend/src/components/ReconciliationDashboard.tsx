@@ -264,7 +264,16 @@ function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
         <td className="r">{cell(r.einvoice_vat)}</td>
         <td className="r"><Var v={r.reg_vs_einvoice} /></td>
         <td className="r"><Var v={r.einvoice_vs_declared} /></td>
-        <td className="r"><Var v={r.declared_vs_reg} /></td>
+        <td className="r"
+            title={r.variance_metric === "taxable"
+              ? "compared on the taxable amount: a customs declaration states a value in SAR "
+                + "and never the tax on it"
+              : undefined}>
+          <Var v={r.declared_vs_reg} />
+          {r.variance_metric === "taxable" && r.declared_vs_reg !== null && (
+            <i className="vm">base</i>
+          )}
+        </td>
       </tr>
     );
   };
@@ -285,9 +294,9 @@ function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
             <tr className="grouprow">
               <th />
               <th colSpan={3} className="grp">VAT return &mdash; declared</th>
-              <th colSpan={2} className="grp">Register &mdash; the taxpayer&rsquo;s</th>
+              <th colSpan={2} className="grp">Primary record</th>
               <th colSpan={2} className="grp">E-invoices &mdash; the Authority&rsquo;s</th>
-              <th colSpan={3} className="grp last">Variance, in VAT</th>
+              <th colSpan={3} className="grp last">Variance</th>
             </tr>
             <tr>
               <th>Box</th>
@@ -309,6 +318,9 @@ function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
       <div className="panel-note">
         <span className="ct">empty &ne; zero</span> A blank cell means the box was not declared,
         or that side holds nothing for it &mdash; neither is a declaration of zero.
+        &ldquo;Primary record&rdquo; is the register for most boxes and the <b>customs
+        declarations</b> for imports and exports; each row says which. Those two populations are
+        not added together, so the column total states the register alone.
         {!!m.declared_only_count && ` ${m.note}`}
         {!!m.unallocated_count && (
           <> <b>Records the return has no box for</b> carries {m.unallocated_count} record(s)

@@ -82,12 +82,36 @@ def scenario_alfaisaliah(db: Session) -> None:
         total_vat_due=2_000_000, net_due_vat=1_850_000,
     )
     ret.boxes += [
-        _box("standard_rate_sales", "Standard-rated sales", "sale",
+        # The return as the Authority actually issues it. Several of these boxes turn on facts
+        # no register carries — who the customer was, whether a supply was exempt rather than
+        # zero-rated, whether an import was serviced under reverse charge — and the dashboard
+        # marks them declared-only rather than manufacturing a variance against nothing.
+        _box("standard_rate_sales", "Standard-rated sales (15%)", "sale",
              13_333_333.33, 2_000_000, rate=15, category="S"),
-        _box("zero_rated_sales", "Zero-rated domestic sales", "sale", 900_000, 0, rate=0, category="Z"),
+        _box("etimad_sales", "Sales through the Etimad platform (15%)", "sale",
+             1_200_000, 180_000, rate=15, category="S"),
+        _box("standard_rate_sales_5", "Standard-rated sales (5%)", "sale",
+             400_000, 20_000, rate=5, category="S"),
+        _box("citizen_sales", "Sales to citizens", "sale",
+             300_000, 45_000, rate=15, category="S"),
+        _box("zero_rated_sales", "Zero-rated domestic sales", "sale", 900_000, 0,
+             rate=0, category="Z"),
+        # Declared exports exceed what the customs declarations evidence by SAR 120,000.
         _box("exports", "Exports", "sale", 1_500_000, 0, rate=0, category="Z"),
-        _box("standard_rate_purchase", "Standard-rated purchases", "purchase",
+        _box("exempt_sales", "Exempt sales", "sale", 250_000, 0, category="E"),
+
+        _box("standard_rate_purchase", "Standard-rated purchases (15%)", "purchase",
              1_000_000, 150_000, rate=15, category="S"),
+        _box("standard_rate_purchase_5", "Standard-rated purchases (5%)", "purchase",
+             200_000, 10_000, rate=5, category="S"),
+        # The customs declarations total SAR 2,240,000 against SAR 2,000,000 declared.
+        _box("import_customs_15", "Imports — VAT paid at customs (15%)", "purchase",
+             2_000_000, 300_000, rate=15, category="S", adjustment=-40_000),
+        _box("import_reverse_charge_15", "Imports under reverse charge (15%)", "purchase",
+             600_000, 90_000, rate=15, category="S"),
+        _box("zero_rated_purchase", "Zero-rated purchases", "purchase", 150_000, 0,
+             rate=0, category="Z"),
+        _box("exempt_purchase", "Exempt purchases", "purchase", 80_000, 0, category="E"),
     ]
     db.add(ret)
 

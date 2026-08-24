@@ -42,6 +42,10 @@ COUNTERPARTY_NAME = "counterparty_name"
 COUNTERPARTY_TAX_ID = "counterparty_tax_id"
 ISSUE_DATE = "issue_date"
 SUPPLY_DATE = "supply_date"
+#: A Hijri date. Recognised so it is not mistaken for the Gregorian one, and deliberately
+#: consumed by nothing: a customs export declaration carries both, and reading the period from
+#: the Hijri column reported a file covering "1446-01-15 → 1446-03-19".
+HIJRI_DATE = "hijri_date"
 PAYMENT_DATE = "payment_date"
 POSTING_DATE = "posting_date"
 NET_AMOUNT = "net_amount"
@@ -106,6 +110,41 @@ _BY_CANONICAL: dict[str, tuple[str, str]] = {
     "status": (STATUS, ""),
 }
 
+#: Arabic headers, as the Authority's own templates write them.
+#:
+#: These are matched as *fragments* like everything else, which matters for the trial balance:
+#: its columns are composed from a merged group label and the sub-label beneath it, so a debit
+#: column arrives as "الرصيد الافتتاحي مدين" rather than a bare "مدين", and three different
+#: debit columns have to stay distinguishable from one another while all reading as debits.
+_ARABIC: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    # Dates are decided before the declaration reference, and Hijri before either. Both orders
+    # are load-bearing on a customs export declaration, which carries "التاريخ-هجري" and
+    # "تاريخ البيان - ميلادي" side by side:
+    #   · Hijri first, or the general date cue claims it and the file reports a period of
+    #     "1446-01-15 → 1446-03-19";
+    #   · dates before "بيان", or the Gregorian column — which contains البيان — is read as a
+    #     declaration reference and the file ends up with no date at all.
+    (HIJRI_DATE, ("هجري",), ""),
+    (ISSUE_DATE, ("ميلادي", "تاريخ_البيان", "التاريخ", "تاريخ"), ""),
+    # "بيان" bare, so it catches البيان and للبيان alike: Arabic attaches its article and
+    # prepositions to the word, and "الرقم المبدئي للبيان" would otherwise fall through to the
+    # account-code cue on its leading الرقم and be read as a ledger account.
+    (CUSTOMS_DECLARATION, ("بيان",), ""),
+    (COUNTERPARTY_NAME, ("اسم_المستورد", "المصدر", "المورد", "العميل"), ""),
+    (DESCRIPTION, ("وصف_الصنف", "وصف", "البيان_الوصفي", "الاسم"), ""),
+    (CURRENCY, ("عملة",), ""),
+    (NET_AMOUNT, ("القيمة_بالريال", "القيمة"), ""),
+    # Balance before debit/credit, and the order is the whole difference between a trial
+    # balance and a general ledger. "الرصيد الافتتاحي مدين" is an opening *balance* stated on
+    # the debit side; read as a plain debit column, the balance signal never fires and the
+    # profiler calls a trial balance a ledger — which is not a naming quibble, because the two
+    # answer different questions and only one of them reconciles against a register.
+    (BALANCE, ("الرصيد",), ""),
+    (DEBIT, ("مدين",), ""),
+    (CREDIT, ("دائن",), ""),
+    (ACCOUNT_CODE, ("رقم_الحساب", "الرقم"), ""),
+)
+
 # Fragments matched against a header that the alias table did not recognise. Ordered: the first
 # match wins, so the more specific patterns come first.
 _BY_FRAGMENT: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -148,7 +187,7 @@ _BY_FRAGMENT: tuple[tuple[str, tuple[str, ...], str], ...] = (
     (DESCRIPTION, ("description", "narration", "particulars", "details", "memo"), ""),
     (TERMINAL, ("terminal", "till", "register_id", "device"), ""),
     (STATUS, ("status", "state", "clearance"), ""),
-)
+) + _ARABIC
 
 
 # --------------------------------------------------------- shape evidence

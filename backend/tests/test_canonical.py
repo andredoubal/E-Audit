@@ -237,3 +237,69 @@ def test_a_header_naming_vat_only_as_the_tax_itself_still_reads_as_vat():
                  [["INV-1", "2025-01-14", "Buyer A", 100_000, 15_000]])
     assert ds.total("vat") == 15_000.0
     assert ds.total("taxable") == 100_000.0
+
+
+# ------------------------------------------------------------------ two-row headers
+def test_a_merged_two_row_header_keeps_every_column():
+    """The trial balance the Authority issues, and the reason this exists.
+
+    Its header is two rows — a group label spanning a merged pair of columns, and the pair's own
+    labels beneath it. Read as one row, a merged group contributes its label to the first of its
+    two columns and nothing to the second, so every `دائن` column was dropped from the file: the
+    credit side of every account silently went missing, and the sub-header arrived as data.
+    """
+    from app.requests import extract as ex
+
+    grid = [
+        ["ميزان المراجعة", None, None, None, None, None, None, None],
+        ["الرقم", "الاسم", "الرصيد الافتتاحي", None, "الحركة", None, "الرصيد النهائي", None],
+        [None, None, "مدين", "دائن", "مدين", "دائن", "مدين", "دائن"],
+        ["1010", "النقد", 1_450_000, 0, 3_200_000, 2_980_000, 1_670_000, 0],
+    ]
+    out = ex._from_grid(grid)
+
+    assert len(out["columns"]) == 8, "every column survives, credit side included"
+    assert out["columns"][2] != out["columns"][3], "the two sides of a group stay distinct"
+    assert out["columns"][3] != out["columns"][5], "and so do the same side of two groups"
+    assert len(out["rows"]) == 1, "the sub-header is a header, not a row of data"
+    assert out["rows"][0][0] == "1010"
+
+
+def test_a_first_data_row_is_not_mistaken_for_a_second_header():
+    """The guard the other way. A row of values under a single-row header is data."""
+    from app.requests import extract as ex
+
+    grid = [
+        ["invoice_number", "invoice_date", "amount_excl_vat", "vat_charged"],
+        ["INV-1", "2025-01-14", 100_000, 15_000],
+        ["INV-2", "2025-02-03", 200_000, 30_000],
+    ]
+    out = ex._from_grid(grid)
+    assert len(out["columns"]) == 4
+    assert len(out["rows"]) == 2, "both data rows survive"
+
+
+def test_a_customs_declaration_takes_its_period_from_the_gregorian_date_not_the_hijri():
+    """An export declaration carries both calendars side by side, and two cue orderings in
+    `roles.py` are load-bearing because of it.
+
+    Read Hijri-first-come-first-served and the file reports covering "1446-01-15 → 1446-03-19".
+    Let the customs-declaration cue see the Gregorian column before the date cue does — it
+    contains البيان — and the file ends up with no date at all, which silently removes it from
+    every period check downstream.
+    """
+    from app.evidence import profile as prof
+
+    cols = ["اسم_المستورد_المصدر", "رقم_البيان", "التاريخ_هجري", "تاريخ_البيان_ميلادي",
+            "القيمة_بالريال"]
+    rows = [["Acme", f"EXP-{n}", f"1446-0{n}-15", f"2025-0{n}-1{n}", 100_000 * n]
+            for n in (1, 2, 3)]
+    p = prof.build({"filename": "customs_exports.xlsx",
+                    "content": {"format": "xlsx", "columns": cols, "rows": rows}}).to_dict()
+
+    assert p["dataset_type"] == "customs-records"
+    assert p["date_min"] == "2025-01-11" and p["date_max"] == "2025-03-13"
+    roles = {r["column"]: r["role"] for r in p["roles"]}
+    assert roles["التاريخ_هجري"] == "hijri_date", "recognised, and used for nothing"
+    assert roles["تاريخ_البيان_ميلادي"] == "issue_date"
+    assert roles["رقم_البيان"] == "customs_declaration"

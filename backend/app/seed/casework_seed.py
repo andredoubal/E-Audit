@@ -67,6 +67,18 @@ def build(db: Session) -> dict:
     zatca_service.record(db, case, filename="ZATCA_Invoices_Q1_2025.xlsx",
                          data=demo_files.zatca_invoices_xlsx(), source="seed")
 
+    # None of these answers a request item. The customs declarations were obtained by the
+    # auditor, and the trial balance is not the return-to-ledger reconciliation that was asked
+    # for — it is the accounts themselves. Filed against an item they do not answer, the
+    # checker correctly reports them as the wrong document; filed with no item, they are what
+    # they are, and the reconciliation the auditor actually asked for stays outstanding.
+    for filename, data in (("Customs_Imports_Q1_2025.xlsx", demo_files.customs_imports_xlsx()),
+                           ("Customs_Exports_Q1_2025.xlsx", demo_files.customs_exports_xlsx()),
+                           ("Trial_Balance_Q1_2025.xlsx", demo_files.trial_balance_xlsx())):
+        service.record_document(
+            db, case=case, req=req, filename=filename, data=data,
+            file_format="xlsx", received=issued + timedelta(days=34))
+
     return {"seeded": True, "case_id": HERO, "round": req.seq,
             "items": len(req.items), "gaps": len(report.gaps),
             "blocking": len(report.blocking)}

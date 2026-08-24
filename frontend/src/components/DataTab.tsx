@@ -40,7 +40,8 @@ function DatasetTable({ ev, dash, period }: {
   const usedAs = new Map<string, string>();
   if (dash) {
     for (const [ws, w] of Object.entries(dash.workstreams)) {
-      for (const s of [w.sources.register, w.sources.einvoices]) {
+      for (const s of [w.sources.register, w.sources.einvoices,
+                       w.sources.customs_import, w.sources.customs_export]) {
         if (s) usedAs.set(s.source_file, ws);
       }
     }

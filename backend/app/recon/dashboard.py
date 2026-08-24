@@ -93,6 +93,10 @@ class Sources:
     #: Extracts whose side could not be established. Reported rather than pressed into
     #: service on whichever workstream happened to ask first.
     unusable_einvoices: list[dict] = field(default_factory=list)
+    #: Customs declarations, split by what they declare. These carry a value in SAR and no tax
+    #: at all, so they can only ever evidence a box's *base*.
+    customs_import: Dataset | None = None
+    customs_export: Dataset | None = None
 
     def side(self, which: str, metric: str) -> P.Side:
         if which == P.RETURN:
@@ -120,14 +124,22 @@ def _sources(db: Session, case: AuditCase, profiles: list[dict],
 
     for workstream, direction in (("sales", SALE), ("purchases", PURCHASE)):
         s = Sources(workstream=workstream, return_on_file=on_file)
-        box = _BOX[(workstream, "vat")]
-        s.declared_vat = boxes.get(box) if on_file else None
-        s.declared_base = bases.get(box) if on_file else None
-        # Zero-rated sales are declared in their own box, so the declared taxable base for the
-        # sales workstream is both boxes together — otherwise a register carrying zero-rated
-        # lines is compared against a standard-rated-only declaration.
-        if workstream == "sales" and on_file and s.declared_base is not None:
-            s.declared_base = round(s.declared_base + bases.get(BOX_ZERO_RATED_SALES, 0.0), 2)
+        # What the taxpayer declared on this side of the return: *every* box on it, not the
+        # standard-rated one alone.
+        #
+        # The pairings compare a whole population against this figure — the register and the
+        # e-invoice extract hold all of the taxpayer's sales, zero-rated and 5%-rated supplies
+        # among them. Set against the standard-rated box by itself, every riyal declared in
+        # another box came back as undeclared: on the demo case S2 reported SAR 630,000 against
+        # the return when SAR 245,000 of it was declared in the Etimad, 5% and citizen boxes,
+        # and the box-by-box matrix directly below said so. Four boxes hid this; fifteen make
+        # it obvious.
+        codes = [b.code for b in vb.for_workstream(workstream)]
+        if on_file:
+            declared = [boxes[c] for c in codes if c in boxes]
+            based = [bases[c] for c in codes if c in bases]
+            s.declared_vat = round(sum(declared), 2) if declared else None
+            s.declared_base = round(sum(based), 2) if based else None
 
         reg = _pick(profiles, _REGISTER_TYPES[direction])
         if reg:
@@ -149,6 +161,20 @@ def _sources(db: Session, case: AuditCase, profiles: list[dict],
             s.einvoices = canon.build(ein, rows_by_file.get(ein["filename"], []),
                                       direction=direction)
             break
+        for cd in profiles:
+            if cd.get("dataset_type") != prof.CUSTOMS_RECORDS:
+                continue
+            ds = canon.build(cd, rows_by_file.get(cd["filename"], []), direction=direction)
+            # Import or export is read from the sheet the Authority named, not guessed: an
+            # export declaration counted as an import would evidence the wrong box entirely.
+            name = cd["filename"].lower()
+            if "export" in name or "صادر" in cd["filename"]:
+                if workstream == "sales":
+                    s.customs_export = ds
+            elif "import" in name or "وارد" in cd["filename"]:
+                if workstream == "purchases":
+                    s.customs_import = ds
+
         out[workstream] = s
     return out
 
@@ -305,6 +331,10 @@ def build_for(db: Session, case_id: str) -> dict:
                                  if sources[ws].register else None),
                     "einvoices": (sources[ws].einvoices.to_dict()
                                   if sources[ws].einvoices else None),
+                    "customs_import": (sources[ws].customs_import.to_dict()
+                                       if sources[ws].customs_import else None),
+                    "customs_export": (sources[ws].customs_export.to_dict()
+                                       if sources[ws].customs_export else None),
                 },
                 "summary": _summary([c for c in comparisons
                                      if c.pairing.workstream == ws],
@@ -483,6 +513,15 @@ def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float],
         r_base = r_vat = r_count = e_base = e_vat = e_count = None
         if box.evidenced_by == vb.RECORDS:
             r_base, r_vat, r_count, e_base, e_vat, e_count = records_for(box)
+        elif box.evidenced_by in (vb.CUSTOMS_IMPORT, vb.CUSTOMS_EXPORT):
+            # A declaration states a value in SAR and no tax. So the base is compared and the
+            # VAT column is left empty rather than filled with a figure customs never gave —
+            # and there is only one customs population, so it evidences the 15% box and the
+            # rate-split boxes beneath it are declared without a counterpart.
+            cd = (s.customs_import if box.evidenced_by == vb.CUSTOMS_IMPORT
+                  else s.customs_export)
+            if cd is not None and box.rate in (15, 0, None):
+                r_base, r_count = cd.total("taxable"), cd.count
 
         rows.append({
             "code": box.code, "label": box.label, "label_ar": box.label_ar,
@@ -492,9 +531,17 @@ def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float],
             "declared_base": d_base, "declared_vat": d_vat, "declared_adjustment": d_adj,
             "register_base": r_base, "register_vat": r_vat, "register_count": r_count,
             "einvoice_base": e_base, "einvoice_vat": e_vat, "einvoice_count": e_count,
+            # Customs states a value and no tax, so those rows are compared on the base or not
+            # at all. Left on VAT they read as three empty cells — on the demo case that hid
+            # SAR 240,000 of import declarations the return does not carry, which is the whole
+            # reason the box is evidenced. The row says which metric its variance is in.
+            "variance_metric": "taxable" if box.evidenced_by in (vb.CUSTOMS_IMPORT,
+                                                                 vb.CUSTOMS_EXPORT) else "vat",
             "reg_vs_einvoice": diff(r_vat, e_vat),
             "einvoice_vs_declared": diff(e_vat, d_vat),
-            "declared_vs_reg": diff(d_vat, r_vat),
+            "declared_vs_reg": (diff(d_base, r_base)
+                                if box.evidenced_by in (vb.CUSTOMS_IMPORT, vb.CUSTOMS_EXPORT)
+                                else diff(d_vat, r_vat)),
         })
 
     # Anything the boxes cannot hold. A record charged at a rate the return has no box for —
@@ -532,16 +579,29 @@ def _matrix(s: Sources, boxes: dict[str, float], bases: dict[str, float],
             "einvoice_vs_declared": None, "declared_vs_reg": None,
         })
 
-    def col(key: str) -> float | None:
-        vals = [r[key] for r in rows if r[key] is not None]
-        return round(sum(vals), 2) if vals else None
+    def col(key: str, *, records_only: bool = False) -> float | None:
+        """A column total. `records_only` keeps customs out of the register column's sum.
+
+        A customs declaration and the taxpayer's own register are two different populations,
+        and adding them gives a figure belonging to neither — the sales register totalled
+        SAR 17,453,333 and the export declarations SAR 1,380,000, and the column footed to
+        18,833,333, which is nothing. The customs rows keep their own figures on the row, and
+        the total states only the register.
+        """
+        picked = [r for r in rows
+                  if r[key] is not None
+                  and not (records_only and r["evidenced_by"] in (vb.CUSTOMS_IMPORT,
+                                                                  vb.CUSTOMS_EXPORT))]
+        return round(sum(r[key] for r in picked), 2) if picked else None
 
     total = {"code": "total", "label": "Total", "label_ar": "الإجمالي",
              "rate": None, "category": "", "evidenced_by": vb.COMPUTED,
-             "declared_only": False, "why_unevidenced": ""}
+             "declared_only": False, "why_unevidenced": "", "variance_metric": "vat"}
     for key in ("declared_base", "declared_vat", "declared_adjustment",
-                "register_base", "register_vat", "einvoice_base", "einvoice_vat"):
+                "einvoice_base", "einvoice_vat"):
         total[key] = col(key)
+    for key in ("register_base", "register_vat"):
+        total[key] = col(key, records_only=True)
     total["register_count"] = reg.count if reg else None
     total["einvoice_count"] = ein.count if ein else None
     # From the totals, never summed down the column. A box one side cannot state drops out of

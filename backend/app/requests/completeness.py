@@ -384,7 +384,11 @@ def check(*, case_id: str, round_: int, items: list, documents: list,
 
     for doc in by_item.get(None, []):
         report.gaps.append(Gap(
+            # This gap belongs to no request item — that is the whole of what it says. It still
+            # needs a label, because every other gap has one and a blank cell in the middle of
+            # the column reads as a defect in the checker rather than a fact about the file.
             kind="unrequested-document", severity=ADVISORY, document_id=doc.id,
+            item_label="Not requested",
             detail=f"'{doc.filename}' was supplied but does not answer any item on the request. "
                    f"It may be a misfiled response, or evidence worth reading anyway."))
 

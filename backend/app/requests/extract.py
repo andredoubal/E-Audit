@@ -136,6 +136,56 @@ def _is_blank(v: Any) -> bool:
 
 # --------------------------------------------------------------------------- table assembly
 
+def _is_subheader(top: list[Any], sub: list[Any]) -> bool:
+    """Whether `sub` is the second row of a two-row header rather than the first row of data.
+
+    A trial balance is the case this exists for. Its header is *two* rows — a group label
+    spanning a merged pair of columns, and the pair's own labels beneath it:
+
+        الرقم | الاسم |  |  | الرصيد الافتتاحي |      | الحركة |      | الرصيد النهائي |
+              |       |  |  | مدين             | دائن | مدين   | دائن | مدين           | دائن
+
+    Read as a single header row, a merged group contributes its label to the *first* of its two
+    columns and nothing to the second — so every `دائن` column was dropped from the file
+    entirely, the credit side of every account silently went missing, and the sub-header row
+    itself arrived as a row of data.
+
+    Three things have to hold, and together they are hard for a data row to satisfy by accident:
+    the row carries no numbers at all, it fills at least two positions, and at least one of
+    those positions is one the row above left blank — which is exactly the shape a merged group
+    header leaves behind, and nothing a first data row would produce.
+    """
+    filled = [j for j, c in enumerate(sub) if not _is_blank(c)]
+    if len(filled) < 2:
+        return False
+    if any(_num(sub[j]) is not None for j in filled):
+        return False
+    return any(j >= len(top) or _is_blank(top[j]) for j in filled)
+
+
+def _compose(top: list[Any], sub: list[Any] | None) -> list[str]:
+    """Column names, joining a group label to the sub-label beneath it.
+
+    The group label carries rightwards across its own columns — that is what a merge means —
+    so `الرصيد الافتتاحي` + `دائن` becomes one name and stays distinct from the `دائن` under
+    `الحركة`. A column the top row names and the sub row does not keeps its own name alone.
+    """
+    out: list[str] = []
+    carried = ""
+    for j in range(max(len(top), len(sub or []))):
+        t = top[j] if j < len(top) else None
+        u = (sub[j] if sub and j < len(sub) else None)
+        if not _is_blank(t):
+            carried = str(t).strip()
+        if not _is_blank(u):
+            out.append(f"{carried} {str(u).strip()}".strip() if carried else str(u).strip())
+        elif not _is_blank(t):
+            out.append(str(t).strip())
+        else:
+            out.append("")
+    return out
+
+
 def _from_grid(grid: list[list[Any]]) -> dict:
     """Find the header row, split off any stated totals, and normalise the columns."""
     header_idx = None
@@ -147,14 +197,19 @@ def _from_grid(grid: list[list[Any]]) -> dict:
     if header_idx is None:
         return {"columns": [], "rows": [], "stated_totals": {}, "raw_headers": []}
 
-    raw = grid[header_idx]
-    keep = [j for j, h in enumerate(raw) if not _is_blank(h)]
-    raw_headers = [str(raw[j]).strip() for j in keep]
-    columns = [normalise(raw[j]) for j in keep]
+    top = grid[header_idx]
+    sub = grid[header_idx + 1] if header_idx + 1 < len(grid) else None
+    two_row = sub is not None and _is_subheader(top, sub)
+    names = _compose(top, sub if two_row else None)
+    first_data = header_idx + (2 if two_row else 1)
+
+    keep = [j for j, h in enumerate(names) if h]
+    raw_headers = [names[j] for j in keep]
+    columns = [normalise(names[j]) for j in keep]
 
     rows: list[list[Any]] = []
     stated: dict[str, float] = {}
-    for row in grid[header_idx + 1:]:
+    for row in grid[first_data:]:
         cells = [row[j] if j < len(row) else None for j in keep]
         if all(_is_blank(c) for c in cells):
             continue

@@ -1745,6 +1745,9 @@ export interface MatrixRow {
   declared_only: boolean;
   why_unevidenced: string;
   unallocated?: boolean;
+  /** which metric this row's variances are in — customs rows compare bases, since a
+   *  declaration states a value in SAR and never the tax on it */
+  variance_metric: "vat" | "taxable";
   declared_adjustment: number | null;
   declared_base: number | null;
   declared_vat: number | null;
@@ -1774,6 +1777,9 @@ export interface WorkstreamDash {
     return_on_file: boolean;
     register: DatasetSummary | null;
     einvoices: DatasetSummary | null;
+    /** customs declarations state a value in SAR and no tax, so they evidence a base only */
+    customs_import: DatasetSummary | null;
+    customs_export: DatasetSummary | null;
   };
   summary: {
     comparisons_total: number;

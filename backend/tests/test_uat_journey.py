@@ -620,6 +620,12 @@ def test_the_treatment_matrix_agrees_with_the_comparison_cards(api):
     two must land on the same number. Summing the variance column instead came to SAR 499,000
     where the pairing itself reports 630,000 — a treatment one side cannot state drops out of
     that sum — and an auditor shown both would rightly trust neither.
+
+    The same guard caught a second, larger version of the defect once the return grew to its
+    real fifteen boxes: the pairings compared the *whole* e-invoice population against the
+    standard-rated box alone, so every riyal declared in the Etimad, 5% and citizen boxes came
+    back as undeclared. The comparison is against everything declared on that side of the
+    return, which is what these three assertions now hold it to.
     """
     d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
     w = d["workstreams"]["sales"]
@@ -637,7 +643,11 @@ def test_a_box_the_taxpayer_did_not_declare_is_empty_rather_than_zero(api):
     taxpayer, and drawing the first as the second turns a gap in the form into a figure."""
     d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
     rows = {r["code"]: r for r in d["workstreams"]["sales"]["matrix"]["rows"]}
-    assert rows["exempt_sales"]["declared_vat"] is None
+    rows_p = {r["code"]: r for r in d["workstreams"]["purchases"]["matrix"]["rows"]}
+    # A box left off the return entirely reads blank. Exempt sales *is* declared here, at zero
+    # VAT — a real declaration, and a different fact about the taxpayer.
+    assert rows_p["import_reverse_charge_5"]["declared_vat"] is None
+    assert rows["exempt_sales"]["declared_vat"] == 0.0
     for r in rows.values():
         for key in ("declared_vat", "register_vat", "einvoice_vat"):
             assert r[key] is None or isinstance(r[key], (int, float))
@@ -686,3 +696,44 @@ def test_a_card_states_only_the_metrics_both_sides_carry(api):
     assert {r["metric"] for r in by_code["S1"]["rows"]} == {"taxable", "vat", "count"}
     for code in ("S2", "S3"):
         assert "count" not in {r["metric"] for r in by_code[code]["rows"]}
+
+
+# ============================================================ customs and the trial balance
+def test_the_customs_declarations_evidence_the_import_and_export_boxes(api):
+    """A declaration states a value in SAR and no tax, so it can only ever be compared against
+    a box's base — filling the VAT column would put a figure customs never gave under the
+    Authority's own letterhead."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    imports = next(r for r in d["workstreams"]["purchases"]["matrix"]["rows"]
+                   if r["code"] == "import_customs_15")
+    exports = next(r for r in d["workstreams"]["sales"]["matrix"]["rows"]
+                   if r["code"] == "exports")
+
+    assert imports["evidenced_by"] == "customs-import"
+    assert imports["register_base"] == 2_240_000.0
+    assert imports["register_vat"] is None, "customs states a value, never the tax on it"
+    assert exports["evidenced_by"] == "customs-export"
+    assert exports["register_base"] == 1_380_000.0
+
+
+def test_customs_is_never_added_into_the_register_column(api):
+    """Two different populations. The sales register totals SAR 17,453,333 and the export
+    declarations 1,380,000, and a column footing to 18,833,333 states neither."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    w = d["workstreams"]["sales"]
+    kpi = {k["key"]: k["value"] for k in w["kpis"]}
+    assert w["matrix"]["total"]["register_base"] == kpi["register_base"]
+
+
+def test_the_trial_balance_is_read_as_a_trial_balance_and_not_a_ledger(api):
+    """Its columns are Arabic and its header is two rows deep. Both had to work for the file to
+    classify at all, and the distinction matters: a ledger and a trial balance answer different
+    questions and only one of them reconciles against a register."""
+    ev = _json(api.get(f"/api/cases/{CASE}/evidence"))
+    tb = next(x for x in ev["datasets"] if x["filename"].startswith("Trial_Balance"))
+
+    assert tb["dataset_type"] == "trial-balance"
+    assert tb["confidence"] in ("high", "confirmed")
+    assert tb["column_count"] == 8, "the credit columns survived the merged header"
+    roles = {r["role"] for r in tb["roles"]}
+    assert {"account_code", "balance", "debit", "credit"} <= roles

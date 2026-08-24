@@ -128,3 +128,104 @@ def zatca_invoices_xlsx() -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+# --------------------------------------------------------------------- customs declarations
+#: The Authority's own import and export declaration extracts, in the columns its templates
+#: carry. Arabic headers, because that is what an auditor is handed — and because reading them
+#: is the point: a declaration file the profiler cannot classify evidences nothing.
+IMPORT_HEADERS = ("اسم المستورد/المصدّر", "الرقم المبدئي للبيان", "رقم البيان", "دولة المقصد",
+                  "وصف الصنف في الفاتورة", "الوزن القائم بالكيلو", "الوزن الصافي بالكيلو",
+                  "القيمة بالريال")
+EXPORT_HEADERS = ("اسم المستورد/المصدّر", "الرقم المبدئي للبيان", "رقم البيان", "التاريخ-هجري",
+                  "تاريخ البيان - ميلادي", "وصف الصنف في الفاتورة", "كمية الفاتورة",
+                  "عملة الفاتورة", "الوزن القائم بالكيلو", "الوزن الصافي بالكيلو",
+                  "القيمة بالريال")
+
+#: Imports total SAR 2,240,000 against SAR 2,000,000 declared — the shape of an import the
+#: return does not carry. Customs states a value and no tax, so this can only ever be compared
+#: against the box's base.
+_IMPORT_VALUES = (620_000, 480_000, 355_000, 290_000, 245_000, 250_000)
+#: Exports total SAR 1,380,000 against SAR 1,500,000 declared: the taxpayer claimed more
+#: zero-rated export than the declarations evidence, which runs the other way.
+_EXPORT_VALUES = (430_000, 360_000, 295_000, 180_000, 115_000)
+
+
+def customs_imports_xlsx() -> bytes:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Import"
+    ws.append(list(IMPORT_HEADERS))
+    for n, value in enumerate(_IMPORT_VALUES, 1):
+        ws.append(["Al-Faisaliah Trading Co.", f"{9000 + n}", f"IMP-2025-{100 + n}",
+                   "SA", "Trading stock", 12_400 + n * 90, 11_800 + n * 85, value])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def customs_exports_xlsx() -> bytes:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Export"
+    ws.append(list(EXPORT_HEADERS))
+    for n, value in enumerate(_EXPORT_VALUES, 1):
+        ws.append(["Al-Faisaliah Trading Co.", f"{7000 + n}", f"EXP-2025-{200 + n}",
+                   f"1446-0{n}-15", f"2025-0{min(n, 3)}-{10 + n}", "Trading stock",
+                   240 + n * 15, "SAR", 9_100 + n * 70, 8_650 + n * 66, value])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- trial balance
+#: Two header rows with merged group cells, exactly as the Authority's template writes them —
+#: a group label spanning a pair of columns and the pair's own labels beneath it. Written this
+#: way on purpose: read as a single header row, every `دائن` column is dropped and the credit
+#: side of every account silently goes missing.
+_TB_GROUPS = ("الرصيد الافتتاحي", "الحركة", "الرصيد النهائي")
+_TB_ACCOUNTS = (
+    ("1010", "النقد وما في حكمه", 1_450_000, 0, 3_200_000, 2_980_000, 1_670_000, 0),
+    ("1210", "الذمم المدينة", 2_100_000, 0, 6_400_000, 5_900_000, 2_600_000, 0),
+    ("2110", "الذمم الدائنة", 0, 890_000, 1_240_000, 1_610_000, 0, 1_260_000),
+    ("2140", "ضريبة القيمة المضافة المستحقة", 0, 310_000, 1_850_000, 2_640_000, 0, 1_100_000),
+    # The sales account: SAR 17,600,000 credited against a register totalling 17,453,333.26.
+    ("4010", "المبيعات", 0, 0, 0, 17_600_000, 0, 17_600_000),
+    ("5010", "تكلفة المبيعات", 0, 0, 11_240_000, 0, 11_240_000, 0),
+)
+
+
+def trial_balance_xlsx() -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "TB"
+
+    ws.append(["ميزان المراجعة"])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=8)
+
+    ws.cell(row=2, column=1, value="الرقم")
+    ws.cell(row=2, column=2, value="الاسم")
+    for n, group in enumerate(_TB_GROUPS):
+        col = 3 + n * 2
+        ws.cell(row=2, column=col, value=group)
+        ws.merge_cells(start_row=2, start_column=col, end_row=2, end_column=col + 1)
+        ws.cell(row=3, column=col, value="مدين")
+        ws.cell(row=3, column=col + 1, value="دائن")
+    for col in (1, 2):
+        ws.merge_cells(start_row=2, start_column=col, end_row=3, end_column=col)
+
+    for account in _TB_ACCOUNTS:
+        ws.append(list(account))
+    for col in range(1, 9):
+        ws.column_dimensions[get_column_letter(col)].width = 22
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
