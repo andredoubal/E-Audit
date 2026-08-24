@@ -1116,6 +1116,20 @@ input.letter-input,select.letter-input{min-height:0}
 .rstep-mark{flex:none;font-size:11.5px;color:var(--faint)}
 .rstep-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
 
+/* ---- the end of a module: what carries forward, and the control that takes you there.
+   Teal, because this is the confirm colour in this design — what the engine found and what you
+   confirmed — and moving to the next module on the strength of your own rulings is exactly
+   that. Orange would say "this is merely clickable", which is the one thing it is not. */
+.handoff{border:1px solid var(--brand);border-radius:13px;background:var(--brand-tint);
+  padding:16px 18px;display:flex;flex-direction:column;gap:11px}
+.handoff-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.handoff-what{flex:1;min-width:250px;display:flex;flex-direction:column;gap:4px}
+.handoff-what b{font-size:14.5px;font-weight:500;color:var(--ink)}
+.handoff-what .sub{font-size:12.5px;line-height:1.55;color:var(--muted);max-width:74ch}
+.handoff-go{flex:none;font-size:14px;padding:11px 22px;border-radius:10px}
+.handoff .callout{margin:0}
+@media(max-width:760px){.handoff-go{width:100%}}
+
 /* ---- the case assistant: one conversation, reachable from every tab.
    A docked panel rather than a modal — an auditor asking "what is still missing" wants to read
    the answer against the page it is about, not on top of it. */

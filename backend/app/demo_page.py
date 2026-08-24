@@ -228,6 +228,19 @@ the case-ID generation and the taxpayer fields are the real thing.</p>"""
 
 # ------------------------------------------------------------------ the three tabs
 
+def handoff(label: str, tab: str, carries: str, caution: str) -> str:
+    """The end of a module, and the control that moves to the next one.
+
+    `data-tab` is the same attribute the header tabs and the rail carry, so the existing
+    switcher moves the pane with no handler of its own — three places that cannot get out of
+    step because there is only one of them.
+    """
+    return (f'<div class="handoff"><div class="handoff-row"><div class="handoff-what">'
+            f'<b>{e(carries)}</b><span class="sub">{e(caution)}</span></div>'
+            f'<button class="btn handoff-go" data-tab="{tab}">{e(label)} &rarr;</button>'
+            f'</div></div>')
+
+
 def correspondence(loop: dict, threads: dict) -> str:
     a = loop.get("assessment") or {"items": [], "summary": {}}
     t = (threads.get("threads") or [{}])[0]
@@ -309,6 +322,14 @@ on the evidence held, requesting information from the taxpayer starts the next r
 </span><span class="pill status">coming soon</span></div>
 <div class="rstep"><p class="detail-note" style="margin:0">The same four steps, against
 whatever the next question turns out to be.</p></div></div>
+
+{handoff("Confirm and move to Investigation", "investigation",
+         f"{len(docs)} document{'' if len(docs) == 1 else 's'} on file"
+         + (f" · {len(outstanding)} still outstanding" if outstanding
+            else " · nothing outstanding"),
+         "Opens the Investigation module. In the application this also re-runs the "
+         "investigation over the evidence on file; that needs the engine, so what is shown "
+         "here is the run captured when this page was generated.")}
 """
 
 
@@ -488,7 +509,9 @@ figures. The audit conclusion is the auditor's: only what you accept reaches the
                 '<button class="btn-ghost">Ask the taxpayer</button>')
         + "</div></div>"
         for c in summary["cards"] if c["hypothesis_ids"])
-    confirmed = len([c for c in summary["cards"] if c["decision"] == "accepted"])
+    accepted = [c for c in summary["cards"] if c["decision"] == "accepted"]
+    confirmed = len(accepted)
+    confirmed_total = sum(c["amount"] for c in accepted)
     steers = "".join(f'<button class="btn-ghost">{e(s)}</button>' for s in (
         "Treat the largest difference as a timing difference and say why.",
         "Rewrite this using only what I have confirmed.",
@@ -518,7 +541,16 @@ something is put, and cannot introduce a number. The assessment stays yours.</p>
     return f"""{zsrc}
 {summary_panel}
 {detail}
-{assess}"""
+{assess}
+{handoff("Confirm and draft audit report", "report",
+         f"{confirmed} matter{'' if confirmed == 1 else 's'} confirmed · {sar(confirmed_total)}"
+         if confirmed else "Nothing confirmed yet",
+         "Only what you have confirmed reaches the audit report and the letter to the "
+         "taxpayer. The rest stays on the file as investigated and not pursued."
+         if confirmed else
+         "The report will record that no finding was established, which is the honest reading "
+         "of an investigation nobody has ruled on. Confirm a matter above to carry it through.")}
+"""
 
 
 def report(rep: dict, inv: dict, verdict: dict) -> str:

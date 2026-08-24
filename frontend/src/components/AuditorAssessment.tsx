@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { askAbout } from "../ai/ask";
 import { Sparkles } from "./Icon";
+import ModuleHandoff from "./ModuleHandoff";
 
 const sar = (n: number) => "SAR " + Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 
@@ -171,6 +172,7 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
   const confirmedTotal = confirmed.reduce((n, c) => n + c.amount, 0);
 
   return (
+    <>
     <div className="panel assess">
       <div className="panel-head">
         <h3 className="display">Your assessment</h3>
@@ -259,5 +261,25 @@ export default function AuditorAssessment({ id, rev, onChanged }: {
         </div>
       </div>
     </div>
+
+    {/* The end of the module. The confirming happened above, matter by matter; this says what
+        those rulings come to and takes the auditor to the report they produce. Nothing is
+        confirmed *by* this button — which is why it states the count even when it is nought,
+        rather than moving on quietly and letting the report be the one to break the news. */}
+    <ModuleHandoff
+      label="Confirm and draft audit report"
+      to={`/cases/${id}/report`}
+      carries={confirmed.length
+        ? `${confirmed.length} matter${confirmed.length === 1 ? "" : "s"} confirmed`
+          + ` · ${sar(confirmedTotal)}`
+        : "Nothing confirmed yet"}
+      caution={confirmed.length
+        ? "Only what you have confirmed reaches the audit report and the letter to the taxpayer."
+          + " The rest stays on the file as investigated and not pursued."
+        : "The report will record that no finding was established, which is the honest reading"
+          + " of an investigation nobody has ruled on. Confirm a matter above to carry it"
+          + " through."}
+    />
+    </>
   );
 }

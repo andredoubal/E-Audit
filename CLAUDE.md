@@ -253,6 +253,28 @@ shares. `Dossier` and `Rulebook` stay routable at their own paths but are off th
 first is a dormant planning-era screen, the second is reference material an auditor reads rather
 than a place the work happens.
 
+**Each of the first two modules ends with the handoff to the next.** `ModuleHandoff.tsx` — the
+teal bar carrying *Confirm and move to Investigation* and *Confirm and draft audit report*. The
+rail says where you can go; it does not say you are done, and an auditor finishing correspondence
+had no way to say so either. Two rules keep the bar honest:
+
+- **It states what it is carrying, in the engine's own counts, before you press it.** *1 document
+  on file · 3 still outstanding*; *3 matters confirmed · SAR 1,332,000*; and — the case that
+  earns the rule — *Nothing confirmed yet*, with the plain warning that the report will then
+  record that no finding was established. A button that moved you on without saying what it took
+  would be the one place in this application where the auditor could not see what they had just
+  agreed to.
+- **It confirms a handoff, not a figure.** No matter is decided here and no amount computed: the
+  rulings are made above it, on the matters, and this reports what they come to. Correspondence's
+  button does have real work behind it — it re-runs the investigation over the evidence on file
+  before opening it, which is what finishing correspondence actually means — and navigation waits
+  on that call and does not happen if it fails. With nothing filed there is nothing to run, so
+  the bar says so and only moves.
+
+Teal, not a new green: teal is already what the engine found and what you confirmed, and moving
+on off the back of your own rulings is exactly that. Orange would say *merely clickable*, which
+is the one thing this control is not.
+
 ### Investigation: summary first, evidence on demand
 
 `pages/Investigation.tsx` answers four questions in order, and refuses to answer them all at once.

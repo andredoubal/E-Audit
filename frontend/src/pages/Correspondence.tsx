@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import CaseTabs from "../components/CaseTabs";
+import ModuleHandoff from "../components/ModuleHandoff";
 import RoundCard from "../components/RoundCard";
-import { getLoop, getThreads, type LoopState, type ThreadState } from "../api";
+import { getLoop, getThreads, runInvestigation, type LoopState, type ThreadState } from "../api";
 
 /** Everything said to the taxpayer, and everything they sent back. */
 export default function Correspondence() {
@@ -25,6 +26,23 @@ export default function Correspondence() {
   const outstanding = loop?.assessment
     ? loop.assessment.items.filter((i) => i.state !== "received").length
     : 0;
+  const docs = rounds.reduce((n, t) => n + t.documents.length, 0);
+
+  // Finishing correspondence is not a state to store — it is the moment the investigation
+  // should be run again over everything that has arrived since it last ran. Saying so, and
+  // doing it, is what makes the handoff real rather than a link with a confident label.
+  const carries = docs
+    ? `${docs} document${docs === 1 ? "" : "s"} on file`
+      + (outstanding ? ` · ${outstanding} still outstanding` : " · nothing outstanding")
+    : "Nothing filed on this case yet";
+  const caution = !docs
+    ? "There is nothing for the investigation to run on yet. Drop the chain and the taxpayer's "
+      + "files into the round above first."
+    : outstanding
+      ? "The investigation will run over the evidence on file, and open. "
+        + `${outstanding} item${outstanding === 1 ? " is" : "s are"} still outstanding — `
+        + "they stay on this round, and step 4 drafts the chase for them."
+      : "The investigation will run over the evidence on file, and open.";
 
   return (
     <>
@@ -90,6 +108,13 @@ export default function Correspondence() {
         </div>
       </div>
 
+      <ModuleHandoff
+        label="Confirm and move to Investigation"
+        to={`/cases/${id}/investigation`}
+        carries={carries}
+        caution={caution}
+        onConfirm={docs ? () => runInvestigation(id, "new-evidence") : undefined}
+      />
     </div>
     </>
   );
