@@ -223,8 +223,11 @@ h3.display{font-size:19px}
 .page.list{padding:52px 48px 96px;gap:26px}
 @media(max-width:760px){.page{padding:22px 20px 90px}.page.list{padding:32px 20px 80px}}
 /* Prose does not want to be 1400px wide, so the reading blocks keep a measure of their own
-   while the grids (cards, tables, field rows) take the whole column. */
-.page>.detail-note,.page>p,.assess-doc,.rstep-body>.letterpre{max-width:78ch}
+   while the grids (cards, tables, field rows) take the whole column.
+   A letter is not prose in this sense — it is a document block that fills the card it sits in.
+   Capping it at 78ch left the chase email occupying half its own step while the bordered card
+   around it ran the full width, which reads as a broken panel rather than a measure. */
+.page>.detail-note,.page>p,.assess-doc{max-width:78ch}
 /* The page is a stack with air in it: panels no longer carry their own bottom
    margin, so one gap rule spaces every screen the same way. */
 .page>.panel,.page>.callout,.page>.roundcard{margin-bottom:0}
@@ -1096,8 +1099,12 @@ input.letter-input,select.letter-input{min-height:0}
 .round-n{font-size:14.5px;font-weight:700}
 .round-origin{flex:1;font-size:12.5px;color:var(--muted)}
 
+/* Each step is its own card, so it needs air around it: without the inset the four cards sat
+   flush against each other and against the round's own border, and the seam between step 3 and
+   step 4 read as one panel rather than two. Adjacent margins collapse, so this is 16px between
+   siblings and 16px at either end. */
 .rstep{background:var(--surface);border:1px solid var(--line);border-radius:13px;
-  overflow:hidden}
+  overflow:hidden;margin:16px}
 .rstep-head{display:flex;align-items:center;gap:13px;width:100%;text-align:left;font:inherit;
   background:none;border:none;padding:14px 18px;cursor:pointer;color:var(--ink)}
 .rstep-head:active{opacity:.7}
