@@ -1,0 +1,268 @@
+{
+  "document": "VAT Implementing Regulations (Kingdom of Saudi Arabia)",
+  "jurisdiction": "SA",
+  "review_status": "draft-unreviewed",
+  "review_note": "Authored as a first draft to give the applicability engine something real to screen against. Each entry is an editorial reading of the article it cites, NOT reviewed legal analysis, and every assessment produced from it carries that on its face. Which provision founds which requirement is a legal judgement and must be confirmed by a tax specialist before any of this supports a position taken with a taxpayer. The article's own text travels with every citation for exactly that reason.",
+  "predicate_vocabulary": {
+    "always": "the control is in scope for every case",
+    "has_dataset": "any of these dataset types is on the case",
+    "has_role": "any dataset on the case carries all of these column roles",
+    "has_vat_treatment": "any of these VAT treatments appears in the data",
+    "box_filed": "any of these boxes carries a non-zero figure on the return"
+  },
+  "controls": [
+    {
+      "control_id": "RC-SAL-INV-01",
+      "title": "Tax invoice content",
+      "topic": "tax-invoice",
+      "applies_to": "sales",
+      "article": 53,
+      "paragraph": "5",
+      "requirement": "A tax invoice must carry, as a minimum, the date of issue, a sequential number identifying it, the supplier's and customer's details including the customer's VAT registration number where they are a taxable person, the taxable amount, the rate applied and the amount of VAT charged.",
+      "conditions": [
+        "the document is a tax invoice issued for a taxable supply",
+        "the customer is a taxable person, for the customer VAT number requirement"
+      ],
+      "exceptions": [
+        "simplified tax invoices, which carry a reduced set of particulars",
+        "supplies to non-taxable persons, where the customer VAT number does not arise"
+      ],
+      "applies_when": {"has_dataset": ["sales-register", "einvoice-extract"]},
+      "evidence_required": {
+        "dataset_types": ["sales-register", "einvoice-extract"],
+        "roles": ["reference", "issue_date", "counterparty_name", "net_amount", "vat_amount"]
+      },
+      "testability": "deterministic",
+      "check": "fields_present",
+      "check_params": {
+        "roles": ["reference", "issue_date", "counterparty_name", "net_amount", "vat_amount"],
+        "advisory_roles": ["counterparty_tax_id"]
+      },
+      "related": [54],
+      "source_note": "The listing is evidence about the invoices, not the invoices themselves. A row missing a particular is a question about that invoice, not proof the invoice lacked it."
+    },
+    {
+      "control_id": "RC-SAL-CN-01",
+      "title": "Credit and debit notes reference the invoice they adjust",
+      "topic": "credit-note",
+      "applies_to": "sales",
+      "article": 54,
+      "requirement": "A credit or debit note must be issued where the tax charged on a tax invoice exceeds or falls short of the true value of the supply, and must carry a reference to the tax invoice it adjusts.",
+      "conditions": [
+        "a tax invoice has already been issued",
+        "one of the circumstances in Article 40(1) has occurred after issue"
+      ],
+      "exceptions": [],
+      "applies_when": {"has_dataset": ["credit-note-listing"]},
+      "evidence_required": {
+        "dataset_types": ["credit-note-listing"],
+        "roles": ["reference", "issue_date"]
+      },
+      "testability": "deterministic",
+      "check": "reference_to_original",
+      "check_params": {},
+      "related": [40, 53],
+      "source_note": "Tests only that the adjusted invoice is identified. Whether the adjustment itself was due is a question of fact this cannot reach."
+    },
+    {
+      "control_id": "RC-SAL-ZR-01",
+      "title": "Evidence supporting zero-rated exports",
+      "topic": "zero-rating",
+      "applies_to": "sales",
+      "article": 32,
+      "paragraph": "1",
+      "requirement": "To apply the zero rate to an export of goods from the Kingdom, the supplier must retain evidence that the goods were transported out of Council territory.",
+      "conditions": [
+        "the supply is an export of goods to a place outside Council territory",
+        "the supplier holds transport or customs evidence for the movement"
+      ],
+      "exceptions": [
+        "zero-rated supplies arising other than by export, which rest on their own provisions"
+      ],
+      "applies_when": {"has_vat_treatment": ["zero-rated"]},
+      "evidence_required": {
+        "dataset_types": ["customs-records"],
+        "roles": []
+      },
+      "testability": "deterministic",
+      "check": "supporting_dataset_present",
+      "check_params": {"dataset_types": ["customs-records"]},
+      "related": [31],
+      "source_note": "Presence of customs records is a precondition for testing this, not proof the evidence is adequate for any particular supply."
+    },
+    {
+      "control_id": "RC-SAL-DOS-01",
+      "title": "Supplies allocated to the correct tax period",
+      "topic": "date-of-supply",
+      "applies_to": "sales",
+      "article": 20,
+      "requirement": "The date of supply determines the tax period a supply falls into, and for continuous supplies, advance payments and other specific circumstances it is not simply the invoice date.",
+      "conditions": [
+        "the supply is of a kind whose date of supply is set by a specific rule"
+      ],
+      "exceptions": [
+        "ordinary supplies, where the general date of supply rule applies"
+      ],
+      "applies_when": {"has_dataset": ["sales-register"]},
+      "evidence_required": {
+        "dataset_types": ["sales-register"],
+        "roles": ["issue_date", "supply_date"]
+      },
+      "testability": "ai-assisted",
+      "check": "needs_review",
+      "check_params": {},
+      "related": [58],
+      "source_note": "A listing usually carries an invoice date and no supply date. Assuming the two are the same is one of the specific errors this engine must not make, so with no supply date the control reports that it cannot be tested."
+    },
+    {
+      "control_id": "RC-SAL-REC-01",
+      "title": "Records sufficient to establish the tax due",
+      "topic": "records",
+      "applies_to": "both",
+      "article": 66,
+      "requirement": "A taxable person must keep the invoices, books, records and accounting documents required by the Law and these Regulations, in a form that allows the tax due to be established.",
+      "conditions": [
+        "the records relate to the tax period under review"
+      ],
+      "exceptions": [],
+      "applies_when": {"always": true},
+      "evidence_required": {"dataset_types": [], "roles": []},
+      "testability": "deterministic",
+      "check": "records_readable",
+      "check_params": {},
+      "related": [53],
+      "source_note": "Tests whether the records supplied can be read well enough to establish a figure — blank key fields, unreadable amounts, totals that do not foot. It does not test whether the records were kept."
+    },
+    {
+      "control_id": "RC-PUR-DED-01",
+      "title": "Input tax incurred in the course of an economic activity",
+      "topic": "input-deduction",
+      "applies_to": "purchases",
+      "article": 49,
+      "paragraph": "1",
+      "requirement": "A taxable person may deduct input tax charged on goods and services supplied to them to the extent these are received in the course of carrying on an economic activity.",
+      "conditions": [
+        "the goods or services were supplied to the taxable person",
+        "they were received in the course of carrying on an economic activity",
+        "the deduction is claimed in the correct tax period"
+      ],
+      "exceptions": [
+        "expenditure deemed to be received outside the economic activity under Article 50"
+      ],
+      "applies_when": {"box_filed": ["standard_rate_purchase"]},
+      "evidence_required": {
+        "dataset_types": ["purchase-register"],
+        "roles": ["description", "counterparty_name"]
+      },
+      "testability": "ai-assisted",
+      "check": "needs_review",
+      "check_params": {},
+      "related": [50, 51],
+      "source_note": "Whether a purchase serves the economic activity is a judgement about the business, not a property of a spreadsheet. The control exists so a clean reconciliation still surfaces it, and it reports honestly that it needs a person."
+    },
+    {
+      "control_id": "RC-PUR-DED-02",
+      "title": "Input tax supported by a tax invoice identifying the supplier",
+      "topic": "input-deduction",
+      "applies_to": "purchases",
+      "article": 49,
+      "requirement": "A deduction of input tax must be supported by a tax invoice held by the taxable person, identifying the supplier and the tax charged.",
+      "conditions": [
+        "the taxable person holds the tax invoice for the supply",
+        "the invoice identifies the supplier and the VAT charged"
+      ],
+      "exceptions": [
+        "imports, where the customs documentation stands in place of a supplier invoice",
+        "reverse-charge supplies, which are self-accounted"
+      ],
+      "applies_when": {"has_dataset": ["purchase-register"]},
+      "evidence_required": {
+        "dataset_types": ["purchase-register"],
+        "roles": ["reference", "counterparty_name", "vat_amount"]
+      },
+      "testability": "deterministic",
+      "check": "fields_present",
+      "check_params": {
+        "roles": ["reference", "counterparty_name", "vat_amount"],
+        "advisory_roles": ["counterparty_tax_id"]
+      },
+      "related": [53],
+      "source_note": "Tests that the register identifies an invoice and a supplier for each claimed line. It cannot establish that the invoice is held, only that the register does not identify one."
+    },
+    {
+      "control_id": "RC-PUR-BLK-01",
+      "title": "Expenditure deemed received outside the economic activity",
+      "topic": "blocked-input",
+      "applies_to": "purchases",
+      "article": 50,
+      "paragraph": "1",
+      "requirement": "Expenditure on certain goods and services is not considered to be incurred in the course of an economic activity, and input tax on it is not deductible.",
+      "conditions": [
+        "the expenditure falls within one of the categories the article lists"
+      ],
+      "exceptions": [
+        "the article's own carve-outs, including re-supply, statutory obligation and restricted-vehicle exceptions"
+      ],
+      "applies_when": {"has_dataset": ["purchase-register"]},
+      "evidence_required": {
+        "dataset_types": ["purchase-register"],
+        "roles": ["description"]
+      },
+      "testability": "ai-assisted",
+      "check": "needs_review",
+      "check_params": {},
+      "related": [49],
+      "source_note": "The article carries exceptions this engine does not model, so a line matching a blocked category is a question rather than a disallowance. The English edition of this article is also superseded, which every assessment against it must say."
+    },
+    {
+      "control_id": "RC-PUR-IMP-01",
+      "title": "Import VAT accounted for through the return",
+      "topic": "imports",
+      "applies_to": "purchases",
+      "article": 44,
+      "requirement": "Tax on imports may, where the conditions are met, be paid through the tax return rather than on entry, and must then be accounted for in the correct period.",
+      "conditions": [
+        "the taxable person is eligible to account for import VAT through the return",
+        "the import falls in the period declared"
+      ],
+      "exceptions": [
+        "imports where tax is collected on entry under Article 43"
+      ],
+      "applies_when": {"has_dataset": ["customs-records"]},
+      "evidence_required": {
+        "dataset_types": ["customs-records", "purchase-register"],
+        "roles": []
+      },
+      "testability": "deterministic",
+      "check": "supporting_dataset_present",
+      "check_params": {"dataset_types": ["customs-records", "purchase-register"]},
+      "related": [42, 43],
+      "source_note": "Applies only where the case actually carries customs records. On a case with none, this is not applicable rather than untested."
+    },
+    {
+      "control_id": "RC-PUR-PROP-01",
+      "title": "Proportional deduction where exempt supplies are made",
+      "topic": "input-deduction",
+      "applies_to": "purchases",
+      "article": 51,
+      "requirement": "Where a taxable person makes both taxable and exempt supplies, input tax must be deducted proportionally, and input tax attributable to exempt supplies is not deductible.",
+      "conditions": [
+        "the taxable person makes exempt supplies as well as taxable ones",
+        "input tax is incurred on costs used for both"
+      ],
+      "exceptions": [
+        "input tax wholly attributable to taxable supplies, which is deductible in full"
+      ],
+      "applies_when": {"has_vat_treatment": ["exempt"]},
+      "evidence_required": {
+        "dataset_types": ["purchase-register", "sales-register"],
+        "roles": ["vat_treatment"]
+      },
+      "testability": "ai-assisted",
+      "check": "needs_review",
+      "check_params": {},
+      "related": [49],
+      "source_note": "Only in scope where exempt supplies actually appear in the evidence. On a wholly standard-rated case this is not applicable, and saying so is more useful than reporting it untested."
+    }
+  ]
+}

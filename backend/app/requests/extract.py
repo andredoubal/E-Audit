@@ -1,0 +1,338 @@
+"""Turn whatever the taxpayer sent into a structure the completeness checker can read.
+
+Deliberately separate from the checking. Extraction is format work — xlsx, csv, a PDF, a letter
+in the body of an email — and it changes with the file. Checking is rule work and should not.
+Keeping them apart is what lets the completeness checks stay deterministic no matter what
+arrives, and lets a better extractor be dropped in without touching a single rule.
+
+Column naming is the one place where being strict would produce nonsense. A taxpayer who writes
+"Invoice No." has supplied the invoice number, and reporting it missing would be wrong. So
+headers are normalised and run through a modest alias table. Anything the alias table does not
+cover is reported as missing — and the document reviewer, which is allowed to exercise
+judgement, can then observe that the column is present under a name we did not anticipate. The
+deterministic layer stays strict; the judgement stays with the layer that is allowed to have it.
+"""
+from __future__ import annotations
+
+import csv
+import io
+import re
+from datetime import date, datetime
+from typing import Any
+
+# canonical column name -> the spellings we accept for it
+ALIASES: dict[str, tuple[str, ...]] = {
+    "invoice_date": ("date", "inv_date", "invoice_dt", "issue_date", "date_of_invoice",
+                     "tax_invoice_date"),
+    "invoice_number": ("invoice_no", "inv_no", "invoice_num", "invoice", "document_number",
+                       "doc_no", "tax_invoice_number", "invoice_ref"),
+    "customer_name": ("customer", "client_name", "client", "buyer_name", "buyer",
+                      "customer_title"),
+    "customer_vat_number": ("customer_vat", "customer_trn", "buyer_vat", "buyer_vat_number",
+                            "customer_vat_no", "vat_number_of_customer"),
+    "supplier_name": ("supplier", "vendor_name", "vendor", "seller_name", "seller"),
+    "supplier_vat_number": ("supplier_vat", "vendor_vat", "seller_vat", "supplier_vat_no",
+                            "supplier_trn"),
+    "description": ("desc", "details", "narration", "particulars", "goods_description",
+                    "line_description"),
+    "taxable_amount": ("net_amount", "amount_excl_vat", "amount_before_vat", "taxable_value",
+                       "net", "amount_excluding_vat", "base_amount"),
+    # "vat" on its own is the amount far more often than the rate, so it belongs below
+    "vat_rate": ("rate", "tax_rate", "vat_pct", "vat_percent", "vat_rate_pct"),
+    "vat_amount": ("vat", "vat_value", "tax_amount", "vat_amt", "output_vat", "input_vat",
+                   "vat_amount_sar"),
+    "note_date": ("credit_note_date", "cn_date"),
+    "note_number": ("credit_note_no", "cn_no", "note_no", "credit_note_number"),
+    "note_type": ("type", "document_type", "doc_type"),
+    "original_invoice_number": ("original_invoice", "related_invoice", "invoice_referenced",
+                                "against_invoice"),
+    "reason": ("reason_for_issue", "note_reason", "explanation"),
+    "account_code": ("account", "gl_account", "account_no", "acc_code"),
+    "account_name": ("account_description", "gl_name", "acc_name"),
+    "debit": ("dr", "debit_amount"),
+    "credit": ("cr", "credit_amount"),
+    "posting_date": ("post_date", "gl_date", "transaction_date"),
+    "reference": ("ref", "document_reference", "voucher"),
+    "item": ("reconciling_item", "line", "particular"),
+    "amount": ("value", "sar", "amount_sar"),
+    "supporting_reference": ("support", "evidence", "reference_document"),
+    "terminal_id": ("terminal", "pos_id", "device_id", "terminal_no"),
+    "transactions": ("txn_count", "no_of_transactions", "count"),
+    "gross_amount": ("gross", "total_amount", "amount_incl_vat"),
+    "asset_code": ("asset_no", "asset_id", "fa_code"),
+    "acquisition_date": ("purchase_date", "date_acquired", "addition_date"),
+    "cost": ("acquisition_cost", "purchase_cost", "asset_cost"),
+    "vat_claimed": ("input_vat_claimed", "vat_recovered"),
+    "disposal_date": ("date_disposed", "disposal"),
+    "date": ("day", "business_date", "trading_date"),
+}
+
+_ALIAS_LOOKUP: dict[str, str] = {}
+for _canon, _spellings in ALIASES.items():
+    _ALIAS_LOOKUP[_canon] = _canon
+    for _s in _spellings:
+        _ALIAS_LOOKUP.setdefault(_s, _canon)
+
+TOTAL_ROW = re.compile(r"^\s*(grand\s+)?totals?\b", re.I)
+NUMERIC = re.compile(r"^-?[\d,]+(\.\d+)?$")
+
+
+def normalise(header: Any) -> str:
+    """'Invoice No. ' -> 'invoice_no' -> canonical 'invoice_number'."""
+    s = str(header or "").strip().lower()
+    s = re.sub(r"[^\w\s]", " ", s)
+    s = re.sub(r"\s+", "_", s).strip("_")
+    return _ALIAS_LOOKUP.get(s, s)
+
+
+_UPPER = {"vat", "isic", "hs", "pos", "id", "no"}
+
+
+def display(column: str) -> str:
+    """'customer_vat_number' -> 'Customer VAT number'.
+
+    Snake_case is the checker's vocabulary, not the taxpayer's. A letter that asks for
+    'customer_vat_number' reads like a database error, so gap details are phrased with this.
+    """
+    words = str(column or "").split("_")
+    if not words or not words[0]:
+        return str(column or "")
+    out = [words[0].upper() if words[0] in _UPPER else words[0].capitalize()]
+    out += [w.upper() if w in _UPPER else w for w in words[1:]]
+    return " ".join(out)
+
+
+def _num(v: Any) -> float | None:
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    s = str(v or "").strip().replace(",", "").replace("SAR", "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _as_date(v: Any) -> date | None:
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    s = str(v or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%d %b %Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _is_blank(v: Any) -> bool:
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+# --------------------------------------------------------------------------- table assembly
+
+def _is_subheader(top: list[Any], sub: list[Any]) -> bool:
+    """Whether `sub` is the second row of a two-row header rather than the first row of data.
+
+    A trial balance is the case this exists for. Its header is *two* rows — a group label
+    spanning a merged pair of columns, and the pair's own labels beneath it:
+
+        الرقم | الاسم |  |  | الرصيد الافتتاحي |      | الحركة |      | الرصيد النهائي |
+              |       |  |  | مدين             | دائن | مدين   | دائن | مدين           | دائن
+
+    Read as a single header row, a merged group contributes its label to the *first* of its two
+    columns and nothing to the second — so every `دائن` column was dropped from the file
+    entirely, the credit side of every account silently went missing, and the sub-header row
+    itself arrived as a row of data.
+
+    Three things have to hold, and together they are hard for a data row to satisfy by accident:
+    the row carries no numbers at all, it fills at least two positions, and at least one of
+    those positions is one the row above left blank — which is exactly the shape a merged group
+    header leaves behind, and nothing a first data row would produce.
+    """
+    filled = [j for j, c in enumerate(sub) if not _is_blank(c)]
+    if len(filled) < 2:
+        return False
+    if any(_num(sub[j]) is not None for j in filled):
+        return False
+    return any(j >= len(top) or _is_blank(top[j]) for j in filled)
+
+
+def _compose(top: list[Any], sub: list[Any] | None) -> list[str]:
+    """Column names, joining a group label to the sub-label beneath it.
+
+    The group label carries rightwards across its own columns — that is what a merge means —
+    so `الرصيد الافتتاحي` + `دائن` becomes one name and stays distinct from the `دائن` under
+    `الحركة`. A column the top row names and the sub row does not keeps its own name alone.
+    """
+    out: list[str] = []
+    carried = ""
+    for j in range(max(len(top), len(sub or []))):
+        t = top[j] if j < len(top) else None
+        u = (sub[j] if sub and j < len(sub) else None)
+        if not _is_blank(t):
+            carried = str(t).strip()
+        if not _is_blank(u):
+            out.append(f"{carried} {str(u).strip()}".strip() if carried else str(u).strip())
+        elif not _is_blank(t):
+            out.append(str(t).strip())
+        else:
+            out.append("")
+    return out
+
+
+def _from_grid(grid: list[list[Any]]) -> dict:
+    """Find the header row, split off any stated totals, and normalise the columns."""
+    header_idx = None
+    for i, row in enumerate(grid[:20]):
+        filled = [c for c in row if not _is_blank(c)]
+        if len(filled) >= 2 and not all(_num(c) is not None for c in filled):
+            header_idx = i
+            break
+    if header_idx is None:
+        return {"columns": [], "rows": [], "stated_totals": {}, "raw_headers": []}
+
+    top = grid[header_idx]
+    sub = grid[header_idx + 1] if header_idx + 1 < len(grid) else None
+    two_row = sub is not None and _is_subheader(top, sub)
+    names = _compose(top, sub if two_row else None)
+    first_data = header_idx + (2 if two_row else 1)
+
+    keep = [j for j, h in enumerate(names) if h]
+    raw_headers = [names[j] for j in keep]
+    columns = [normalise(names[j]) for j in keep]
+
+    rows: list[list[Any]] = []
+    stated: dict[str, float] = {}
+    for row in grid[first_data:]:
+        cells = [row[j] if j < len(row) else None for j in keep]
+        if all(_is_blank(c) for c in cells):
+            continue
+        label = next((str(c) for c in cells if isinstance(c, str) and c.strip()), "")
+        if TOTAL_ROW.match(label):
+            for col, cell in zip(columns, cells):
+                n = _num(cell)
+                if n is not None:
+                    stated[col] = n
+            continue
+        rows.append(cells)
+    return {"columns": columns, "rows": rows, "stated_totals": stated,
+            "raw_headers": raw_headers}
+
+
+def _period(columns: list[str], rows: list[list[Any]]) -> tuple[str | None, str | None]:
+    """The span the document actually covers, from whichever column looks like a date."""
+    idxs = [i for i, c in enumerate(columns) if c.endswith("date")]
+    seen: list[date] = []
+    for row in rows:
+        for i in idxs:
+            d = _as_date(row[i]) if i < len(row) else None
+            if d:
+                seen.append(d)
+    if not seen:
+        return None, None
+    return min(seen).isoformat(), max(seen).isoformat()
+
+
+# --------------------------------------------------------------------------- entry points
+
+def extract(filename: str, data: bytes) -> dict:
+    """Normalise one received file. Never raises — an unreadable file is a finding, not a crash."""
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+    try:
+        if ext in ("xlsx", "xlsm"):
+            out = _extract_xlsx(data)
+        elif ext in ("csv", "txt") and ext == "csv":
+            out = _extract_csv(data)
+        else:
+            text = data.decode("utf-8", errors="replace")
+            return {"format": ext or "unknown", "columns": [], "rows": [], "raw_headers": [],
+                    "stated_totals": {}, "period_from": None, "period_to": None,
+                    "text": text[:20000], "row_count": 0, "sheet": "", "sheets": [],
+                    "note": "Not a tabular format — structured checks cannot run on it."}
+    except Exception as exc:                       # noqa: BLE001 - report, do not crash
+        return {"format": ext or "unknown", "columns": [], "rows": [], "raw_headers": [],
+                "stated_totals": {}, "period_from": None, "period_to": None, "text": "",
+                "row_count": 0, "sheet": "", "sheets": [],
+                "note": f"Could not be read: {type(exc).__name__}."}
+
+    pf, pt = _period(out["columns"], out["rows"])
+    return {
+        "format": ext, "columns": out["columns"], "raw_headers": out["raw_headers"],
+        # keep rows JSON-safe: dates become strings
+        "rows": [[c.isoformat() if isinstance(c, (date, datetime)) else c for c in r]
+                 for r in out["rows"]],
+        "stated_totals": out["stated_totals"], "period_from": pf, "period_to": pt,
+        "text": "", "row_count": len(out["rows"]), "note": "",
+        "sheet": out.get("sheet", ""), "sheets": out.get("sheets", []),
+    }
+
+
+def _recognised(columns: list[str]) -> int:
+    """How many of these column names are ones we know. Used to find the data sheet."""
+    return sum(1 for c in columns if c in ALIASES)
+
+
+def _extract_xlsx(data: bytes) -> dict:
+    """Read every worksheet, and analyse the one that actually holds the data.
+
+    Reading only the first sheet was a silent misread waiting to happen: a workbook whose first
+    tab is a cover page or a summary would be reported as having none of the requested columns,
+    which is a false "they did not send it" — the most expensive kind of wrong answer here,
+    because it costs the taxpayer a round trip over a file they already supplied.
+
+    The primary sheet is chosen by how many recognised columns it carries, then by how many rows
+    — item-agnostic, because extraction is format work and must not know what was asked for. The
+    others are kept in `sheets` so the checker can say where the data really is.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+    read: list[tuple[str, dict]] = []
+    try:
+        for name in wb.sheetnames:
+            grid = [list(r) for r in wb[name].iter_rows(values_only=True)]
+            read.append((name, _from_grid(grid)))
+    finally:
+        wb.close()
+    if not read:
+        return {"columns": [], "rows": [], "stated_totals": {}, "raw_headers": [], "sheets": []}
+
+    name, out = max(read, key=lambda s: (_recognised(s[1]["columns"]), len(s[1]["rows"])))
+    out = dict(out)
+    out["sheet"] = name
+    out["sheets"] = [{"name": n, "columns": s["columns"], "row_count": len(s["rows"]),
+                      "primary": n == name}
+                     for n, s in read]
+    return out
+
+
+def _extract_csv(data: bytes) -> dict:
+    text = data.decode("utf-8-sig", errors="replace")
+    grid = [row for row in csv.reader(io.StringIO(text))]
+    return _from_grid(grid)
+
+
+def from_structure(payload: dict) -> dict:
+    """Accept an already-parsed table (demo seeding, or an upstream extraction service)."""
+    columns = [normalise(c) for c in payload.get("columns", [])]
+    rows = payload.get("rows", []) or []
+    pf, pt = payload.get("period_from"), payload.get("period_to")
+    if pf is None and pt is None:
+        pf, pt = _period(columns, rows)
+    return {
+        "format": payload.get("format", "xlsx"), "columns": columns,
+        "raw_headers": list(payload.get("columns", [])), "rows": rows,
+        "stated_totals": payload.get("stated_totals", {}) or {},
+        "period_from": pf, "period_to": pt, "text": payload.get("text", ""),
+        "row_count": len(rows), "note": payload.get("note", ""),
+        "sheet": payload.get("sheet", ""),
+        "sheets": payload.get("sheets") or ([{"name": payload.get("sheet") or "Sheet1",
+                                              "columns": columns, "row_count": len(rows),
+                                              "primary": True}] if columns else []),
+    }

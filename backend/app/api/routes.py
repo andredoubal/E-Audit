@@ -1,0 +1,1934 @@
+from datetime import date
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import select, func, delete
+from sqlalchemy.orm import Session
+
+from ..db import get_db
+from ..models import (
+    Taxpayer, VatReturn, Invoice, AuditCase, Rule, TaxpayerResponse, EventLog, GapFinding,
+    AuditorCalculation, AuditorDecision, AuditorFinding, PersistedHypothesis, LetterDraft,
+    CaseInstruction,
+)
+from ..models.reporting import LETTER_KINDS
+from ..models.instructions import MAX_INSTRUCTIONS
+from ..models.reviews import KINDS as REVIEW_KINDS, KIND_COMPLETENESS
+from ..requests import service as req_service
+from ..requests import from_email
+from ..agents import calc_service
+from ..agents import investigation_service as inv_service
+from ..agents import zatca_service
+from ..agents.correspondence import draft_followup, draft_request
+from ..recon_engine import reconcile_case
+from ..priority import score_case
+from ..pipeline.rules import coded_rules as wired_codes
+from ..rule_taxonomy import REASON_CODES, STAGES, KINDS
+from ..scope import scope_card
+from ..dossier import collect as collect_dossier
+from ..llm.service import llm
+from ..config import settings
+
+router = APIRouter(prefix="/api")
+
+
+def _rule_rows(db: Session) -> list[dict]:
+    return [
+        {"code": r.code, "family": r.family, "title": r.title,
+         "explains_gap": r.explains_gap, "severity": r.severity}
+        for r in db.scalars(select(Rule).order_by(Rule.code)).all()
+    ]
+
+
+@router.get("/health")
+def health(db: Session = Depends(get_db)):
+    return {
+        "status": "ok",
+        "taxpayers": db.scalar(select(func.count()).select_from(Taxpayer)),
+        "cases": db.scalar(select(func.count()).select_from(AuditCase)),
+        "rules": db.scalar(select(func.count()).select_from(Rule)),
+    }
+
+
+@router.get("/rules")
+def list_rules(db: Session = Depends(get_db)):
+    """The rule library, each row carrying its taxonomy and whether the engine can fire it.
+
+    `wired` comes from the reconciling-item registry rather than a hard-coded list in the
+    UI, so a rule added to the registry is badged live without a frontend change.
+    """
+    wired = wired_codes()
+    rows = db.scalars(select(Rule).order_by(Rule.code)).all()
+    return [
+        {
+            "code": r.code, "family": r.family, "title": r.title,
+            "explains_gap": r.explains_gap, "gap_band": r.gap_band,
+            "severity": r.severity, "severity_band": r.severity_band,
+            "root_cause_code": r.root_cause_code, "enabled": r.enabled,
+            "rule_kind": r.rule_kind, "stage": r.stage,
+            "reason_code": r.reason_code,
+            "reason_label": REASON_CODES.get(r.reason_code, ("", ""))[1],
+            "wired": r.code in wired,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/reason-codes")
+def list_reason_codes():
+    """The difference taxonomy: why a return may legitimately differ from the e-invoices."""
+    return {
+        "kinds": list(KINDS),
+        "stages": list(STAGES),
+        "codes": [
+            {"code": code, "group": group, "label": label}
+            for code, (group, label) in REASON_CODES.items()
+        ],
+    }
+
+
+@router.get("/scope")
+def scope():
+    """What this PoC reconciles, and what it deliberately leaves out."""
+    return scope_card()
+
+
+@router.get("/cases/{case_id}/dossier")
+def case_dossier(case_id: str, db: Session = Depends(get_db)):
+    """Everything ZATCA already holds on this taxpayer and period, in one call.
+
+    The auditors start a case by investigating internal data — returns, e-invoicing, imports and
+    exports, history, prior audits, financials — and only then decide what is genuinely missing.
+    Doing that today means opening several systems. This is that step, assembled.
+    """
+    try:
+        return collect_dossier(db, case_id)
+    except LookupError:
+        raise HTTPException(404, "case not found")
+
+
+@router.get("/cases/{case_id}/precedent")
+def case_precedent(case_id: str, db: Session = Depends(get_db)):
+    """What comparable closed cases turned out to be, and which evidence actually closed them.
+
+    Deterministic retrieval over labelled closed cases — no model, no embeddings. Every figure
+    is a count or a median taken here, which is what makes the ranked list reproducible.
+    """
+    from ..agents.precedent_analyst import brief
+
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    return brief(db, c).to_dict()
+
+
+def _case_or_404(db: Session, case_id: str) -> AuditCase:
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    return c
+
+
+@router.get("/cases/{case_id}/investigate")
+def investigate_case(case_id: str, db: Session = Depends(get_db)):
+    """Run the multi-agent investigation over the reconciled case, without storing it.
+
+    Evidence agents propose typed hypotheses; a deterministic adjudicator settles each one
+    against the engine's figures. No model is involved in any number here, and the whole
+    loop runs without credentials — the agents are pattern detectors, not writers.
+
+    This is the stateless view. `/cases/{id}/investigation` is the same pipeline with its
+    conclusions kept, which is what the auditor rules on; both assemble their context from
+    `investigation_service.context_args` so the two can never disagree about what the agents
+    were shown.
+    """
+    from ..agents.orchestrator import investigate
+
+    c = _case_or_404(db, case_id)
+    recon = reconcile_case(db, case_id, persist=False)
+    return investigate(recon, **inv_service.context_args(db, c)).model_dump()
+
+
+# ======================================================= the investigation, remembered
+#
+# `/investigate` above recomputes and returns; it never stored anything, which is why an
+# auditor could read a hypothesis but not rule on one. These endpoints work over the
+# persisted view instead: the same pipeline, with its conclusions kept so a decision has
+# something to attach to and a re-run has something to compare against.
+
+
+@router.get("/cases/{case_id}/investigation")
+def investigation_state(case_id: str, db: Session = Depends(get_db)):
+    """The persisted investigation: hypotheses, their verdicts, and what the auditor decided.
+
+    Runs the investigation once on first read so opening the tab shows a worked case rather
+    than an empty page asking to be told to start.
+    """
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return inv_service.state(db, c)
+
+
+@router.get("/cases/{case_id}/investigation/summary")
+def investigation_summary(case_id: str, db: Session = Depends(get_db)):
+    """What the investigation found, as a handful of cards rather than every hypothesis.
+
+    One card per basis, so a single excess seen four ways is stated once; and what was
+    *observed* is kept apart from what it *may mean*, because a difference between the documents
+    and the return is a fact and a tax finding is a judgement the auditor makes.
+    """
+    from ..agents import summary as summary_mod
+    from ..agents import zatca_service
+
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return summary_mod.build(inv_service.state(db, c), zatca=zatca_service.state(db, c))
+
+
+class AssessmentIn(BaseModel):
+    text: str = ""
+
+
+class AssessmentReviseIn(BaseModel):
+    instruction: str
+
+
+@router.get("/cases/{case_id}/assessment")
+def get_assessment(case_id: str, db: Session = Depends(get_db)):
+    """The auditor's assessment — theirs if they have written one, the engine's draft if not."""
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    inv_service.ensure_run(db, c)
+    return assessment.get(db, c)
+
+
+@router.put("/cases/{case_id}/assessment")
+def put_assessment(case_id: str, body: AssessmentIn, db: Session = Depends(get_db)):
+    """Store the auditor's assessment. An empty body reverts to the engine's draft."""
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    return assessment.save(db, c, body.text)
+
+
+@router.post("/cases/{case_id}/assessment/revise")
+def revise_assessment(case_id: str, body: AssessmentReviseIn, db: Session = Depends(get_db)):
+    """Rewrite the assessment under the auditor's instruction, against the same facts.
+
+    The instruction steers wording and emphasis. It cannot introduce a figure: the facts block
+    and the verifier are the ones the first draft passed through.
+    """
+    from ..agents import assessment
+
+    c = _case_or_404(db, case_id)
+    if not body.instruction.strip():
+        raise HTTPException(422, "Say what should change about the assessment.")
+    return assessment.revise(db, c, body.instruction)
+
+
+class RunIn(BaseModel):
+    trigger: str = "auditor-requested"
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/investigation/run")
+def investigation_run(case_id: str, body: RunIn | None = None,
+                      db: Session = Depends(get_db)):
+    """Investigate again, merging into what the case already concluded.
+
+    This is the loop: new documents arrive, the auditor re-runs, and each hypothesis is
+    re-adjudicated against the larger evidence base. A verdict that moves keeps the old one
+    beside it, and any decision made before the ground shifted is flagged rather than
+    silently overwritten.
+    """
+    c = _case_or_404(db, case_id)
+    body = body or RunIn()
+    run = inv_service.run(db, c, trigger=body.trigger, note=body.note)
+    state = inv_service.state(db, c)
+    state["last_run"] = {"seq": run.seq, "changed_count": run.changed_count}
+    return state
+
+
+class DecisionIn(BaseModel):
+    decision: str
+    comment: str = ""
+
+
+@router.post("/cases/{case_id}/hypotheses/{hypothesis_id}/decision")
+def decide(case_id: str, hypothesis_id: str, body: DecisionIn,
+           db: Session = Depends(get_db)):
+    """Record what the auditor decided about one hypothesis.
+
+    Only `accepted` reaches the report. The rest are kept because what was rejected, and
+    why, is as much a part of the audit file as what was upheld — and because an auditor
+    who reopens the case in a month needs to see that a question was already answered.
+    """
+    from ..models.investigation import DECISIONS
+
+    c = _case_or_404(db, case_id)
+    if body.decision not in DECISIONS:
+        raise HTTPException(422, f"decision must be one of {', '.join(DECISIONS)}")
+    h = db.scalar(select(PersistedHypothesis).where(
+        PersistedHypothesis.case_id == case_id,
+        PersistedHypothesis.hypothesis_id == hypothesis_id))
+    if h is None:
+        raise HTTPException(404, "hypothesis not found on this case")
+
+    row = db.scalar(select(AuditorDecision).where(
+        AuditorDecision.case_id == case_id,
+        AuditorDecision.hypothesis_id == hypothesis_id))
+    if row is None:
+        row = AuditorDecision(case_id=case_id, hypothesis_id=hypothesis_id)
+        db.add(row)
+    row.decision = body.decision
+    row.comment = (body.comment or "").strip()
+    row.decided_on_status = h.status
+    row.superseded_by_run = None          # deciding again clears the re-confirmation flag
+    db.add(EventLog(case_id=case_id, actor="auditor", action="hypothesis-decision",
+                    payload={"hypothesis_id": hypothesis_id, "decision": body.decision,
+                             "status": h.status}))
+    db.commit()
+    return inv_service.state(db, c)
+
+
+@router.delete("/cases/{case_id}/hypotheses/{hypothesis_id}/decision")
+def undecide(case_id: str, hypothesis_id: str, db: Session = Depends(get_db)):
+    """Take a ruling back, returning the matter to open.
+
+    A decision an auditor cannot reverse is one they will hesitate to make, and hesitating
+    over a first pass is the opposite of what this section is for. The hypothesis itself is
+    untouched — what is removed is the auditor's position on it, and the removal is logged,
+    so the file still shows that a view was taken and withdrawn.
+    """
+    c = _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorDecision).where(
+        AuditorDecision.case_id == case_id,
+        AuditorDecision.hypothesis_id == hypothesis_id))
+    if row is not None:
+        db.add(EventLog(case_id=case_id, actor="auditor", action="hypothesis-undecided",
+                        payload={"hypothesis_id": hypothesis_id, "was": row.decision}))
+        db.delete(row)
+        db.commit()
+    return inv_service.state(db, c)
+
+
+class RequestInfoIn(BaseModel):
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/hypotheses/{hypothesis_id}/request-info")
+def request_information(case_id: str, hypothesis_id: str, body: RequestInfoIn | None = None,
+                        db: Session = Depends(get_db)):
+    """An investigation that cannot settle a hypothesis asks the taxpayer, rather than guessing.
+
+    This is the loop. It opens a correspondence thread carrying the hypothesis id, marks the
+    hypothesis as waiting on the taxpayer, and drafts the request from the engine's own account
+    of what is missing. When documents arrive against that thread, the investigation offers to
+    re-test *this* hypothesis rather than simply re-running everything.
+    """
+    from ..agents.correspondence import draft_information_request
+    from ..requests import threads as thread_service
+
+    case = _case_or_404(db, case_id)
+    body = body or RequestInfoIn()
+    h = db.scalar(select(PersistedHypothesis).where(
+        PersistedHypothesis.case_id == case_id,
+        PersistedHypothesis.hypothesis_id == hypothesis_id))
+    if h is None:
+        raise HTTPException(404, "hypothesis not found on this case")
+
+    draft = draft_information_request(case, case.taxpayer, h, note=body.note)
+    thread = thread_service.open_for_hypothesis(
+        db, case, hypothesis_id, note=body.note, draft=draft.get("text", ""))
+    return {"thread": thread_service.state(db, case_id),
+            "draft": draft,
+            "hypothesis_id": hypothesis_id}
+
+
+@router.get("/cases/{case_id}/threads")
+def correspondence_threads(case_id: str, db: Session = Depends(get_db)):
+    """The full correspondence history — every enquiry, its messages and what arrived on it."""
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    return thread_service.state(db, case_id)
+
+
+class ThreadIn(BaseModel):
+    subject: str = ""
+    #: Why this round exists. A round raised from the investigation that files itself as an
+    #: opening request tells the auditor who lands on it the wrong story about their own case.
+    origin: str = "initial"
+
+
+@router.post("/cases/{case_id}/threads")
+def open_correspondence_thread(case_id: str, body: ThreadIn | None = None,
+                               db: Session = Depends(get_db)):
+    from ..requests import threads as thread_service
+
+    from ..requests.threads import ORIGINS
+
+    _case_or_404(db, case_id)
+    body = body or ThreadIn()
+    if body.origin not in ORIGINS:
+        raise HTTPException(422, f"origin must be one of {', '.join(ORIGINS)}")
+    thread_service.start(db, case_id, subject=body.subject, origin=body.origin)
+    db.commit()
+    return thread_service.state(db, case_id)
+
+
+class ReplyIn(BaseModel):
+    body: str
+    subject: str = ""
+
+
+@router.post("/cases/{case_id}/threads/reply")
+def record_taxpayer_reply(case_id: str, body: ReplyIn, db: Session = Depends(get_db)):
+    """What the taxpayer wrote back, kept verbatim and attributed to them.
+
+    Their account of their own records is evidence of what they say, not of what is true, so it
+    is stored as theirs and never merged into the engine's own narrative.
+    """
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    if not (body.body or "").strip():
+        raise HTTPException(422, "a reply needs a body")
+    thread_service.record_reply(db, case_id, body=body.body.strip(), subject=body.subject)
+    return thread_service.state(db, case_id)
+
+
+def _file_email(db, case, case_id: str, parsed, *, filename: str) -> dict:
+    """Put one parsed email on the round: the message on the chain, its attachments as documents.
+
+    Direction comes from who sent it. An auditor forwarding their own sent mail and an auditor
+    forwarding the taxpayer's reply are different evidence, and the trail must not flatten them —
+    so the header decides, not the fact that it arrived through this endpoint.
+    """
+    from ..requests import threads as thread_service
+
+    thread = thread_service.open_thread(db, case_id)
+    if thread is None:
+        thread = thread_service.start(db, case_id,
+                                      subject=parsed.subject or "Taxpayer correspondence")
+
+    outbound = "zatca" in (parsed.sender or "").lower()
+    sent = None
+    if parsed.sent_at:
+        try:
+            sent = date.fromisoformat(parsed.sent_at)
+        except ValueError:
+            sent = None
+    thread_service.add_message(
+        db, thread,
+        direction="outbound" if outbound else "inbound",
+        body=parsed.body, subject=parsed.subject,
+        sender=parsed.sender or ("ZATCA" if outbound else "Taxpayer"),
+        recipient=parsed.recipient or ("Taxpayer" if outbound else "ZATCA"),
+        drafted_by="auditor" if outbound else "taxpayer",
+        audit_stage="correspondence", sent_at=sent)
+
+    req = req_service.current_request(db, case_id)
+    filed = []
+    for name, payload in parsed.attachments:
+        doc = req_service.record_document(
+            db, case=case, req=req, filename=name, data=payload,
+            file_format=name.rsplit(".", 1)[-1].lower())
+        filed.append(doc.filename)
+    if filed and req is not None:
+        req_service.run_checks(db, case)
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action="email-filed",
+                    payload={"file": filename, "attachments": filed,
+                             "direction": "outbound" if outbound else "inbound"}))
+    return {"filename": filename, "ok": True, "subject": parsed.subject,
+            "sender": parsed.sender, "recipient": parsed.recipient,
+            "sent_at": parsed.sent_at, "direction": "outbound" if outbound else "inbound",
+            "filed": filed, "skipped": parsed.skipped, "note": parsed.note}
+
+
+@router.post("/cases/{case_id}/threads/emails")
+async def upload_emails(case_id: str, files: list[UploadFile] = File(...),
+                        db: Session = Depends(get_db)):
+    """File a whole chain at once — as many messages as the auditor drops in.
+
+    Three things this does that filing them one at a time does not.
+
+    **They go on the chain in the order they were sent, not the order they were dropped.** A
+    chain selected in a mail client arrives in whatever order the file picker hands it over, and
+    a trail that says the chase went out before the request misrepresents the correspondence.
+    The `Date` header decides; a message without one keeps its position in the drop.
+
+    **One unreadable file does not lose the other four.** Each is reported on its own, so a
+    signature-only forward or an Outlook `.msg` this deployment cannot read is a line in the
+    result rather than a rejected upload.
+
+    **The attachments come with them.** That is the step that costs a round when it is done by
+    hand: the auditor is holding the words and the spreadsheets together, and the attachment
+    that gets missed is the one nobody notices until both sides have waited a month.
+    """
+    from ..requests import email_file
+
+    case = _case_or_404(db, case_id)
+    if not files:
+        raise HTTPException(422, "no files")
+    if len(files) > 40:
+        raise HTTPException(413, "too many files in one drop for the demo (40 limit)")
+
+    read: list[tuple[int, str, object]] = []
+    failed: list[dict] = []
+    for n, f in enumerate(files):
+        name = f.filename or f"message-{n + 1}.eml"
+        data = await f.read()
+        if len(data) > 12_000_000:
+            failed.append({"filename": name, "ok": False,
+                           "note": "file too large for the demo (12 MB limit)"})
+            continue
+        parsed = email_file.parse(name, data)
+        if not parsed.ok:
+            failed.append({"filename": name, "ok": False,
+                           "note": parsed.note or "nothing readable in that email"})
+            continue
+        read.append((n, name, parsed))
+
+    if not read:
+        raise HTTPException(422, failed[0]["note"] if failed else "nothing readable")
+
+    # Sent order, with the drop order as the tiebreak for messages carrying no Date header.
+    read.sort(key=lambda r: (r[2].sent_at or "9999-12-31", r[0]))
+
+    results = [_file_email(db, case, case_id, parsed, filename=name) for _, name, parsed in read]
+    db.commit()
+
+    from ..requests import threads as thread_service
+
+    return {**thread_service.state(db, case_id), "results": results + failed,
+            "read": len(results), "unreadable": len(failed),
+            "filed": [f for r in results for f in r["filed"]]}
+
+
+@router.post("/cases/{case_id}/threads/email")
+async def upload_email(case_id: str, file: UploadFile = File(...),
+                       db: Session = Depends(get_db)):
+    """One forwarded email onto the round. The plural form above is what the UI uses.
+
+    Kept because a single file is a legitimate thing to send and because callers already use it;
+    it shares `_file_email` with the chain endpoint so the two cannot drift on direction, dates
+    or attachment handling.
+    """
+    from ..requests import email_file
+    from ..requests import threads as thread_service
+
+    case = _case_or_404(db, case_id)
+    data = await file.read()
+    if len(data) > 12_000_000:
+        raise HTTPException(413, "file too large for the demo (12 MB limit)")
+
+    parsed = email_file.parse(file.filename or "message.eml", data)
+    if not parsed.ok:
+        raise HTTPException(422, parsed.note or "nothing readable in that email")
+
+    one = _file_email(db, case, case_id, parsed, filename=file.filename or "message.eml")
+    db.commit()
+    return {**thread_service.state(db, case_id),
+            "filed": one["filed"], "skipped": parsed.skipped, "note": parsed.note}
+
+
+@router.get("/regulatory/coverage")
+def regulatory_coverage():
+    """What the regulations corpus holds, and which outcomes have a provision behind them.
+
+    Published rather than internal: an auditor is entitled to know that six of the twelve
+    outcomes rest on Article 14, and that 31 articles have been amended since the English
+    edition they are shown in.
+    """
+    from ..regulatory import lookup as reg_lookup
+
+    return reg_lookup.coverage()
+
+
+@router.get("/regulatory/articles/{number}")
+def regulatory_article(number: int):
+    """One article, as the corpus holds it."""
+    from ..regulatory import lookup as reg_lookup
+
+    a = reg_lookup.article(number)
+    if a is None:
+        raise HTTPException(404, "article not in the corpus")
+    return a
+
+
+# --------------------------------------------------- approve or challenge what we concluded
+
+class ReviewIn(BaseModel):
+    item_kind: str
+    item_key: str
+    verdict: str = ""          # approved | challenged | "" to withdraw
+    note: str = ""
+
+
+@router.put("/cases/{case_id}/reviews")
+def record_review(case_id: str, body: ReviewIn, db: Session = Depends(get_db)):
+    """The auditor's verdict on one thing the application worked out.
+
+    Every check here is defensible and every one of them can be wrong. An auditor who knows the
+    "missing" column is present under a different header needs somewhere to say so — and saying
+    it has to *do* something, or the chase letter goes out asking for a document the Authority's
+    own auditor has said was already supplied.
+
+    A challenge must carry a reason. "The auditor disagreed" with nothing after it is not
+    something anyone can act on later, least of all the auditor coming back to it in a month.
+    """
+    from ..requests import reviews as review_service
+
+    _case_or_404(db, case_id)
+    if body.item_kind not in REVIEW_KINDS:
+        raise HTTPException(422, f"unknown item kind: {body.item_kind}")
+    if body.verdict == "challenged" and not body.note.strip():
+        raise HTTPException(422, "a challenge needs a reason")
+
+    try:
+        review_service.record(db, case_id, kind=body.item_kind, key=body.item_key,
+                              verdict=body.verdict, note=body.note)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action="item-reviewed",
+                    payload={"kind": body.item_kind, "key": body.item_key,
+                             "verdict": body.verdict or "withdrawn"}))
+    db.commit()
+    return {"case_id": case_id,
+            "reviews": review_service.reviews_for(db, case_id, body.item_kind)}
+
+
+@router.get("/cases/{case_id}/reviews/{kind}")
+def list_reviews(case_id: str, kind: str, db: Session = Depends(get_db)):
+    from ..requests import reviews as review_service
+
+    _case_or_404(db, case_id)
+    if kind not in REVIEW_KINDS:
+        raise HTTPException(422, f"unknown item kind: {kind}")
+    return {"case_id": case_id, "reviews": review_service.reviews_for(db, case_id, kind)}
+
+
+# ------------------------------------------------- the auditor's standing AI instructions
+# One row per case, reaching every module. See `models/instructions.py` for why it is a case
+# fact rather than a session setting, and `llm/guidance.py` for why it cannot reach the rules
+# that keep figures out of the model's hands.
+
+class InstructionsIn(BaseModel):
+    text: str = ""
+    enabled: bool = True
+
+
+def _instructions_state(db: Session, case_id: str) -> dict:
+    row = db.scalar(select(CaseInstruction).where(CaseInstruction.case_id == case_id))
+    return {
+        "case_id": case_id,
+        "text": row.text if row else "",
+        "enabled": bool(row.enabled) if row else True,
+        "updated_at": row.updated_at.isoformat() if row and row.updated_at else "",
+        "updated_by": row.updated_by if row else "",
+        "max_length": MAX_INSTRUCTIONS,
+    }
+    # Which surfaces the steer reaches is a property of `llm/service.py:_with_steer` — the
+    # narration, the report, the taxpayer brief and the letters, and deliberately not the two
+    # that *read* rather than write. It was published here and listed in the panel; the panel is
+    # now the box and two buttons, and an API field nothing renders is a second place for that
+    # answer to go stale. It lives in the code and in CLAUDE.md instead.
+
+
+@router.get("/cases/{case_id}/instructions")
+def get_instructions(case_id: str, db: Session = Depends(get_db)):
+    """What the auditor has told the AI about this case, and where it applies."""
+    _case_or_404(db, case_id)
+    return _instructions_state(db, case_id)
+
+
+@router.put("/cases/{case_id}/instructions")
+def set_instructions(case_id: str, body: InstructionsIn, db: Session = Depends(get_db)):
+    """Write the standing instructions. An empty text clears them.
+
+    `enabled` is kept separate from clearing on purpose: an auditor who wants to see what the AI
+    says *without* their steer should not have to delete what they wrote to find out.
+    """
+    _case_or_404(db, case_id)
+    text = (body.text or "").strip()
+    if len(text) > MAX_INSTRUCTIONS:
+        raise HTTPException(422, f"instructions are limited to {MAX_INSTRUCTIONS} characters")
+
+    row = db.scalar(select(CaseInstruction).where(CaseInstruction.case_id == case_id))
+    if not text:
+        if row is not None:
+            db.delete(row)
+        action = "instructions-cleared"
+    else:
+        if row is None:
+            row = CaseInstruction(case_id=case_id)
+            db.add(row)
+        row.text = text
+        row.enabled = bool(body.enabled)
+        action = "instructions-set" if body.enabled else "instructions-paused"
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action=action,
+                    payload={"length": len(text), "enabled": bool(body.enabled)}))
+    db.commit()
+    return _instructions_state(db, case_id)
+
+
+# ------------------------------------------------------------------ the case assistant
+
+class AskIn(BaseModel):
+    question: str = ""
+    action: str = ""
+
+
+@router.get("/cases/{case_id}/assistant")
+def assistant_state(case_id: str, db: Session = Depends(get_db)):
+    """The case conversation, and what the assistant is able to do."""
+    from ..agents import assistant
+
+    _case_or_404(db, case_id)
+    return assistant.state(db, case_id)
+
+
+@router.post("/cases/{case_id}/assistant")
+def assistant_ask(case_id: str, body: AskIn, db: Session = Depends(get_db)):
+    """One turn: choose an action from the closed set, run it, record both.
+
+    The assistant cannot run anything this application could not already do from a button — an
+    assistant with open-ended reach would be unauditable, and every figure in its answer is
+    computed by the engine before the reply is written.
+    """
+    from ..agents import assistant
+
+    case = _case_or_404(db, case_id)
+    try:
+        return assistant.ask(db, case, body.question, action=body.action)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.delete("/cases/{case_id}/assistant")
+def assistant_clear(case_id: str, db: Session = Depends(get_db)):
+    from ..agents import assistant
+
+    _case_or_404(db, case_id)
+    return assistant.clear(db, case_id)
+
+
+class AuditorFindingIn(BaseModel):
+    statement: str
+    outcome_code: str = ""
+    amount: float = 0.0
+    note: str = ""
+
+
+@router.post("/cases/{case_id}/auditor-findings")
+def add_auditor_finding(case_id: str, body: AuditorFindingIn,
+                        db: Session = Depends(get_db)):
+    """A finding the auditor wrote themselves.
+
+    The agents cover what they have tests for. Anything else still has to be recordable, and
+    it has to stay distinguishable in the report from what a model proposed.
+    """
+    _case_or_404(db, case_id)
+    statement = (body.statement or "").strip()
+    if not statement:
+        raise HTTPException(422, "statement is required")
+    seq = 1 + len(db.scalars(select(AuditorFinding).where(
+        AuditorFinding.case_id == case_id)).all())
+    row = AuditorFinding(case_id=case_id, seq=seq, statement=statement,
+                         outcome_code=(body.outcome_code or "").strip(),
+                         amount=round(float(body.amount or 0), 2),
+                         basis=f"auditor|{seq}", note=(body.note or "").strip())
+    db.add(row)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-added",
+                    payload={"seq": seq, "statement": statement[:200]}))
+    db.commit()
+    return {"seq": seq, "statement": statement, "amount": float(row.amount),
+            "outcome_code": row.outcome_code, "note": row.note, "basis": row.basis}
+
+
+@router.get("/cases/{case_id}/auditor-findings")
+def list_auditor_findings(case_id: str, db: Session = Depends(get_db)):
+    _case_or_404(db, case_id)
+    return [{"seq": r.seq, "statement": r.statement, "amount": float(r.amount or 0),
+             "outcome_code": r.outcome_code, "note": r.note, "basis": r.basis,
+             "created_at": r.created_at.isoformat() if r.created_at else ""}
+            for r in db.scalars(select(AuditorFinding)
+                                .where(AuditorFinding.case_id == case_id)
+                                .order_by(AuditorFinding.seq)).all()]
+
+
+class AuditorFindingPatch(BaseModel):
+    statement: str | None = None
+    outcome_code: str | None = None
+    amount: float | None = None
+    note: str | None = None
+    seq: int | None = None
+
+
+@router.patch("/cases/{case_id}/auditor-findings/{seq}")
+def edit_auditor_finding(case_id: str, seq: int, body: AuditorFindingPatch,
+                         db: Session = Depends(get_db)):
+    """Amend a finding the auditor wrote.
+
+    Only the fields sent are touched, so an amount can be corrected without retyping the
+    statement. Clearing the statement is refused rather than stored: a finding with nothing
+    written on it is a row that will reach the audit report saying nothing.
+    """
+    _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorFinding).where(AuditorFinding.case_id == case_id,
+                                                 AuditorFinding.seq == seq))
+    if row is None:
+        raise HTTPException(404, "finding not found")
+    if body.statement is not None:
+        statement = body.statement.strip()
+        if not statement:
+            raise HTTPException(422, "statement cannot be emptied — remove the finding instead")
+        row.statement = statement
+    if body.outcome_code is not None:
+        row.outcome_code = body.outcome_code.strip()
+    if body.amount is not None:
+        row.amount = round(float(body.amount), 2)
+    if body.note is not None:
+        row.note = body.note.strip()
+    if body.seq is not None and body.seq != seq:
+        row.seq = body.seq
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-edited",
+                    payload={"seq": seq}))
+    db.commit()
+    return {"seq": row.seq, "statement": row.statement, "amount": float(row.amount or 0),
+            "outcome_code": row.outcome_code, "note": row.note, "basis": row.basis}
+
+
+@router.delete("/cases/{case_id}/auditor-findings/{seq}")
+def remove_auditor_finding(case_id: str, seq: int, db: Session = Depends(get_db)):
+    """Withdraw a finding the auditor wrote.
+
+    Deleted rather than flagged: unlike a hypothesis — which is part of the file whatever its
+    verdict, because what was investigated matters — this row exists only because the auditor
+    typed it, so withdrawing it leaves nothing to record. The event log keeps that it happened.
+    """
+    _case_or_404(db, case_id)
+    row = db.scalar(select(AuditorFinding).where(AuditorFinding.case_id == case_id,
+                                                 AuditorFinding.seq == seq))
+    if row is None:
+        raise HTTPException(404, "finding not found")
+    db.add(EventLog(case_id=case_id, actor="auditor", action="auditor-finding-removed",
+                    payload={"seq": seq, "statement": row.statement[:200]}))
+    db.delete(row)
+    db.commit()
+    return {"removed": seq}
+
+
+class RulePatch(BaseModel):
+    enabled: bool
+
+
+@router.patch("/rules/{code}")
+def update_rule(code: str, body: RulePatch, db: Session = Depends(get_db)):
+    """Enable/disable a detection rule.
+
+    Disabling a wired rule changes which documents qualify — e.g. turning COR-01 off means
+    credit notes no longer belong in the box, so they leave the qualifying set entirely.
+    """
+    r = db.get(Rule, code)
+    if not r:
+        raise HTTPException(404, "rule not found")
+    r.enabled = body.enabled
+    db.commit()
+    return {"code": r.code, "enabled": r.enabled}
+
+
+@router.delete("/rules/{code}")
+def delete_rule(code: str, db: Session = Depends(get_db)):
+    r = db.get(Rule, code)
+    if not r:
+        raise HTTPException(404, "rule not found")
+    db.delete(r)
+    db.commit()
+    return {"status": "deleted", "code": code}
+
+
+@router.get("/cases")
+def list_cases(db: Session = Depends(get_db)):
+    """Open cases, each scored by the composite priority engine, sorted most-urgent first."""
+    cases = db.scalars(
+        select(AuditCase).where(AuditCase.status != "closed").order_by(AuditCase.case_id)
+    ).all()
+    rows = [
+        {
+            "case_id": c.case_id,
+            "taxpayer": c.taxpayer.name,
+            "vat_no": c.taxpayer.vat_registration_number,
+            "sector": c.taxpayer.ind_sector,
+            "period": f"{c.period_from:%Y-%m-%d} → {c.period_to:%Y-%m-%d}",
+            "reason": c.case_reason_code,
+            "risk": c.risk_category,
+            "referral_priority": c.vat_priority,
+            "status": c.status,
+            "scenario": c.scenario_key,
+            "priority": score_case(db, c),
+        }
+        for c in cases
+    ]
+    rows.sort(key=lambda r: r["priority"]["score"], reverse=True)
+    return rows
+
+
+# ------------------------------------------------------------------- manual case creation
+# There is no live risk-engine integration in this PoC — every case up to now has come from
+# a seed script. This is the only way an auditor can actually put a case in front of the
+# tool themselves, so it doubles as the one place several report-template fields
+# ("Case Creation Reason", "Assigned Audit Team information", taxpayer contact details) can
+# ever be filled with something real instead of [not held]. See reporting/audit_report.py.
+class NewCaseTaxpayerIn(BaseModel):
+    name: str
+    vat_registration_number: str
+    ind_sector: str = ""
+    economic_activities: list = []
+    contact_phone: str = ""
+    contact_email: str = ""
+    contact_address: str = ""
+    audited_before: bool = False
+    audited_before_note: str = ""
+
+
+class NewCaseIn(BaseModel):
+    case_id: str = ""                    # blank = auto-generate the next CASE-{year}-NNNN
+    period_from: date
+    period_to: date
+    creation_date: date | None = None     # blank = today
+    creation_reason: str = ""             # one of audit_report.CREATION_REASONS
+    audit_manager: str = ""
+    audit_supervisor: str = ""
+    audit_officer: str = ""
+    taxpayer: NewCaseTaxpayerIn
+
+
+def _next_case_id(db: Session, year: int) -> str:
+    """CASE-{year}-NNNN, one past whatever already exists for that year.
+
+    Deliberately not the CASE-H{year}-... shape corpus.py uses for the historical/precedent
+    corpus — that prefix marks a different population and must not collide with live cases.
+    """
+    prefix = f"CASE-{year}-"
+    existing = db.scalars(
+        select(AuditCase.case_id).where(AuditCase.case_id.like(f"{prefix}%"))
+    ).all()
+    max_seq = 0
+    for cid in existing:
+        tail = cid[len(prefix):]
+        if tail.isdigit():
+            max_seq = max(max_seq, int(tail))
+    return f"{prefix}{max_seq + 1:04d}"
+
+
+def _clear_orphaned_case_state(db: Session, case_id: str) -> None:
+    """Wipe anything still filed under this id before a new case takes it.
+
+    The auditor's own writing — instructions, the assessment, report fields, letter drafts,
+    reviews, the assistant conversation — is keyed on `case_id` with no foreign key, because it
+    outlives the rows it describes on purpose: a hypothesis is re-derived on every run and a
+    decision must not vanish with it. The cost is that a deleted case leaves its writing behind,
+    and ids are sequential, so the next case created can be handed the last one's steer and its
+    edited report fields. That is somebody else's audit appearing inside a fresh one.
+
+    A case id being issued is the moment to clear it: at that point nothing can legitimately be
+    filed under it yet.
+
+    **The evidence has to go too, and that is the half this originally missed.** Documents,
+    correspondence and the investigation are keyed the same way, so a reissued id inherited the
+    previous taxpayer's spreadsheets — and every figure downstream is built from those. A new
+    case opened on a recycled id showed another taxpayer's invoice register, expected return and
+    completeness gaps under its own name. Inheriting a stale instruction is somebody else's
+    steer; inheriting their invoices is somebody else's audit.
+    """
+    from sqlalchemy import delete
+
+    from ..models import (AuditorCalculation, AuditorDecision, AuditorFinding, BoxOutcome,
+                          CaseAssessment, CaseInstruction, CaseMessage, CaseRecon, Conclusion,
+                          CorrespondenceMessage, CorrespondenceThread, EventLog, GapFinding,
+                          HypothesisRegulatoryRef, InformationRequest, InvestigationRun,
+                          ItemReview, LetterDraft, PersistedHypothesis, QualificationStep,
+                          ReceivedDocument, ReportFieldEdit, RequestItem, TaxpayerResponse,
+                          Unexplained, ZatcaDataset)
+
+    # Children keyed on their parent rather than on the case have to go through it.
+    for recon in db.scalars(select(CaseRecon).where(CaseRecon.case_id == case_id)).all():
+        for child in (BoxOutcome, QualificationStep, Unexplained, Conclusion):
+            db.execute(delete(child).where(child.case_recon_id == recon.id))
+    for req in db.scalars(select(InformationRequest)
+                          .where(InformationRequest.case_id == case_id)).all():
+        db.execute(delete(RequestItem).where(RequestItem.request_id == req.id))
+
+    for model in (
+        # the auditor's own writing
+        CaseInstruction, CaseAssessment, ReportFieldEdit, LetterDraft, ItemReview, CaseMessage,
+        AuditorDecision, AuditorFinding, AuditorCalculation,
+        # the evidence, and what was asked for
+        ReceivedDocument, GapFinding, InformationRequest, ZatcaDataset,
+        CorrespondenceMessage, CorrespondenceThread, TaxpayerResponse,
+        # what was concluded from it
+        HypothesisRegulatoryRef, PersistedHypothesis, InvestigationRun, CaseRecon, EventLog,
+    ):
+        db.execute(delete(model).where(model.case_id == case_id))
+
+
+@router.post("/cases")
+def create_case(body: NewCaseIn, db: Session = Depends(get_db)):
+    """Create a case by hand. Reuses the taxpayer by VAT registration number if one already
+    exists, rather than erroring on the unique constraint — an auditor re-testing with the
+    same synthetic TIN should update the record, not be blocked by it."""
+    tp_in = body.taxpayer
+    if not tp_in.name.strip() or not tp_in.vat_registration_number.strip():
+        raise HTTPException(422, "taxpayer name and VAT registration number are required")
+    if body.period_from > body.period_to:
+        raise HTTPException(422, "period_from must not be after period_to")
+
+    tp = db.scalar(select(Taxpayer).where(
+        Taxpayer.vat_registration_number == tp_in.vat_registration_number.strip()))
+    if tp:
+        tp.name = tp_in.name.strip()
+        tp.ind_sector = tp_in.ind_sector.strip()
+        tp.economic_activities = tp_in.economic_activities
+        tp.contact_phone = tp_in.contact_phone.strip()
+        tp.contact_email = tp_in.contact_email.strip()
+        tp.contact_address = tp_in.contact_address.strip()
+        tp.audited_before = tp_in.audited_before
+        tp.audited_before_note = tp_in.audited_before_note.strip()
+    else:
+        tp = Taxpayer(
+            vat_registration_number=tp_in.vat_registration_number.strip(),
+            name=tp_in.name.strip(), ind_sector=tp_in.ind_sector.strip(),
+            economic_activities=tp_in.economic_activities,
+            contact_phone=tp_in.contact_phone.strip(), contact_email=tp_in.contact_email.strip(),
+            contact_address=tp_in.contact_address.strip(),
+            audited_before=tp_in.audited_before,
+            audited_before_note=tp_in.audited_before_note.strip(),
+        )
+        db.add(tp)
+    db.flush()   # assign tp.id for a brand-new taxpayer
+
+    creation_date = body.creation_date or date.today()
+    case_id = body.case_id.strip() or _next_case_id(db, creation_date.year)
+    if db.scalar(select(AuditCase).where(AuditCase.case_id == case_id)):
+        raise HTTPException(409, f"case {case_id} already exists")
+
+    db.add(AuditCase(
+        case_id=case_id, taxpayer_id=tp.id,
+        period_from=body.period_from, period_to=body.period_to,
+        audit_type="desk", status="referred", referral_date=creation_date,
+        creation_reason=body.creation_reason.strip(),
+        audit_manager=body.audit_manager.strip(),
+        audit_supervisor=body.audit_supervisor.strip(),
+        audit_officer=body.audit_officer.strip(),
+    ))
+    _clear_orphaned_case_state(db, case_id)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="case-created",
+                    payload={"taxpayer": tp.name, "vat_no": tp.vat_registration_number}))
+    db.commit()
+    return {"case_id": case_id}
+
+
+@router.get("/overview")
+def overview(db: Session = Depends(get_db)):
+    """Executive tiles — aggregated live across every open case's deterministic reconciliation."""
+    cases = db.scalars(select(AuditCase).where(AuditCase.status != "closed")).all()
+    exposure = accounted = differences = 0.0
+    supported = findings = review = 0
+    for c in cases:
+        try:
+            r = reconcile_case(db, c.case_id, persist=False)
+        except Exception:
+            continue
+        combined = r.get("combined") or {}
+        differences += abs(r["difference"])
+        accounted += float(r.get("evidence_total", 0.0))
+        state = combined.get("state", r["state"])          # worst of output + input boxes
+        if state == "potential-finding":
+            exposure += float(combined.get("total_exposure", max(r["unexplained"], 0.0)))
+            findings += 1
+        elif state == "unresolved":
+            review += 1
+        elif state == "supported":
+            supported += 1
+    n = len(cases)
+    return {
+        "open_cases": n,
+        "exposure_total": round(exposure, 2),
+        "difference_total": round(differences, 2),
+        "accounted_total": round(accounted, 2),
+        "auto_clearable": supported,
+        "auto_clearable_pct": round(supported / n, 4) if n else 0.0,
+        "needs_action": findings + review,
+        "findings": findings,
+        "to_review": review,
+    }
+
+
+@router.post("/admin/reseed")
+def reseed_demo():
+    """Restore the demo database to its seeded state. Synthetic data only — drops and rebuilds all tables."""
+    if not settings.data_is_synthetic:
+        raise HTTPException(403, "reseed is disabled unless the data is synthetic")
+    from ..seed.seed import run as _run
+    _run()
+    return {"status": "ok", "message": "Demo data restored"}
+
+
+@router.get("/cases/{case_id}")
+def get_case(case_id: str, db: Session = Depends(get_db)):
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    tp = c.taxpayer
+    vret = db.scalar(
+        select(VatReturn).where(
+            VatReturn.taxpayer_id == tp.id,
+            VatReturn.period_from == c.period_from,
+            VatReturn.current_flag.is_(True),
+        )
+    )
+    n_inv = db.scalar(
+        select(func.count()).select_from(Invoice).where(Invoice.taxpayer_id == tp.id)
+    )
+    return {
+        "case_id": c.case_id,
+        "status": c.status,
+        "reason": c.case_reason_code,
+        "risk": c.risk_category,
+        "priority": c.vat_priority,
+        "scenario": c.scenario_key,
+        "period": f"{c.period_from:%Y-%m-%d} → {c.period_to:%Y-%m-%d}",
+        "taxpayer": {
+            "name": tp.name, "vat_no": tp.vat_registration_number,
+            "sector": tp.ind_sector, "size": tp.business_size,
+            "accounting_method": tp.accounting_method, "resident": tp.resident_flag,
+            "vat_group": tp.vat_group_rep_flag,
+        },
+        "return": None if not vret else {
+            "form_number": vret.form_number,
+            "data_version": vret.data_version,
+            "submission_date": vret.submission_date and vret.submission_date.isoformat(),
+            "filing_deadline": vret.filing_deadline and vret.filing_deadline.isoformat(),
+            "total_vat_due": float(vret.total_vat_due),
+            "net_due_vat": float(vret.net_due_vat),
+            "boxes": [
+                {
+                    "box_code": b.box_code, "label": b.box_label, "direction": b.direction,
+                    "category": b.category, "rate": b.rate,
+                    "base_amount": float(b.base_amount), "vat_amount": float(b.vat_amount),
+                    "adjustment": float(b.adjustment),
+                }
+                for b in vret.boxes
+            ],
+        },
+        "invoice_count": n_inv,
+    }
+
+
+@router.get("/cases/{case_id}/reconcile")
+def reconcile(case_id: str, db: Session = Depends(get_db)):
+    """Qualify the e-invoice lines, sum what belongs to this box, and compare with the return."""
+    try:
+        return reconcile_case(db, case_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/cases/{case_id}/evidence")
+def evidence(case_id: str, db: Session = Depends(get_db)):
+    """Stage 0 — what arrived, read for what it is rather than for what it is called.
+
+    Everything downstream keys off this: which reconciliations can run, which regulatory
+    controls are testable, which box a listing belongs to. It replaces deciding those from
+    the filename, which worked on files named the way the demo names them and silently
+    misread everything else.
+    """
+    from ..evidence import service as evidence_service
+
+    _case_or_404(db, case_id)
+    try:
+        return evidence_service.state(db, case_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+class DatasetOverrideIn(BaseModel):
+    filename: str
+    #: Empty type and workstream together clear the override and restore the profiler's reading.
+    dataset_type: str = ""
+    workstream: str = ""
+    note: str = ""
+
+
+@router.put("/cases/{case_id}/evidence/override")
+def override_dataset(case_id: str, body: DatasetOverrideIn, db: Session = Depends(get_db)):
+    """The auditor's own reading of what a file is.
+
+    A classifier that cannot be overruled is worse than the filename matching it replaced: a
+    filename at least behaves predictably. So the correction is a first-class action, it is
+    recorded with what the profiler had said, and every consumer reads it in preference.
+    """
+    from ..evidence import profile as prof
+    from ..evidence import service as evidence_service
+
+    _case_or_404(db, case_id)
+    if body.dataset_type and body.dataset_type not in prof.LABEL:
+        raise HTTPException(422, f"unknown dataset type '{body.dataset_type}'")
+    if body.workstream and body.workstream not in ("sales", "purchases", "both", "unknown"):
+        raise HTTPException(422, "workstream must be sales, purchases, both or unknown")
+    if not any(p["filename"] == body.filename for p in evidence_service.profiles(db, case_id)):
+        raise HTTPException(404, f"no document named '{body.filename}' on this case")
+
+    evidence_service.set_override(db, case_id, filename=body.filename,
+                                  dataset_type=body.dataset_type,
+                                  workstream=body.workstream, note=body.note)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="dataset-reclassified",
+                    payload={"file": body.filename, "as": body.dataset_type or "(cleared)"}))
+    db.commit()
+    return evidence_service.state(db, case_id)
+
+
+@router.get("/cases/{case_id}/reconciliations")
+def reconciliations(case_id: str, workstream: str = "", db: Session = Depends(get_db)):
+    """Stage 1 — every comparison the evidence supports, and every one it does not.
+
+    The second half is the point. A comparison that silently does not run looks identical to
+    one that ran and found nothing, so a definition that cannot run publishes what is missing
+    — which is also the list a chase letter should be asking for.
+    """
+    from ..recon import registry as recon_registry
+    from ..recon import service as recon_service
+
+    _case_or_404(db, case_id)
+    if workstream and workstream not in (recon_registry.SALES, recon_registry.PURCHASES):
+        raise HTTPException(422, "workstream must be sales or purchases")
+    try:
+        return recon_service.state(db, case_id, workstream=workstream)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/cases/{case_id}/dashboard")
+def reconciliation_dashboard(case_id: str, db: Session = Depends(get_db)):
+    """The reconciliation dashboard: three sources, six comparisons, three levels.
+
+    Every figure here is computed in Python and reproducible without credentials — no model is
+    called from this path or anything it imports. That is what makes the dashboard testable
+    independently of the AI layer, which is the point of the separation.
+    """
+    from ..recon import dashboard as recon_dashboard
+
+    _case_or_404(db, case_id)
+    try:
+        return recon_dashboard.build_for(db, case_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/cases/{case_id}/regulatory-controls")
+def regulatory_controls(case_id: str, workstream: str = "", db: Session = Depends(get_db)):
+    """Which regulatory controls this case's evidence brings into scope, and what they show.
+
+    Screening starts from the evidence rather than from a confirmed hypothesis, which is what
+    makes the case the specification cares about reachable: the numbers reconcile and a
+    compliance question still arises. Every citation is retrieved from the corpus, and an
+    article whose English wording is superseded says so rather than being quoted as the rule.
+    """
+    from ..evidence import service as evidence_service
+    from ..recon import registry as recon_registry
+    from ..recon import service as recon_service
+    from ..regulatory import applicability
+
+    c = _case_or_404(db, case_id)
+    if workstream and workstream not in (recon_registry.SALES, recon_registry.PURCHASES):
+        raise HTTPException(422, "workstream must be sales or purchases")
+
+    profiles = evidence_service.profiles(db, case_id)
+    rows = evidence_service.rows_by_file(db, case_id)
+    declared, _ = recon_service._declared(db, c)
+    return applicability.assess(profiles, rows, declared, workstream=workstream)
+
+
+@router.get("/regulatory/controls")
+def regulatory_control_set():
+    """The control set itself, and how much of the regulations it reaches.
+
+    Published because ten controls over seventy-nine articles is a start rather than coverage,
+    and a screening tool that does not say so is claiming more than it has.
+    """
+    from ..regulatory import controls as control_corpus
+
+    corpus = control_corpus.load()
+    return {**control_corpus.coverage(),
+            "controls": [c.to_dict() for c in corpus.controls]}
+
+
+@router.get("/cases/{case_id}/registers")
+def registers(case_id: str, db: Session = Depends(get_db)):
+    """The sales and purchase registers, each against its own box on the return.
+
+    Deliberately separate from `/reconcile`: that endpoint answers *which documents qualify*
+    for a box, and every figure in it has been through the rules. This one answers the question
+    an auditor opens with — what does the listing itself total, what does the return say, and
+    what is the gap — where no rule has acted on anything.
+    """
+    from .. import registers as register_service
+    from ..agents import zatca_service
+
+    c = _case_or_404(db, case_id)
+    comparison = zatca_service.comparison(db, c).to_dict()
+    try:
+        return register_service.build(db, case_id, zatca=comparison)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+# ---------------------------------------------------------------- taxpayer response loop
+class ResponseIn(BaseModel):
+    label: str
+    amount: float           # SAR the evidence accounts for (auditor-confirmed)
+    doc_name: str = ""
+
+
+@router.get("/cases/{case_id}/responses")
+def list_responses(case_id: str, db: Session = Depends(get_db)):
+    rows = db.scalars(
+        select(TaxpayerResponse).where(TaxpayerResponse.case_id == case_id)
+        .order_by(TaxpayerResponse.seq)
+    ).all()
+    return [{"seq": r.seq, "code": r.code, "label": r.label,
+             "amount": float(r.amount), "doc_name": r.doc_name} for r in rows]
+
+
+@router.post("/cases/{case_id}/responses")
+def add_response(case_id: str, body: ResponseIn, db: Session = Depends(get_db)):
+    """Record evidence the taxpayer supplied, then regenerate the whole reconciliation."""
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    if not body.label.strip() or abs(body.amount) < 0.005:
+        raise HTTPException(422, "a description and a non-zero amount are required")
+    n = db.scalar(select(func.count()).select_from(TaxpayerResponse)
+                  .where(TaxpayerResponse.case_id == case_id)) or 0
+    seq = n + 1
+    db.add(TaxpayerResponse(
+        case_id=case_id, seq=seq, code=f"RESP-{seq:02d}",
+        label=body.label.strip(), amount=abs(body.amount), doc_name=body.doc_name.strip(),
+    ))
+    db.add(EventLog(case_id=case_id, actor="auditor", action="taxpayer-response",
+                    payload={"seq": seq, "amount": abs(body.amount), "doc": body.doc_name}))
+    db.commit()
+    return reconcile_case(db, case_id)
+
+
+@router.delete("/cases/{case_id}/responses/{seq}")
+def delete_response(case_id: str, seq: int, db: Session = Depends(get_db)):
+    db.execute(delete(TaxpayerResponse).where(
+        TaxpayerResponse.case_id == case_id, TaxpayerResponse.seq == seq))
+    db.add(EventLog(case_id=case_id, actor="auditor", action="taxpayer-response-removed",
+                    payload={"seq": seq}))
+    db.commit()
+    return reconcile_case(db, case_id)
+
+
+# ------------------------------------------------- information request / response loop
+
+
+@router.get("/cases/{case_id}/plan")
+def request_plan(case_id: str, db: Session = Depends(get_db)):
+    """What to ask the taxpayer for — and what was dropped because ZATCA already holds it."""
+    from ..requests.planner import plan
+
+    return plan(db, _case_or_404(db, case_id)).to_dict()
+
+
+@router.get("/cases/{case_id}/requests")
+def request_loop(case_id: str, db: Session = Depends(get_db)):
+    """Every round of correspondence on this case: items, documents received, and gaps."""
+    return req_service.state(db, _case_or_404(db, case_id))
+
+
+@router.post("/cases/{case_id}/requests")
+def open_round(case_id: str, db: Session = Depends(get_db)):
+    """Open the next round from the current plan, as a draft the auditor approves."""
+    case = _case_or_404(db, case_id)
+    current = req_service.current_request(db, case_id)
+    if current is not None and current.status not in ("satisfied",):
+        raise HTTPException(409, f"round {current.seq} is still {current.status}")
+    req = req_service.open_request(db, case)
+    drafted = draft_request(case, case.taxpayer, req)
+    req.body, req.body_source = drafted["text"], drafted["source"]
+    db.add(EventLog(case_id=case_id, actor="auditor", action="request-drafted",
+                    payload={"round": req.seq, "items": len(req.items)}))
+    db.commit()
+    return {**req_service.state(db, case), "draft": drafted}
+
+
+@router.post("/cases/{case_id}/requests/{seq}/issue")
+def issue_round(case_id: str, seq: int, db: Session = Depends(get_db)):
+    case = _case_or_404(db, case_id)
+    req = next((r for r in req_service.rounds(db, case_id) if r.seq == seq), None)
+    if req is None:
+        raise HTTPException(404, "round not found")
+    req_service.issue(db, req)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="request-issued",
+                    payload={"round": seq}))
+    db.commit()
+    return req_service.state(db, case)
+
+
+@router.post("/cases/{case_id}/documents")
+async def upload_document(case_id: str, file: UploadFile = File(...),
+                          item_id: int | None = Form(None),
+                          db: Session = Depends(get_db)):
+    """Record a file the taxpayer sent, extract it, and re-run the completeness checks."""
+    from ..requests import threads as thread_service
+
+    case = _case_or_404(db, case_id)
+    req = req_service.current_request(db, case_id)
+    # An enquiry opened from the investigation asks for something without raising a formal
+    # request round, and the answer to it still has to be uploadable. Refusing the file because
+    # no round exists would break the loop at the point it matters most — the moment the
+    # evidence arrives.
+    if req is None and thread_service.open_thread(db, case_id) is None:
+        raise HTTPException(409, "no information request or open enquiry on this case")
+    data = await file.read()
+    if len(data) > 8_000_000:
+        raise HTTPException(413, "file too large for the demo (8 MB limit)")
+    doc = req_service.record_document(
+        db, case=case, req=req, item_id=item_id, filename=file.filename or "response",
+        data=data, file_format=(file.filename or "").rsplit(".", 1)[-1].lower())
+    # Nothing formal was requested, so there is no spec to check the file against. That is not
+    # a failed check — it is the absence of one, and reporting it as a gap would be noise.
+    report = req_service.run_checks(db, case) if req is not None else None
+    db.add(EventLog(case_id=case_id, actor="taxpayer", action="document-received",
+                    payload={"round": req.seq if req else 0, "file": doc.filename,
+                             "gaps": len(report.gaps) if report else 0}))
+    db.commit()
+    return {**req_service.state(db, case),
+            "report": report.to_dict() if report else None}
+
+
+# ------------------------------------------------------------------ ZATCA's own invoice records
+
+@router.get("/cases/{case_id}/zatca")
+def zatca_state(case_id: str, db: Session = Depends(get_db)):
+    """What is loaded, and what comparing it against the taxpayer's listing produced."""
+    return zatca_service.state(db, _case_or_404(db, case_id))
+
+
+@router.post("/cases/{case_id}/zatca")
+async def upload_zatca(case_id: str, file: UploadFile = File(...),
+                       db: Session = Depends(get_db)):
+    """Load the Authority's invoice extract for this case, replacing any earlier one.
+
+    Not a `ReceivedDocument`: this is our own data, not something the taxpayer produced, and
+    filing it as a taxpayer response would put it through a completeness check against request
+    items nobody asked for.
+    """
+    case = _case_or_404(db, case_id)
+    data = await file.read()
+    if len(data) > 8_000_000:
+        raise HTTPException(413, "file too large for the demo (8 MB limit)")
+    zatca_service.record(db, case, filename=file.filename or "zatca-invoices", data=data)
+    return zatca_service.state(db, case)
+
+
+@router.delete("/cases/{case_id}/zatca")
+def remove_zatca(case_id: str, db: Session = Depends(get_db)):
+    """Unload the dataset — the comparison goes back to saying it cannot compare."""
+    case = _case_or_404(db, case_id)
+    zatca_service.remove(db, case_id)
+    return zatca_service.state(db, case)
+
+
+@router.post("/cases/{case_id}/requests/check")
+def recheck(case_id: str, db: Session = Depends(get_db)):
+    """Re-run the deterministic completeness checks over what has been received."""
+    case = _case_or_404(db, case_id)
+    report = req_service.run_checks(db, case)
+    db.commit()
+    return {**req_service.state(db, case), "report": report.to_dict()}
+
+
+@router.get("/cases/{case_id}/followup")
+def followup(case_id: str, db: Session = Depends(get_db)):
+    """Draft the chase letter from the outstanding gaps only — minus what the auditor challenged.
+
+    A challenge has to change something or it is decoration. An auditor who has recorded that
+    the "missing" column is present under a different header must not then watch the Authority
+    write to the taxpayer asking for it: that is the letter this feature exists to stop. The gap
+    stays on the case file with the challenge beside it; it just stops being chased.
+    """
+    from ..requests import reviews as review_service
+    from ..requests.completeness import item_key
+
+    case = _case_or_404(db, case_id)
+    req = req_service.current_request(db, case_id)
+    if req is None:
+        raise HTTPException(409, "no information request has been issued on this case")
+    gaps = db.scalars(
+        select(GapFinding).where(GapFinding.case_id == case_id, GapFinding.round == req.seq,
+                                 GapFinding.severity == "blocking")
+        .order_by(GapFinding.id)).all()
+
+    reviews = review_service.reviews_for(db, case_id, KIND_COMPLETENESS)
+    challenged = {k for k, r in reviews.items() if r["verdict"] == "challenged"}
+    if challenged:
+        by_item = {i.id: i for i in req.items}
+        def kept(g) -> bool:
+            item = by_item.get(getattr(g, "request_item_id", None))
+            if item is None:
+                return True
+            return item_key({"kind": item.kind, "label": item.label}) not in challenged
+        gaps = [g for g in gaps if kept(g)]
+
+    if not gaps:
+        raise HTTPException(409, "nothing is outstanding that has not been challenged")
+    return draft_followup(case, case.taxpayer, req, list(gaps))
+
+
+@router.get("/cases/{case_id}/lifecycle")
+def lifecycle(case_id: str, db: Session = Depends(get_db)):
+    """Where this case is in the five-stage run, and whose move it is.
+
+    Derived from the case's own data rather than a stored status, so it cannot fall out of
+    step with reality. No stage advances by itself — every gate is a human decision (§6).
+    """
+    from ..casefile import status as case_status
+
+    return case_status(db, _case_or_404(db, case_id))
+
+
+@router.get("/cases/{case_id}/verdict")
+def verdict(case_id: str, db: Session = Depends(get_db)):
+    """Draft the taxpayer letter reporting the outcome. §8's second administrative burden."""
+    from ..agents.correspondence import draft_verdict
+    from ..agents.orchestrator import investigate
+
+    case = _case_or_404(db, case_id)
+    recon = reconcile_case(db, case_id, persist=False)
+    inv = investigate_case(case_id, db)
+    return draft_verdict(case, case.taxpayer, recon, inv, inv.get("findings"))
+
+
+# ============================================================ THE AUDIT REPORT
+# The auditors asked for two outputs, not one: the email and the audit report. This is the
+# second. It targets the Authority's own template rather than a layout of ours, and a field the
+# case cannot answer says which kind of gap it is instead of being filled from a guess.
+
+def _audit_report(db: Session, case_id: str) -> dict:
+    """Assemble the report from everything on the case file.
+
+    The findings here are the ones the **auditor accepted**, not every hypothesis the engine
+    confirmed. That distinction is the whole point: an adjudicated hypothesis is a proposal
+    that survived testing, and it becomes a finding when a person says so. A case with nothing
+    accepted yet reports no finding — which is correct, not broken.
+    """
+    from ..agents.calc_service import documents_for
+    from ..agents.findings import exposure
+    from ..reporting import audit_report
+
+    case = _case_or_404(db, case_id)
+    recon = reconcile_case(db, case_id, persist=False)
+    inv_service.ensure_run(db, case)
+    confirmed = inv_service.confirmed_findings(db, case)
+    runs = inv_service.state(db, case)["runs"]
+    inv = {"findings": [f.to_dict() for f in confirmed],
+           "exposure": exposure(confirmed),
+           "conclusion": runs[-1]["conclusion"] if runs else ""}
+
+    req = req_service.current_request(db, case_id)
+    requested = [{"key": i.catalog_key, "label": i.label} for i in (req.items if req else [])]
+    gaps = [{"item_label": g.item_label, "kind": g.kind, "severity": g.severity,
+             "detail": g.detail, "citation": g.citation}
+            for g in db.scalars(select(GapFinding)
+                                .where(GapFinding.case_id == case_id,
+                                       GapFinding.round == (req.seq if req else 1))
+                                .order_by(GapFinding.id)).all()]
+    from ..reporting import edits as report_edits
+
+    built = audit_report.build(
+        case, case.taxpayer, recon, inv,
+        priority=score_case(db, case), requested=requested,
+        received=documents_for(db, case_id), gaps=gaps)
+    # Applied here, in the one place the JSON view, the Word download and the printable page all
+    # pass through. An edit that showed on screen but not in the downloaded document would be
+    # worse than no editing at all — the auditor would send the version they already corrected.
+    return report_edits.apply(db, case_id, built)
+
+
+@router.get("/cases/{case_id}/audit-report")
+def audit_report_view(case_id: str, db: Session = Depends(get_db)):
+    """The audit report, section by section, in the template's own order."""
+    return _audit_report(db, case_id)
+
+
+class ReportFieldIn(BaseModel):
+    key: str
+    value: str
+    original: str = ""
+
+
+@router.put("/cases/{case_id}/audit-report/fields")
+def edit_report_field(case_id: str, body: ReportFieldIn, db: Session = Depends(get_db)):
+    """Write one field of the report in the auditor's own words.
+
+    The template asks for rulings, penalties and a meeting date — judgements the tool has no
+    business making, and which it had no way for anyone to supply. A report that names the gap
+    and then offers no way to close it is a form you cannot fill in.
+
+    An empty value reverts the field, which is what clearing a box should do. Nothing here
+    computes: the engine still owns every figure, and this records that a third author — the
+    auditor — wrote this line, with what it replaced kept beside it.
+    """
+    from ..reporting import edits as report_edits
+
+    _case_or_404(db, case_id)
+    key = (body.key or "").strip()
+    if not key or "::" not in key:
+        raise HTTPException(422, "a field key is '<section>::<label>'")
+
+    report_edits.save(db, case_id, key, body.value, original=body.original)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="report-field-edited",
+                    payload={"field": key, "cleared": not (body.value or "").strip()}))
+    db.commit()
+    return _audit_report(db, case_id)
+
+
+@router.get("/cases/{case_id}/audit-report.doc")
+def audit_report_word(case_id: str, db: Session = Depends(get_db)):
+    """The same report as a Word document. One render serves Word and print — see reporting."""
+    from ..reporting import render
+
+    report = _audit_report(db, case_id)
+    return Response(
+        content=render.to_html(report, for_word=True).encode("utf-8"),
+        media_type="application/msword",
+        headers={"Content-Disposition":
+                 f'attachment; filename="{render.filename_for(report, "doc")}"'})
+
+
+@router.get("/cases/{case_id}/audit-report.html")
+def audit_report_print(case_id: str, db: Session = Depends(get_db)):
+    """The printable page. The browser's own print-to-PDF is the PDF renderer."""
+    from ..reporting import render
+
+    report = _audit_report(db, case_id)
+    return Response(content=render.to_html(report).encode("utf-8"),
+                    media_type="text/html; charset=utf-8")
+
+
+@router.get("/demo/response-file")
+def demo_response_file():
+    """The taxpayer's deficient sales analysis, so the upload path can be demonstrated live."""
+    from ..seed.demo_files import sales_analysis_xlsx
+
+    return Response(
+        content=sales_analysis_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Sales_Analysis_Q1_2025.xlsx"'},
+    )
+
+
+# ---------------------------------------------------------------- AI layer (Phase 2)
+@router.get("/cases/{case_id}/narrate")           # FEATURE 1 — box narration (verified prose)
+def narrate(case_id: str, db: Session = Depends(get_db)):
+    recon = reconcile_case(db, case_id, persist=False)
+    return llm.narrate(recon, _rule_rows(db))
+
+
+@router.get("/cases/{case_id}/nba")               # FEATURE 2 — next best action (structured)
+def nba(case_id: str, db: Session = Depends(get_db)):
+    recon = reconcile_case(db, case_id, persist=False)
+    return llm.next_best_action(recon, _rule_rows(db))
+
+
+@router.get("/cases/{case_id}/summary")           # FEATURE 3 — taxpayer brief (figure-free)
+def summary(case_id: str, db: Session = Depends(get_db)):
+    c = db.scalar(select(AuditCase).where(AuditCase.case_id == case_id))
+    if not c:
+        raise HTTPException(404, "case not found")
+    tp = c.taxpayer
+    profile = {"name": tp.name, "sector": tp.ind_sector, "size": tp.business_size,
+               "accounting_method": tp.accounting_method, "resident": tp.resident_flag,
+               "vat_group": tp.vat_group_rep_flag}
+    prior_returns = [
+        {"data_version": r.data_version, "current": r.current_flag,
+         "reason_for_amendment": r.reason_for_amendment,
+         "submitted": r.submission_date and r.submission_date.isoformat()}
+        for r in db.scalars(select(VatReturn).where(VatReturn.taxpayer_id == tp.id)
+                            .order_by(VatReturn.data_version)).all()
+    ]
+    prior_cases = [
+        {"case_id": pc.case_id, "reason": pc.case_reason_code, "risk": pc.risk_category,
+         "result": pc.audit_result_type, "root_cause": pc.root_cause_code, "action": pc.action_taken}
+        for pc in db.scalars(select(AuditCase).where(
+            AuditCase.taxpayer_id == tp.id, AuditCase.case_id != case_id)).all()
+    ]
+    return llm.summarise_history(profile, prior_returns, prior_cases)
+
+
+class LetterIn(BaseModel):
+    text: str
+
+
+@router.post("/cases/{case_id}/read-letter")     # FEATURE 5 — read a taxpayer letter (draft extraction)
+def read_letter(case_id: str, body: LetterIn, db: Session = Depends(get_db)):
+    recon = reconcile_case(db, case_id, persist=False)
+    return llm.read_letter(recon, body.text)
+
+
+@router.get("/cases/{case_id}/report")            # FEATURE 4 — AI-drafted report (streamed SSE)
+def report(case_id: str, db: Session = Depends(get_db)):
+    recon = reconcile_case(db, case_id)
+    return StreamingResponse(llm.stream_report(recon, _rule_rows(db)),
+                             media_type="text/event-stream")
+
+
+# ============================================================ THE CALCULATION AGENT
+# The auditors asked for help with their own arithmetic and for a check on it. Both run the same
+# executor: the model turns a described method into a query, Python computes the figure.
+
+class AskIn(BaseModel):
+    question: str = ""
+    spec: dict | None = None        # an auditor-specified query, used verbatim if supplied
+
+
+class CheckIn(BaseModel):
+    label: str = ""
+    method: str = ""
+    # Optional: the auditors write freely — "I summed the VAT column and got 2,618,000" states
+    # the figure in the same breath as the method, and made them retype it into its own box.
+    stated_amount: float | None = None
+    document_name: str = ""
+    spec: dict | None = None
+
+
+@router.post("/cases/{case_id}/calc/ask")
+def calc_ask(case_id: str, body: AskIn, db: Session = Depends(get_db)):
+    """Answer a question off the uploaded documents. Every figure comes from Python."""
+    _case_or_404(db, case_id)
+    return calc_service.ask(db, case_id, body.question, body.spec)
+
+
+@router.post("/cases/{case_id}/calc/check")
+def calc_check(case_id: str, body: CheckIn, db: Session = Depends(get_db)):
+    """Record a figure the auditor calculated and verify it against the source documents."""
+    from ..agents import calc_language
+
+    _case_or_404(db, case_id)
+    stated = body.stated_amount
+    if stated is None:
+        stated = calc_language.stated_amount_in(body.method)
+    if stated is None:
+        raise HTTPException(422, "No figure to check — state the amount you arrived at.")
+    label = body.label or calc_language.label_for(body.method) or "Auditor calculation"
+    out = calc_service.check(db, case_id, label, body.method, stated,
+                             body.spec, body.document_name)
+    db.add(EventLog(case_id=case_id, actor="auditor", action="calculation-checked",
+                    payload={"label": body.label, "status": out["status"],
+                             "delta": out["delta"]}))
+    db.commit()
+    return out
+
+
+@router.get("/cases/{case_id}/calc")
+def calc_list(case_id: str, db: Session = Depends(get_db)):
+    _case_or_404(db, case_id)
+    return {"calculations": calc_service.listing(db, case_id),
+            "documents": [{"filename": d["filename"], "columns": d["columns"],
+                           "row_count": d["row_count"]}
+                          for d in calc_service.documents_for(db, case_id)]}
+
+
+@router.delete("/cases/{case_id}/calc/{calc_id}")
+def calc_delete(case_id: str, calc_id: int, db: Session = Depends(get_db)):
+    _case_or_404(db, case_id)
+    db.execute(delete(AuditorCalculation).where(
+        AuditorCalculation.id == calc_id, AuditorCalculation.case_id == case_id))
+    db.commit()
+    return {"ok": True}
+
+
+# ============================================================ THE REQUEST EMAIL
+# Planning is out of scope, so the spec the completeness check enforces has to be recovered from
+# the email the auditor already sent. The parse is a proposal: nothing binds until it is confirmed.
+
+class EmailIn(BaseModel):
+    text: str
+
+
+@router.post("/cases/{case_id}/request-email/parse")
+def parse_request_email(case_id: str, body: EmailIn, db: Session = Depends(get_db)):
+    """Read one request email into a proposed spec, for the auditor to confirm or edit."""
+    _case_or_404(db, case_id)
+    parsed = from_email.parse_email(body.text)
+    return {**parsed.to_dict(), "catalog": from_email.catalog_choices()}
+
+
+@router.post("/cases/{case_id}/request-email/from-chain")
+def parse_request_chain(case_id: str, db: Session = Depends(get_db)):
+    """Read the spec from every message filed on the round, rather than from one of them.
+
+    An enquiry is rarely a single email — the opening request goes out, half of it comes back,
+    and the auditor writes again naming what is still outstanding and the column they forgot. A
+    spec read from only the first message is missing what was added later; from only the last,
+    missing everything already sent. So the chain is read message by message and merged.
+
+    Only ZATCA's own messages define the request. A taxpayer reply saying "please find the sales
+    analysis attached" matches the same cue as the auditor asking for it, and letting that create
+    a request item would have the taxpayer asking themselves for something — then be reported as
+    an outstanding gap against them.
+    """
+    from ..requests import chain
+    from ..requests import threads as thread_service
+
+    _case_or_404(db, case_id)
+    thread = thread_service.open_thread(db, case_id)
+    if thread is None:
+        raise HTTPException(422, "no round is open, so there is no chain to read")
+    messages = sorted(thread.messages or [], key=lambda m: m.seq)
+    if not messages:
+        raise HTTPException(422, "nothing has been filed on this round yet")
+
+    read = chain.read(messages)
+    return {**read, "catalog": from_email.catalog_choices()}
+
+
+# ============================================================ STEP EMAILS
+# The auditors asked for a draft at each point where something leaves the building. There are
+# two: the chase, written from the completeness gaps alone, and the verdict, written from the
+# confirmed findings. Both are drafts for a human to edit and send — nothing is sent from here.
+
+@router.get("/cases/{case_id}/emails")
+def step_emails(case_id: str, db: Session = Depends(get_db)):
+    """Every outbound draft that is live for this case, and which step each belongs to.
+
+    A draft appears only when its trigger exists: the chase when something is outstanding, the
+    verdict when the review has a position to report. Offering an email with nothing in it to
+    say would train the auditor to ignore the panel.
+    """
+    from ..agents.correspondence import draft_verdict
+
+    case = _case_or_404(db, case_id)
+    out: list[dict] = []
+
+    req = req_service.current_request(db, case_id)
+    gaps = list(db.scalars(select(GapFinding).where(GapFinding.case_id == case_id)).all())
+    if req is not None and gaps:
+        draft = draft_followup(case, case.taxpayer, req, gaps)
+        out.append({
+            "step": "response-check", "kind": "follow-up",
+            "title": "What is missing from the response",
+            "trigger": f"{len(gaps)} gap(s) found in what was received",
+            **draft,
+        })
+
+    # The verdict states what the **auditor accepted**, not what the engine confirmed.
+    #
+    # It read `investigate_case` until this was noticed on screen: the Report tab said "no
+    # finding has been confirmed yet" directly above a letter to the taxpayer asserting eight
+    # findings and SAR 987,000 of tax. The engine's verdicts are proposals — putting them in an
+    # outbound letter states as the Authority's position something no person ever signed off,
+    # which is the single worst thing this application could do.
+    from ..agents.findings import exposure as exposure_of
+
+    inv_service.ensure_run(db, case)
+    confirmed = inv_service.confirmed_findings(db, case)
+    findings = [f.to_dict() for f in confirmed]
+    recon = reconcile_case(db, case_id, persist=False)
+    runs = inv_service.state(db, case)["runs"]
+    inv = {"findings": findings, "exposure": exposure_of(confirmed),
+           "conclusion": runs[-1]["conclusion"] if runs else ""}
+
+    # The verdict is always drafted, where it used to appear only once there was something to
+    # assert. A panel that vanishes teaches the auditor nothing: they cannot tell an application
+    # that has no letter for them from one that failed to produce it, and "no adjustment is
+    # proposed" is itself a real outcome letter that a case may legitimately close on. When the
+    # response is still incomplete the trigger says so, so a premature closure is visible rather
+    # than prevented by hiding the draft.
+    blocking = [g for g in gaps if g.severity == "blocking"]
+    if findings:
+        trigger = f"{len(findings)} finding{'' if len(findings) == 1 else 's'} you accepted"
+    elif blocking:
+        trigger = (f"nothing accepted yet · {len(blocking)} item"
+                   f"{'' if len(blocking) == 1 else 's'} still outstanding")
+    else:
+        trigger = "no finding accepted — the declared position stands"
+    draft = draft_verdict(case, case.taxpayer, recon, inv, findings)
+    out.append({
+        "step": "closure", "kind": "verdict",
+        "title": "Outcome of the review",
+        "trigger": trigger,
+        **draft,
+    })
+
+    # A draft the auditor has edited replaces the generated one, and says so. The generated text
+    # travels alongside as `generated` so "restore the draft" is possible and so the panel can
+    # be honest about the letter no longer being what the engine wrote.
+    saved = {r.kind: r for r in db.scalars(
+        select(LetterDraft).where(LetterDraft.case_id == case_id)).all()}
+    for e in out:
+        row = saved.get(e["kind"])
+        e["generated"] = e.get("text", "")
+        if row is not None and (row.body or "").strip():
+            e["text"] = row.body
+            e["edited"] = True
+            e["edited_at"] = row.edited_at.isoformat() if row.edited_at else ""
+            # An edited letter is the auditor's words, so the verifier's badge no longer
+            # describes it. Saying "verified" over text a model never saw would be a lie about
+            # what was checked.
+            e["source"] = "auditor"
+            e["violations"] = []
+        else:
+            e["edited"] = False
+
+    return {"case_id": case_id, "emails": out,
+            "findings": findings, "exposure": inv["exposure"]}
+
+
+class LetterIn(BaseModel):
+    body: str
+    subject: str = ""
+    generated: str = ""
+
+
+@router.put("/cases/{case_id}/letters/{kind}")
+def edit_letter(case_id: str, kind: str, body: LetterIn, db: Session = Depends(get_db)):
+    """Save the letter as the auditor wrote it. An empty body restores the generated draft.
+
+    Every draft in this application has said "a draft for you to edit and send" while offering
+    no way to edit it. A letter is the one artefact here that leaves the building in the
+    Authority's name, so it is the last thing that should be read-only.
+    """
+    _case_or_404(db, case_id)
+    if kind not in LETTER_KINDS:
+        raise HTTPException(422, f"unknown letter kind: {kind}")
+
+    row = db.scalar(select(LetterDraft).where(LetterDraft.case_id == case_id,
+                                              LetterDraft.kind == kind))
+    if not (body.body or "").strip():
+        if row is not None:
+            db.delete(row)
+        action = "letter-draft-restored"
+    else:
+        if row is None:
+            row = LetterDraft(case_id=case_id, kind=kind, original=body.generated or "")
+            db.add(row)
+        elif not row.original:
+            row.original = body.generated or ""
+        row.body = body.body
+        row.subject = body.subject or row.subject
+        action = "letter-edited"
+
+    db.add(EventLog(case_id=case_id, actor="auditor", action=action, payload={"kind": kind}))
+    db.commit()
+    return step_emails(case_id, db)
