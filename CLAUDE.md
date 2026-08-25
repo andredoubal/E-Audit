@@ -403,6 +403,19 @@ dataset reading is corrected. The stable part is the **basis**, not the row: it 
 same way on every run, so an auditor decision or a finding keyed on it survives a re-run without
 anything being migrated.
 
+**The sales listing is reconciled to the accounts.** `recon/ledger.py` — the comparison the
+auditor's own request letter asks for, defined in the registry since the beginning and never
+runnable until a trial balance could be read. It needs one judgement no other comparison does:
+*which accounts*. A trial balance total adds cash to receivables to sales to cost of sales and
+means nothing, so the revenue accounts are selected on their own code and their own name, and
+the selection is published with the reason for each — it is the part that can be wrong. Revenue
+is credited, so the period's figure is the **credit movement**, not the closing balance, which
+would carry the opening position in and report the year to date. `تكلفة المبيعات` — cost of
+sales — contains `مبيعات`, so an expense guard runs before the revenue words: without it the
+demo trial balance reported SAR 6,360,000 of sales where the accounts posted 17,600,000. A chart
+of accounts naming nothing it can read produces a refusal, never a figure summed from whichever
+rows looked plausible.
+
 **The older comparison registry is not deleted, it is scoped.** Four of `recon/registry.py`'s nine
 definitions ask exactly what a pairing asks — same two sources, same metric — so they carry
 `superseded_by` naming it, and the panel below the dashboard shows only what the six do not reach:
@@ -1085,7 +1098,7 @@ Open http://localhost:5174.
   brands.
 - Frontend build check: `npm run build` (runs `tsc --noEmit` + Vite build).
 - Backend syntax check: `python -m compileall -q app`.
-- Guard tests: `pytest backend/tests` (706 at last count). Three layers, and they answer
+- Guard tests: `pytest backend/tests` (724 at last count). Three layers, and they answer
   different questions — keep them apart:
   - **unit** (`test_roster.py`, `test_pipeline.py`, `test_calculation.py`, `test_canonical.py`,
     `test_pairwise.py`, …) — is this piece right, on a fixture built to isolate it?

@@ -1781,6 +1781,7 @@ export interface WorkstreamDash {
     customs_import: DatasetSummary | null;
     customs_export: DatasetSummary | null;
   };
+  ledger: LedgerComparison | null;
   summary: {
     comparisons_total: number;
     comparisons_run: number;
@@ -1791,6 +1792,29 @@ export interface WorkstreamDash {
     not_summed_because: string;
     needs: string[];
   };
+}
+
+export interface LedgerAccount {
+  code: string; name: string; debit: number; credit: number; movement: number; why: string;
+}
+
+/** The sales listing against what was posted to the accounts — the reconciliation the request
+ *  letter actually asks for. A trial balance total means nothing, so this selects the revenue
+ *  accounts and publishes which ones it took and why. */
+export interface LedgerComparison {
+  runnable: boolean;
+  blocked_by: string[];
+  source_file: string;
+  register_file: string;
+  accounts: LedgerAccount[];
+  ledger_revenue: number | null;
+  register_net: number | null;
+  declared_base: number | null;
+  vs_register: number | null;
+  vs_declared: number | null;
+  status: string;
+  status_label: string;
+  observation: string;
 }
 
 export interface ReconDashboard {

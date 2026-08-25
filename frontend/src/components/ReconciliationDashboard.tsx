@@ -5,6 +5,7 @@ import {
   type Comparison,
   type CompareSide,
   type MatchRow,
+  type LedgerComparison,
   type MatrixRow,
   type ReconDashboard,
   type ReconException,
@@ -332,6 +333,89 @@ function Matrix({ m, name }: { m: WorkstreamDash["matrix"]; name: string }) {
   );
 }
 
+// ------------------------------------------------------------------ the accounts
+/** What was posted to the books, against the listing and against the return.
+ *
+ *  This is the comparison the auditor's own request letter asks for, and it needs one judgement
+ *  no other comparison does: *which accounts*. A trial balance total adds cash to receivables
+ *  to sales to cost of sales and means nothing, so the revenue accounts are selected — and the
+ *  selection is shown, with the reason for each, because it is the part that can be wrong. */
+function LedgerPanel({ l }: { l: LedgerComparison }) {
+  if (!l.runnable) {
+    return (
+      <div className="panel">
+        <div className="panel-head">
+          <h2>Sales against the accounts</h2>
+          <span className="pill status">Not run</span>
+        </div>
+        <p className="ledger-blocked">
+          {l.blocked_by.join("; ")}. A figure taken from whichever rows happened to look
+          plausible would be worse than no figure.
+        </p>
+      </div>
+    );
+  }
+  const line = (label: string, value: number | null, variance: number | null, src: string) => (
+    <div className="ldg-line" key={label}>
+      <span className="ldg-l">{label}<i>{src}</i></span>
+      <span className="ldg-v num">{bare(value)}</span>
+      <span className="ldg-d"><Var v={variance} status={variance ? l.status : undefined} /></span>
+    </div>
+  );
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>Sales against the accounts</h2>
+        <span className="sub">{l.source_file} &middot; all amounts in SAR</span>
+        <span className={"pill " + (STATUS_CLASS[l.status] || "status")}
+              style={{ marginLeft: "auto" }}>{l.status_label}</span>
+      </div>
+
+      <div className="ldg">
+        <div className="ldg-lines">
+          {line("Posted to the revenue accounts", l.ledger_revenue, null, l.source_file)}
+          {line("The sales listing", l.register_net, l.vs_register, l.register_file)}
+          {line("Declared on the return", l.declared_base, l.vs_declared, "all sales boxes")}
+        </div>
+
+        <div className="ldg-accts">
+          <div className="ldg-accts-h">
+            Accounts taken as revenue
+            <i>the one judgement here, so it is shown</i>
+          </div>
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th>Account</th><th className="r">Debit</th><th className="r">Credit</th>
+                <th className="r">Movement</th><th>Why it was taken</th>
+              </tr>
+            </thead>
+            <tbody>
+              {l.accounts.map((a) => (
+                <tr key={a.code + a.name}>
+                  <td><b className="mono xs">{a.code}</b> {a.name}</td>
+                  <td className="r num">{bare(a.debit)}</td>
+                  <td className="r num">{bare(a.credit)}</td>
+                  <td className="r num">{bare(a.movement)}</td>
+                  <td className="xs muted">{a.why}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel-note">
+        <span className="ct">credit, not balance</span> Revenue is credited, so the period&rsquo;s
+        sales are the credit movement on these accounts net of anything debited back. The closing
+        balance would carry the opening position in with it and report the year to date rather
+        than the period. An account named for the revenue it relates to but sitting on the other
+        side of the profit and loss &mdash; cost of sales &mdash; is excluded by name.
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ observations rail
 function ObservationRail({ observations, exceptions, workstream }: {
   observations: ReconObservation[];
@@ -592,6 +676,7 @@ function WorkstreamDashboard({ w, name, comparisons, observations, exceptions, w
 
       <div className="dashgrid">
         <Matrix m={w.matrix} name={workstream === "sales" ? "Sales" : "Purchases"} />
+        {w.ledger && <LedgerPanel l={w.ledger} />}
         <ObservationRail observations={observations} exceptions={mine}
                          workstream={workstream} />
       </div>

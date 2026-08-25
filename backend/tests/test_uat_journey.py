@@ -737,3 +737,60 @@ def test_the_trial_balance_is_read_as_a_trial_balance_and_not_a_ledger(api):
     assert tb["column_count"] == 8, "the credit columns survived the merged header"
     roles = {r["role"] for r in tb["roles"]}
     assert {"account_code", "balance", "debit", "credit"} <= roles
+
+
+def test_the_sales_listing_is_reconciled_to_the_accounts(api):
+    """The comparison the auditor's own request letter asks for, and until the trial balance
+    could be read it was defined and never runnable."""
+    d = _json(api.get(f"/api/cases/{CASE}/dashboard"))
+    l = d["workstreams"]["sales"]["ledger"]
+
+    assert l["runnable"], l["blocked_by"]
+    assert l["ledger_revenue"] == 17_600_000.0
+    assert l["vs_register"] == 146_666.74
+    assert l["vs_declared"] == -283_333.33
+    assert [a["code"] for a in l["accounts"]] == ["4010"], \
+        "cost of sales is named for the revenue it relates to and is not revenue"
+    assert all(a["why"] for a in l["accounts"]), "which accounts were taken, and why"
+
+
+def test_the_ledger_comparison_refuses_rather_than_guessing_at_the_revenue_accounts(api):
+    """A chart of accounts naming nothing it can read produces a refusal, not a figure summed
+    from whichever rows happened to look plausible."""
+    from app.recon import ledger
+
+    profile = {"filename": "tb.xlsx",
+               "columns": ["account", "name", "dr", "cr"],
+               "roles": [{"role": "account_code", "column": "account"},
+                         {"role": "description", "column": "name"},
+                         {"role": "debit", "column": "dr"},
+                         {"role": "credit", "column": "cr"}]}
+    rows = [["9910", "Suspense", 0, 500_000], ["9920", "Clearing", 0, 250_000]]
+    c = ledger.compare(profile, rows, register_net=1_000_000.0, register_file="r.xlsx",
+                       declared_base=1_000_000.0)
+
+    assert not c.runnable
+    assert c.ledger_revenue is None
+    assert any("could be identified as revenue" in b for b in c.blocked_by)
+
+
+def test_cost_of_sales_is_never_netted_against_the_revenue_it_is_named_after(api):
+    """The defect this guard exists for: "تكلفة المبيعات" contains "مبيعات", so a plain
+    revenue-word match claimed it and reported SAR 6,360,000 of sales where the accounts
+    posted 17,600,000."""
+    from app.recon import ledger
+
+    profile = {"filename": "tb.xlsx",
+               "columns": ["code", "name", "dr", "cr"],
+               "roles": [{"role": "account_code", "column": "code"},
+                         {"role": "description", "column": "name"},
+                         {"role": "debit", "column": "dr"},
+                         {"role": "credit", "column": "cr"}]}
+    rows = [["4010", "المبيعات", 0, 17_600_000],
+            ["5010", "تكلفة المبيعات", 11_240_000, 0],
+            ["5020", "Cost of sales — imported", 900_000, 0]]
+    c = ledger.compare(profile, rows, register_net=17_600_000.0, register_file="r.xlsx",
+                       declared_base=17_600_000.0)
+
+    assert c.ledger_revenue == 17_600_000.0
+    assert [a["code"] for a in c.to_dict()["accounts"]] == ["4010"]

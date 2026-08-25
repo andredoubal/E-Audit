@@ -844,84 +844,187 @@ it never settles a contradiction.</div></div>
 {ev_panel}"""
 
     # ---------------------------------------------------------------- 2 · what the figures show
+    # ------------------------------------------------------- 2 · what the arithmetic shows
     ST = {"reconciled": "pri-low", "reconciled-with-explained-difference": "pri-low",
           "partially-reconciled": "pri-medium", "variance-identified": "pri-high",
           "insufficient-evidence": "status"}
 
-    def cmpcard(c: dict) -> str:
-        if not c["runnable"]:
-            return f"""<div class="cmp cmp-blocked"><div class="cmp-head">
-<span class="cmp-code num">{c["code"]}</span><span class="cmp-title"><b>{e(c["title"])}</b>
-<small>{e(c["question"])}</small></span><span class="pill status">Not run</span></div>
-<p class="cmp-blockedwhy">Could not be compared &mdash; {e("; ".join(c["blocked_by"]))}.
-Reported rather than run against whatever happens to be on the case: one side is not a
-comparison.</p></div>"""
-        treat = "".join(
-            f"""<tr class="{"hot" if t["status"] == "variance-identified" else ""}">
-<td>{e(t["label"])}</td><td class="r num">{sar(t["a_total"])} <i class="xs">({t["a_count"]})</i></td>
-<td class="r num">{sar(t["b_total"])} <i class="xs">({t["b_count"]})</i></td>
-<td class="r num">{sar(t["variance"])}</td>
-<td><span class="pill sm {ST.get(t["status"], "status")}">{e(t["status_label"])}</span></td></tr>"""
-            for t in c["treatments"])
-        counts: dict = {}
-        for m in c["matches"]:
-            counts.setdefault(m["status_label"], 0)
-            counts[m["status_label"]] += 1
-        chips = "".join(f'<span class="l3-chip"><b class="num">{n}</b>'
-                        f'<span>{e(lbl.lower())}</span></span>'
-                        for lbl, n in counts.items())
-        notes = "".join(f'<p class="cmp-note">{e(n)}</p>' for n in c.get("notes", []))
-        return f"""<div class="cmp open"><div class="cmp-head">
-<span class="cmp-code num">{c["code"]}</span><span class="cmp-title"><b>{e(c["title"])}</b>
-<small>{e(c["question"])}</small></span><span class="cmp-figs">
-<span class="cmp-fig"><i>{e(c["a"]["label"])}</i><b class="num">{sar(c["a"]["total"])}</b></span>
-<span class="cmp-fig"><i>{e(c["b"]["label"])}</i><b class="num">{sar(c["b"]["total"])}</b></span>
-<span class="cmp-fig{" hot" if c["variance"] else ""}"><i>Difference</i>
-<b class="num">{sar(c["variance"])}</b></span></span>
-<span class="pill {ST.get(c["status"], "status")}">{e(c["status_label"])}</span></div>
-<div class="cmp-body"><p class="detail-note" style="margin-top:0">Measured in
-<b>{e(c["metric_label"])}</b>. Tolerance for this comparison is
-{sar(c["tolerance"]["allowance"])} &mdash; {e(c["tolerance"]["note"])}.</p>{notes}
-{f'<h4 class="lvl">By VAT treatment</h4><div class="tablewrap"><table class="dtable"><thead><tr>'
- f'<th>Treatment</th><th class="r">{e(c["a"]["label"])}</th><th class="r">{e(c["b"]["label"])}</th>'
- f'<th class="r">Difference</th><th>Status</th></tr></thead><tbody>{treat}</tbody></table></div>'
- if treat else ""}
-{f'<h4 class="lvl">By transaction</h4><div class="l3-rollup">{chips}</div>' if chips else ""}
-</div></div>"""
+    def n(v) -> str:
+        """A bare figure. The currency is stated once in each panel header, never per cell."""
+        if v is None:
+            return '<span class="muted">&mdash;</span>'
+        return f'{"&minus;" if v < 0 else ""}{abs(v):,.0f}'
 
-    def wsdash(key: str, name: str) -> str:
+    def var(v, status="") -> str:
+        if v is None:
+            return '<span class="muted">&mdash;</span>'
+        if not v:
+            return '<span class="var zero num">0</span>'
+        tone = (" off" if status == "variance-identified"
+                else " part" if status == "partially-reconciled" else " ok" if status else "")
+        return (f'<span class="var num{tone}">{n(v)}'
+                f'<i>{"&#9650;" if v > 0 else "&#9660;"}</i></span>')
+
+    def ccard(c: dict) -> str:
+        """One pairing, stated in every metric the evidence supports."""
+        if not c["runnable"]:
+            return f"""<div class="ccard blocked"><div class="ccard-head">
+<b>{c["code"]}. {e(c["title"])}</b><span class="pill status">Not run</span></div>
+<p class="ccard-blocked">{e("; ".join(c["blocked_by"]))}. Reported rather than run against
+whatever happens to be on the case: one side is not a comparison.</p></div>"""
+        rows = "".join(
+            f'<tr><td>{e(r["label"])}</td><td class="r num">{n(r["a"])}</td>'
+            f'<td class="r num">{n(r["b"])}</td>'
+            f'<td class="r">{var(r["variance"], c["status"])}</td></tr>'
+            for r in c["rows"])
+        strip = "".join(
+            f'<span class="cstat{" agree" if st.get("agree") else ""}">'
+            f'<b class="num">{st["count"]}</b><span>{e(st["label"])}</span></span>'
+            for st in c.get("strip") or [])
+        return f"""<div class="ccard"><div class="ccard-head">
+<b>{c["code"]}. {e(c["title"])}</b></div>
+<p class="ccard-q">{e(c["question"])}</p>
+<table class="ctable"><thead><tr><th></th><th class="r">{e(c["a_label"])}</th>
+<th class="r">{e(c["b_label"])}</th><th class="r">Variance</th></tr></thead>
+<tbody>{rows}</tbody></table>
+{f'<div class="cstrip">{strip}</div>' if strip else ""}
+<div class="ccard-foot"><span class="pill {ST.get(c["status"], "status")}">
+{e(c["status_label"])}</span></div></div>"""
+
+    def kpirow(w: dict) -> str:
+        by = {k["key"]: k for k in w["kpis"]}
+
+        def card(title, head, sub=None, sublabel="") -> str:
+            h = by.get(head)
+            if not h:
+                return ""
+            u = by.get(sub) if sub else None
+            val = f"SAR {h['value']:,.0f}" if h["unit"] == "sar" else f"{h['value']:,.0f}"
+            tail = (f'<span class="kpic-s">{e(sublabel or (u["label"] if u else ""))}'
+                    f'<b class="num">SAR {u["value"]:,.0f}</b></span>' if u else
+                    f'<span class="kpic-src">{e(h["source"])}</span>' if h["source"] else "")
+            return (f'<div class="kpic"><span class="kpic-body">'
+                    f'<span class="kpic-t">{e(title)}</span>'
+                    f'<b class="kpic-n num">{val}</b>{tail}</span></div>')
+
+        vw = "Output VAT" if w is dash["workstreams"]["sales"] else "Input VAT"
+        cards = "".join([
+            card("VAT return — declared", "declared_base", "declared_vat", vw),
+            card("Register — the taxpayer\u2019s", "register_base", "register_vat", vw),
+            card("E-invoices — the Authority\u2019s", "einvoices_base", "einvoices_vat", vw),
+            card("Records on the register", "register_count"),
+            card("Invoices on the extract", "einvoices_count"),
+        ])
+        return f'<div class="kpics">{cards}</div>' if cards else ""
+
+    EV = {"records": "register &amp; e-invoices", "customs-import": "customs import declarations",
+          "customs-export": "customs export declarations", "nothing": "nothing on this case",
+          "computed": "computed"}
+
+    def matrix(w: dict, name: str) -> str:
+        """The return's own boxes, against whatever evidences each."""
+        m = w["matrix"]
+
+        def row(r: dict, total: bool = False) -> str:
+            cls = ("totalrow" if total else "") + (" declared-only" if r["declared_only"] else "")
+            cls += " unalloc" if r.get("unallocated") else ""
+            ev = ("" if total else
+                  f'<i class="bx-ev">{EV.get(r["evidenced_by"], r["evidenced_by"])}'
+                  f'{" &mdash; declared only" if r["declared_only"] else ""}</i>')
+            return f"""<tr class="{cls}"><td><span class="bx">{e(r["label"])}</span>{ev}</td>
+<td class="r num">{n(r["declared_base"])}</td>
+<td class="r num">{n(r["declared_adjustment"])}</td>
+<td class="r num">{n(r["declared_vat"])}</td>
+<td class="r num">{n(r["register_base"])}</td><td class="r num">{n(r["register_vat"])}</td>
+<td class="r num">{n(r["einvoice_base"])}</td><td class="r num">{n(r["einvoice_vat"])}</td>
+<td class="r">{var(r["reg_vs_einvoice"])}</td>
+<td class="r">{var(r["einvoice_vs_declared"])}</td>
+<td class="r">{var(r["declared_vs_reg"])}
+{'<i class="vm">base</i>' if r.get("variance_metric") == "taxable"
+ and r["declared_vs_reg"] is not None else ""}</td></tr>"""
+
+        body = "".join(row(r) for r in m["rows"]) + row(m["total"], True)
+        return f"""<div class="panel"><div class="panel-head">
+<h2>{e(name)} &mdash; the return, box by box</h2>
+<span class="sub">{len(m["rows"])} boxes &middot; all amounts in SAR</span></div>
+<div class="tablewrap"><table class="dtable mtable"><thead>
+<tr class="grouprow"><th></th><th colspan="3" class="grp">VAT return &mdash; declared</th>
+<th colspan="2" class="grp">Primary record</th>
+<th colspan="2" class="grp">E-invoices &mdash; the Authority&rsquo;s</th>
+<th colspan="3" class="grp last">Variance</th></tr>
+<tr><th>Box</th><th class="r">Applied</th><th class="r">Adjustment</th><th class="r">VAT</th>
+<th class="r">Taxable</th><th class="r">VAT</th><th class="r">Taxable</th><th class="r">VAT</th>
+<th class="r">Reg &harr; E-inv</th><th class="r">E-inv &harr; Return</th>
+<th class="r">Return &harr; Reg</th></tr></thead><tbody>{body}</tbody></table></div>
+<div class="panel-note"><span class="ct">empty &ne; zero</span> A blank cell means the box was
+not declared, or that side holds nothing for it &mdash; neither is a declaration of zero.
+&ldquo;Primary record&rdquo; is the register for most boxes and the <b>customs declarations</b>
+for imports and exports; each row says which. Those two populations are not added together, so
+the column total states the register alone.</div></div>"""
+
+    def ledger_panel(l: dict | None) -> str:
+        if not l:
+            return ""
+        if not l["runnable"]:
+            return f"""<div class="panel"><div class="panel-head">
+<h2>Sales against the accounts</h2><span class="pill status">Not run</span></div>
+<p class="ledger-blocked">{e("; ".join(l["blocked_by"]))}.</p></div>"""
+        line = lambda lab, v, d, src: (
+            f'<div class="ldg-line"><span class="ldg-l">{e(lab)}<i>{e(src)}</i></span>'
+            f'<span class="ldg-v num">{n(v)}</span>'
+            f'<span class="ldg-d">{var(d, l["status"]) if d is not None else ""}</span></div>')
+        accts = "".join(
+            f'<tr><td><b class="mono xs">{e(a["code"])}</b> {e(a["name"])}</td>'
+            f'<td class="r num">{n(a["debit"])}</td><td class="r num">{n(a["credit"])}</td>'
+            f'<td class="r num">{n(a["movement"])}</td>'
+            f'<td class="xs muted">{e(a["why"])}</td></tr>' for a in l["accounts"])
+        return f"""<div class="panel"><div class="panel-head">
+<h2>Sales against the accounts</h2>
+<span class="sub">{e(l["source_file"])} &middot; all amounts in SAR</span>
+<span class="pill {ST.get(l["status"], "status")}" style="margin-left:auto">
+{e(l["status_label"])}</span></div>
+<div class="ldg"><div class="ldg-lines">
+{line("Posted to the revenue accounts", l["ledger_revenue"], None, l["source_file"])}
+{line("The sales listing", l["register_net"], l["vs_register"], l["register_file"])}
+{line("Declared on the return", l["declared_base"], l["vs_declared"], "all sales boxes")}
+</div><div class="ldg-accts"><div class="ldg-accts-h">Accounts taken as revenue
+<i>the one judgement here, so it is shown</i></div>
+<table class="dtable"><thead><tr><th>Account</th><th class="r">Debit</th>
+<th class="r">Credit</th><th class="r">Movement</th><th>Why it was taken</th></tr></thead>
+<tbody>{accts}</tbody></table></div></div>
+<div class="panel-note"><span class="ct">credit, not balance</span> Revenue is credited, so the
+period&rsquo;s sales are the credit movement on these accounts net of anything debited back. An
+account named for the revenue it relates to but sitting on the other side of the profit and loss
+&mdash; cost of sales &mdash; is excluded by name.</div></div>"""
+
+    def dash_pane(key: str, name: str) -> str:
         w = dash["workstreams"][key]
-        sm = w["summary"]
-        kpis = "".join(
-            f"""<div class="kpi"><div class="kpi-n num">{sar(k["value"]) if k["unit"] == "sar"
-                else k["value"]}</div><div class="kpi-l">{e(k["label"])}</div>
-<div class="kpi-s">{e(k["source"])}</div></div>""" for k in w["kpis"])
-        head = (f"""<div class="headline"><div>
-<div class="headline-n num">{sar(sm["largest_exception"])}</div>
-<div class="headline-l">Largest single exception &mdash; {e(sm["largest_exception_is"])}</div>
-</div><p class="headline-note">{e(sm["not_summed_because"])}</p></div>"""
-                if sm["largest_exception"] else "")
-        cards = "".join(cmpcard(c) for c in dash["comparisons"] if c["workstream"] == key)
-        return f"""<div class="panel"><div class="panel-head"><h2>{e(name)}</h2>
-<span class="sub num">{sm["comparisons_run"]} of {sm["comparisons_total"]} comparisons run
-{f"&middot; {sm['with_variance']} with a variance" if sm["with_variance"] else ""}</span></div>
-{f'<div class="kpis">{kpis}</div>' if kpis else ""}{head}
-<div class="cmps">{cards}</div></div>"""
+        cards = "".join(ccard(c) for c in w["cards"])
+        return f"""{kpirow(w)}
+<div class="ccards">{cards}</div>
+{matrix(w, name)}
+{ledger_panel(w.get("ledger"))}"""
 
     obs_rows = "".join(
-        f'<li><span class="obs-id mono xs">{o["id"]}</span><span class="obs-t">{e(o["text"])}</span>'
-        f'<span class="obs-src mono xs">{e(" &middot; ".join(o["source_files"]))}</span></li>'
+        f'<li><span class="obs-id mono xs">{o["id"]}</span>'
+        f'<span class="obs-t">{e(o["text"])}</span></li>'
         for o in dash["observations"])
     exc_rows = "".join(
         f"""<tr><td class="mono xs">{x["id"]}</td><td>{e(x["reconciliation"])}</td>
 <td>{e(x["category"])}</td><td class="r num">{x["affected_count"] or "&mdash;"}</td>
-<td class="r num">{sar(x["variance"])} <i class="xs">{x["metric"]}</i></td>
-<td class="xs">{e("; ".join(f'{sar(a["variance"])} of {a["metric_label"].lower()}'
+<td class="r num">{n(x["variance"])} <i class="xs">{x["metric"]}</i></td>
+<td class="xs">{e("; ".join(f'{a["variance"]:,.0f} of {a["metric_label"].lower()}'
                            for a in x["also_measured"])) or "&mdash;"}</td></tr>"""
         for x in dash["exceptions"] if x["kind"] != "comparison-not-possible")
 
-    recon_tab = f"""{wsdash("sales", "Sales — output VAT")}
-{wsdash("purchases", "Purchases — input VAT")}
+    dashtabs = "".join(
+        f'<button class="dashtab{" on" if k == "sales" else ""}" data-dashtab="{k}">{lbl}</button>'
+        for k, lbl in (("sales", "Sales dashboard"), ("purchases", "Purchases dashboard")))
+
+    recon_tab = f"""<div class="dashtabs">{dashtabs}
+<span class="dash-period">{dash["period_from"]} &rarr; {dash["period_to"]}</span></div>
+<div class="dashpane" id="dash-sales">{dash_pane("sales", "Sales")}</div>
+<div class="dashpane" id="dash-purchases" hidden>{dash_pane("purchases", "Purchases")}</div>
 <div class="panel"><div class="panel-head"><h2>Reconciliation observations</h2>
 <span class="sub">{len(dash["observations"])} &mdash; descriptive, computed, no explanation
 attached</span></div><ul class="obslist">{obs_rows}</ul>
@@ -1434,6 +1537,14 @@ function show(k) {{
   window.scrollTo(0, 0);
 }}
 tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+
+/* The Sales / Purchases dashboards, and the investigation's four sub-tabs. */
+const dashtabs = document.querySelectorAll('[data-dashtab]');
+dashtabs.forEach(t => t.addEventListener('click', () => {{
+  const k = t.dataset.dashtab;
+  dashtabs.forEach(o => o.classList.toggle('on', o === t));
+  document.querySelectorAll('.dashpane').forEach(p => p.hidden = p.id !== 'dash-' + k);
+}}));
 
 /* The investigation's four sub-tabs. Switching them is show/hide, which needs no engine — so
    unlike uploading or re-running, this works in the file exactly as it works in the app. */

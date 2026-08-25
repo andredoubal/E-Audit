@@ -23,6 +23,7 @@ from ..evidence import profile as prof
 from ..evidence import service as evidence_service
 from ..models import AuditCase, VatReturn
 from ..pipeline.rules import BOX_PURCHASE, BOX_SALES, BOX_ZERO_RATED_SALES
+from . import ledger as ledger_recon
 from . import observations as obs
 from . import pairwise as P
 from . import status as S
@@ -336,6 +337,17 @@ def build_for(db: Session, case_id: str) -> dict:
                     "customs_export": (sources[ws].customs_export.to_dict()
                                        if sources[ws].customs_export else None),
                 },
+                "ledger": (ledger_recon.compare(
+                    _pick(profiles, (prof.TRIAL_BALANCE, prof.GENERAL_LEDGER)),
+                    rows_by_file.get(
+                        (_pick(profiles, (prof.TRIAL_BALANCE, prof.GENERAL_LEDGER)) or {})
+                        .get("filename", ""), []),
+                    register_net=(sources[ws].register.total("taxable")
+                                  if sources[ws].register else None),
+                    register_file=(sources[ws].register.source_file
+                                   if sources[ws].register else ""),
+                    declared_base=sources[ws].declared_base,
+                ).to_dict() if ws == "sales" else None),
                 "summary": _summary([c for c in comparisons
                                      if c.pairing.workstream == ws],
                                     [e for e in exceptions if e.workstream == ws]),
